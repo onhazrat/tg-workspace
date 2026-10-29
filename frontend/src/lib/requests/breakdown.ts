@@ -87,6 +87,24 @@ export function leftOutQuery(leftOut: ReadonlySet<string>) {
   }
 }
 
+/**
+ * The rows left out once the Channel rows carrying `handles` (lowercased) go
+ * back into the Requests selection (`on`) or out of it (TGU-03).
+ */
+export function selectHandles(
+  leftOut: ReadonlySet<string>,
+  rows: readonly ChannelRow[],
+  handles: readonly string[],
+  on: boolean,
+): Set<string> {
+  const these = new Set(handles.map((h) => h.toLowerCase()))
+  const next = new Set(leftOut)
+  for (const row of rows)
+    if (!row.aggregate && these.has(row.key.toLowerCase()))
+      on ? next.delete(row.id) : next.add(row.id)
+  return next
+}
+
 /** What narrows every Requests read besides the range. */
 export type Picked = Pick<RequestsFilter, "charged" | "accounts" | "leftOut">
 

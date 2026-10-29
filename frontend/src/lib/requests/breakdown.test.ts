@@ -18,6 +18,7 @@ import {
   type Outcome,
   rangeText,
   requestsRange,
+  selectHandles,
   sinceLabel,
   statTotals,
 } from "./breakdown"
@@ -245,6 +246,12 @@ describe("the Channel table's measures (RQS-04)", () => {
       leftOutKinds: ["probe"],
     })
     expect(leftOutQuery(new Set())).toEqual({ leftOut: [], leftOutKinds: [] })
+  })
+
+  test("a Tag's handles go out of the Requests selection and come back (TGU-03)", () => {
+    const out = selectHandles(new Set(["tech"]), rows, ["NEWS", "gone"], false)
+    expect([...out].sort()).toEqual(["news", "tech"])
+    expect([...selectHandles(out, rows, ["news"], true)]).toEqual(["tech"])
   })
 })
 

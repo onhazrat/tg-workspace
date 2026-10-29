@@ -5,8 +5,8 @@ import { addFunnel, setSwitch } from "@/lib/filter-tree"
 import { channelRows, type Outcome } from "./breakdown"
 import {
   addCond,
-  condLabel,
   type ChannelCond,
+  condLabel,
   criteria,
   emptyChannelFilter,
   isUncharged,

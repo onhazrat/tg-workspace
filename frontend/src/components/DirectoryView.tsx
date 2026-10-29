@@ -379,9 +379,7 @@ export function DirectoryView() {
   const bulkTagging: Tagging = {
     ...tagging,
     onTag: (name, handles) =>
-      held
-        ? viewTagging.onTag(name, d.request)
-        : tagging.onTag(name, handles),
+      held ? viewTagging.onTag(name, d.request) : tagging.onTag(name, handles),
     onUntag: (name, handles) =>
       held
         ? viewTagging.onUntag(name, d.request)

@@ -4,10 +4,7 @@
  * Tags mean either one; the rest of the filter is left alone.
  */
 import { describe, expect, test } from "bun:test"
-import {
-  parseDirectoryFilter,
-  printDirectoryFilter,
-} from "./directory-filter"
+import { parseDirectoryFilter, printDirectoryFilter } from "./directory-filter"
 import {
   clearTagFunnels,
   funnelledTags,
@@ -23,11 +20,9 @@ const parse = (text: string) => {
 describe("the Directory's Tag funnel", () => {
   test("one Tag joins the top-level AND; a second makes them either one", () => {
     const one = toggleTagFunnel(parse("lang:fa"), "News", true)
-    expect(printDirectoryFilter(one)).toBe('lang:fa and tag:News')
+    expect(printDirectoryFilter(one)).toBe("lang:fa and tag:News")
     const two = toggleTagFunnel(one, "Tech", true)
-    expect(printDirectoryFilter(two)).toBe(
-      "lang:fa and (tag:News or tag:Tech)",
-    )
+    expect(printDirectoryFilter(two)).toBe("lang:fa and (tag:News or tag:Tech)")
     expect(funnelledTags(two)).toEqual(["News", "Tech"])
     const three = toggleTagFunnel(two, "Art", true)
     expect(funnelledTags(three)).toEqual(["News", "Tech", "Art"])

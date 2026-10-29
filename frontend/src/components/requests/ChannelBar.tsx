@@ -1,4 +1,4 @@
-import { Gauge, Layers, Search } from "lucide-react"
+import { Gauge, Layers, Search, Tag } from "lucide-react"
 import { useMemo } from "react"
 import { BarToggle } from "@/components/channel-grid/ChannelBarControls"
 import { FacetMenu } from "@/components/filter-tree/FacetMenu"
@@ -7,7 +7,11 @@ import {
   type FilterVocabulary,
 } from "@/components/filter-tree/FilterRow"
 import { SortPicker } from "@/components/filter-tree/SortPicker"
+import { TagsDropdown } from "@/components/filter-tree/TagsDropdown"
 import { TgInput } from "@/components/ui/tg-input"
+import { useTags } from "@/hooks/useTags"
+import { useTagUses } from "@/hooks/useTagUses"
+import { isVirtualGroupTag } from "@/lib/channels/virtual-group-tags"
 import {
   addFunnel,
   atoms,
@@ -26,6 +30,7 @@ import {
   measureOf,
   type Outcome,
   type SortDirection,
+  selectHandles,
 } from "@/lib/requests/breakdown"
 import {
   addCond,
@@ -40,6 +45,7 @@ import {
   measureMeta,
   staleReason,
 } from "@/lib/requests/channel-filter"
+import { byTagUse } from "@/lib/tags/tag-use"
 import {
   MeasureMenu,
   MeasureNumberEditor,
@@ -61,6 +67,9 @@ export interface ChannelBarProps {
   onToggleDirection: () => void
   hiddenKinds: ReadonlySet<string>
   hiddenOutcomes: ReadonlySet<Outcome>
+  /** The rows out of the Requests selection, which a Tag's select sets. */
+  leftOut: ReadonlySet<string>
+  onLeftOut: (leftOut: Set<string>) => void
 }
 
 /**
@@ -72,11 +81,13 @@ export function ChannelBar(p: ChannelBarProps) {
   const kinds = KINDS.map((k) => k.id).filter((k) => !p.hiddenKinds.has(k))
   const groups = criteria(kinds, p.hiddenOutcomes)
   const values = useMeasureValues(p.rows)
+  const tagNames = useRequestsTagNames()
   return (
     <>
       <div className="flex flex-wrap items-center gap-2 px-3 pt-2">
         <SearchBox value={p.search} onChange={p.onSearch} />
         <KindsFacet {...p} kinds={kinds} />
+        <RequestsTags {...p} />
         <BarToggle
           on={switchOn(p.filter, isUncharged, true)}
           label="Hide uncharged"
@@ -120,7 +131,7 @@ export function ChannelBar(p: ChannelBarProps) {
       <FilterRow
         filter={p.filter}
         onChange={p.onFilter}
-        vocabulary={vocabulary(p, kinds, groups, values)}
+        vocabulary={vocabulary(p, kinds, groups, values, tagNames)}
         testId="requests-filter"
         search={p.search}
         shownCount={p.shown}
@@ -198,6 +209,45 @@ function KindsFacet({
   )
 }
 
+/** The Tags dropdown (TGU-03): selecting a Tag puts its rows back in the
+ * Requests selection, unselecting takes them out of every total. */
+function RequestsTags(p: ChannelBarProps) {
+  const channels = p.rows.filter((r) => !r.aggregate)
+  return (
+    <TagsDropdown
+      tab="requests"
+      testId="requests-tags"
+      tickHint="Unselecting takes out, the funnel shows only"
+      scope={channels.map((r) => r.key)}
+      selected={channels.filter((r) => !p.leftOut.has(r.id)).map((r) => r.key)}
+      onSelect={(handles, on) =>
+        p.onLeftOut(selectHandles(p.leftOut, p.rows, handles, on))
+      }
+      funnelled={funnelledValues(p.filter, "tag")}
+      onFunnel={(value, on) =>
+        p.onFilter(
+          on
+            ? addFunnel(p.filter, { type: "tag", value })
+            : removeFunnel(p.filter, "tag", value),
+        )
+      }
+      onClearFunnels={() => p.onFilter(clearFunnels(p.filter, "tag"))}
+    />
+  )
+}
+
+/** The Tag names "In the Tag" offers, in the Requests tab's Tag use order. */
+function useRequestsTagNames() {
+  const tags = useTags().tags.filter((t) => !isVirtualGroupTag(t.name))
+  const score = useTagUses("requests")
+  return byTagUse(
+    tags,
+    score,
+    (t) => t.name,
+    (t) => t.channels,
+  ).map((t) => t.name)
+}
+
 /** Each measure's values across the rows, sorted once and kept per render of `rows`. */
 function useMeasureValues(rows: readonly ChannelRow[]): MeasureValues {
   return useMemo(() => {
@@ -225,9 +275,24 @@ function vocabulary(
   kinds: string[],
   groups: CriteriaGroup[],
   values: MeasureValues,
+  tagNames: string[],
 ): FilterVocabulary<ChannelCond> {
   return {
     sections: [
+      {
+        heading: "Tag",
+        entries: [
+          {
+            kind: "list",
+            id: "tag",
+            label: "In the Tag",
+            icon: Tag,
+            options: tagNames.map((name) => ({ id: name, label: name })),
+            make: (value) => ({ type: "tag", value }),
+            current: (c) => (c.type === "tag" ? c.value : undefined),
+          },
+        ],
+      },
       {
         heading: "Kind",
         entries: [
@@ -279,13 +344,16 @@ function vocabulary(
     entryOf: (c) =>
       c.type === "measure" ? `${c.kind ?? ""}|${c.measure}` : c.type,
     label: condLabel,
-    icon: (c) => (c.type === "measure" ? Gauge : Layers),
+    icon: (c) =>
+      c.type === "measure" ? Gauge : c.type === "tag" ? Tag : Layers,
     chipId: (c) =>
-      c.type === "kind"
-        ? c.value
-        : c.type === "uncharged"
-          ? "uncharged"
-          : `${c.kind ?? "row"}-${c.measure}`,
+      c.type === "measure"
+        ? `${c.kind ?? "row"}-${c.measure}`
+        : c.type === "tag"
+          ? `tag-${c.value}`
+          : c.type === "kind"
+            ? c.value
+            : "uncharged",
     stale: (c) => staleReason(c, p.hiddenKinds, p.hiddenOutcomes),
   }
 }

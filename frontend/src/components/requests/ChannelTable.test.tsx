@@ -3,6 +3,7 @@
  * and its filters, yield and pick boxes (RQS-04).
  */
 import { afterEach, describe, expect, test } from "bun:test"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { useState } from "react"
 import type { ChannelRow, Outcome } from "@/lib/requests/breakdown"
@@ -58,21 +59,28 @@ function Table({
   const [filter, setFilter] = useState(emptyChannelFilter)
   const [leftOut, setLeftOut] = useState<ReadonlySet<string>>(new Set())
   return (
-    <ChannelTable
-      rows={rows}
-      hiddenOutcomes={hiddenOutcomes}
-      hiddenKinds={new Set()}
-      filter={filter}
-      onFilter={setFilter}
-      leftOut={leftOut}
-      onLeftOut={(next) => {
-        onLeftOut(next)
-        setLeftOut(next)
-      }}
-      onOpen={onOpen}
-    />
+    <QueryClientProvider client={TAGS_OFFLINE}>
+      <ChannelTable
+        rows={rows}
+        hiddenOutcomes={hiddenOutcomes}
+        hiddenKinds={new Set()}
+        filter={filter}
+        onFilter={setFilter}
+        leftOut={leftOut}
+        onLeftOut={(next) => {
+          onLeftOut(next)
+          setLeftOut(next)
+        }}
+        onOpen={onOpen}
+      />
+    </QueryClientProvider>
   )
 }
+
+/** The Tags dropdown's reads, which these tests leave unanswered. */
+const TAGS_OFFLINE = new QueryClient({
+  defaultOptions: { queries: { retry: false } },
+})
 
 const names = () =>
   screen

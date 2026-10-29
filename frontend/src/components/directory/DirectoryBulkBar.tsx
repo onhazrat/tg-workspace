@@ -77,12 +77,12 @@ export function DirectoryBulkBar({
       {held ? (
         <span>
           <b>All {total} matching.</b> Over {count(MAX_TICK_ALL)}, so they are
-          held as this view, not ticked: Follow and Seeds are off, and changing
-          the view clears it.
+          held as this view, not selected: Follow and Seeds are off, and
+          changing the view clears it.
         </span>
       ) : (
         <>
-          <b>{ticks.size} ticked</b>
+          <b>{ticks.size} selected</b>
           <span className="truncate text-app-ink/50" title={ticked.join(", ")}>
             {ticked
               .slice(0, SHOWN)
@@ -93,7 +93,7 @@ export function DirectoryBulkBar({
         </>
       )}
       {whole?.state === "ticked" && (
-        <span>All {total} matching are ticked.</span>
+        <span>All {total} matching are selected.</span>
       )}
       {whole?.state === "offer" && onTickAll && (
         <button

@@ -128,10 +128,10 @@ export const condLabel = (c: ChannelCond) =>
   c.type === "tag"
     ? `Tag ${c.value}`
     : c.type === "kind"
-    ? kindMeta(c.value).label
-    : c.type === "uncharged"
-      ? "Uncharged rows"
-      : `${measureLabel(c.measure, c.kind)} ${boundText(c.bound)}${measureMeta(c.measure).unit ?? ""}`
+      ? kindMeta(c.value).label
+      : c.type === "uncharged"
+        ? "Uncharged rows"
+        : `${measureLabel(c.measure, c.kind)} ${boundText(c.bound)}${measureMeta(c.measure).unit ?? ""}`
 
 /** Why a Condition stands aside, for its chip; undefined while it applies. */
 export function staleReason(

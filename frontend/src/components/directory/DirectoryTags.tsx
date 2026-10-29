@@ -10,7 +10,6 @@ import { Plus, Tag, X } from "lucide-react"
 import { useState } from "react"
 import type { TagResponse } from "@/client"
 import { BarPopover, BarSearch } from "@/components/BarPopover"
-import { pillClass } from "@/components/PostFilterParts"
 import { isVirtualGroupTag } from "@/lib/channels/virtual-group-tags"
 import { ownTags, sameTag } from "@/lib/directory/directory-tags"
 

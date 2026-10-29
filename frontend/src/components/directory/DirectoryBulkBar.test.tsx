@@ -57,7 +57,7 @@ describe("the bulk bar", () => {
 
   test("names the count and a few handles", () => {
     mount(["a", "b", "c", "d", "e"])
-    expect(screen.getByText("5 ticked")).toBeTruthy()
+    expect(screen.getByText("5 selected")).toBeTruthy()
     expect(screen.getByText("@a, @b, @c +2")).toBeTruthy()
   })
 
@@ -96,7 +96,7 @@ describe("the bulk bar", () => {
   test("Follow and Dismiss act on the unfollowed ticks only, and say of how many", () => {
     // `followed` is lowercase; a tick keeps the handle's own case.
     const calls = mount(["a", "News", "c"], false, ["news"])
-    expect(screen.getByText("3 ticked")).toBeTruthy()
+    expect(screen.getByText("3 selected")).toBeTruthy()
     fireEvent.click(screen.getByRole("button", { name: "Follow 2 of 3" }))
     fireEvent.click(screen.getByRole("button", { name: "Dismiss 2 of 3" }))
     expect(calls.follow).toEqual([["a", "c"]])
@@ -202,7 +202,7 @@ describe("tick all that match (ADR-031)", () => {
 
   test("says when every match became a Tick", () => {
     mount(page, false, [], { total: 4213, state: "ticked" })
-    expect(screen.getByText("All 4,213 matching are ticked.")).toBeTruthy()
+    expect(screen.getByText("All 4,213 matching are selected.")).toBeTruthy()
     expect(screen.queryByRole("button", { name: /Tick all/ })).toBeNull()
   })
 
@@ -211,7 +211,7 @@ describe("tick all that match (ADR-031)", () => {
     const bar = screen.getByTestId("directory-bulk-bar")
     expect(bar.textContent).toContain("All 48,210 matching.")
     expect(bar.textContent).toContain(
-      "Over 10,000, so they are held as this view, not ticked",
+      "Over 10,000, so they are held as this view, not selected",
     )
     const follow = screen.getByRole("button", {
       name: "Follow",

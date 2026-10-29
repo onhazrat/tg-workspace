@@ -18,8 +18,8 @@ import {
   type TagResponse,
 } from "@/client"
 import { errorText } from "@/lib/artifacts/artifact-run"
-import { queryClient } from "@/lib/queryClient"
 import type { TagChoices, Tagging } from "@/lib/directory/directory-tags"
+import { queryClient } from "@/lib/queryClient"
 import { byTagUse } from "@/lib/tags/tag-use"
 import { queryKeys } from "./queryKeys"
 import { useSettingGroupsQuery } from "./useSettingGroups"

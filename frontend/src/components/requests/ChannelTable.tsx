@@ -1,4 +1,7 @@
 import { useState } from "react"
+import { useTagHandles } from "@/hooks/useTags"
+import { recordTagUse } from "@/hooks/useTagUses"
+import { funnelledValues } from "@/lib/filter-tree"
 import {
   type ChannelRow,
   type ChannelSort,
@@ -14,6 +17,7 @@ import {
   toggled,
 } from "@/lib/requests/breakdown"
 import { type ChannelFilter, keepRow } from "@/lib/requests/channel-filter"
+import { newTagValues } from "@/lib/tags/tag-use"
 import { ChannelBar } from "./ChannelBar"
 import { td, th } from "./KindTable"
 import { kindColor, OutcomeBar, Swatch } from "./parts"
@@ -57,13 +61,19 @@ export function ChannelTable({
   const kept = !hiddenSort(chosenSort, hiddenOutcomes)
   const sort = kept ? chosenSort : "total"
   const direction = kept ? chosenDirection : "desc"
+  const tagHandles = useTagHandles(funnelledValues(filter, "tag"))
   const listed = listChannels(
     rows,
     search,
     sort,
     direction,
-    keepRow(filter, hiddenKinds, hiddenOutcomes),
+    keepRow(filter, hiddenKinds, hiddenOutcomes, tagHandles),
   )
+  /** Every filter change, from any control, records the Tags it adds. */
+  const filterAndRecord = (next: ChannelFilter) => {
+    recordTagUse("requests", ...newTagValues(filter, next))
+    onFilter(next)
+  }
   const max = Math.max(
     0,
     ...listed.filter((r) => !r.aggregate).map((r) => r.total),
@@ -107,7 +117,7 @@ export function ChannelTable({
         search={search}
         onSearch={restart(setSearch)}
         filter={filter}
-        onFilter={restart(onFilter)}
+        onFilter={restart(filterAndRecord)}
         sort={sort}
         onSort={(key) => {
           setSort(key)
@@ -119,6 +129,8 @@ export function ChannelTable({
         }
         hiddenKinds={hiddenKinds}
         hiddenOutcomes={hiddenOutcomes}
+        leftOut={leftOut}
+        onLeftOut={onLeftOut}
       />
       <table className="mt-1 w-full table-fixed text-[12px]">
         <thead>
