@@ -59,7 +59,7 @@ def clock(monkeypatch: pytest.MonkeyPatch) -> list[int]:
     from app.services import tags
 
     now = [T0]
-    monkeypatch.setattr(tags, "now_ms", lambda: now[0])
+    monkeypatch.setattr(tags, "server_now_ms", lambda: now[0])
     return now
 
 

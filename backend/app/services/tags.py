@@ -16,7 +16,6 @@ No function commits. The caller owns the transaction, matching `follows.py`.
 
 from __future__ import annotations
 
-import time
 import uuid
 from collections.abc import Iterable
 from typing import Any, cast
@@ -32,6 +31,7 @@ from sqlmodel import Session, col, select
 from sqlmodel.sql.expression import SelectOfScalar
 
 from app.models_tg import Tag, TagUse
+from app.services.analysis_window import server_now_ms
 from app.services.channel_tags import (
     ChannelTag,
     TagSource,
@@ -249,7 +249,7 @@ def assign_tag(
     row is stamped now. `handles` may be a statement of handles (a Directory
     view's matches, ADR-031), written in one `INSERT … SELECT`.
     """
-    assigned_at = int(time.time() * 1000)
+    assigned_at = server_now_ms()
     if isinstance(handles, Select):
         found = handles.subquery()
         rows = sa_select(
@@ -389,10 +389,6 @@ HALF_LIFE_MS = 14 * 86_400_000
 MAX_USES = 50
 
 
-def now_ms() -> int:
-    return int(time.time() * 1000)
-
-
 def record_use(session: Session, *, user_id: uuid.UUID, tab: str, name: str) -> int:
     """Record one use of `name` on `tab`; 0 for a Tag the Account lacks.
 
@@ -409,7 +405,7 @@ def record_use(session: Session, *, user_id: uuid.UUID, tab: str, name: str) -> 
                 literal(user_id, Uuid()),
                 literal(tab),
                 literal(key),
-                literal(now_ms(), BigInteger()),
+                literal(server_now_ms(), BigInteger()),
             ).where(owned),
         )
         .on_conflict_do_nothing()
@@ -480,7 +476,7 @@ def tag_order(
         else col(Tag.handle).in_({normalize_handle(h) for h in scope})
     )
     picked = col(Tag.handle).in_({normalize_handle(h) for h in selected})
-    age = cast_(literal(now_ms(), BigInteger()) - col(TagUse.used_at), Float)
+    age = cast_(literal(server_now_ms(), BigInteger()) - col(TagUse.used_at), Float)
     uses = (
         subject_select(
             sa_select(
