@@ -28,7 +28,6 @@ from sqlmodel import Session, select
 
 from app import crud
 from app.api.routes import jobs as jobs_routes
-from app.core import request_meter
 from app.core.config import settings
 from app.core.db import engine
 from app.core.permissions import ROLE_ADMIN
@@ -36,6 +35,7 @@ from app.core.request_recording import (
     RequestKind,
     RequestKindDisabled,
     attributed,
+    tallied,
 )
 from app.jobs import auto_summary, discover_probe, sync_queue
 from app.jobs.auto_sync import run_auto_sync
@@ -196,7 +196,7 @@ def _fetch_as(kind: RequestKind | None) -> tuple[int, BaseException | None]:
     """One fetch under `kind`'s attribution: what it charged, and what it raised."""
 
     async def _run() -> tuple[int, BaseException | None]:
-        with request_meter.metered() as meter:
+        with tallied() as tally:
             try:
                 if kind is None:
                     await network.fetch_with_retry(PAGE_URL, retries=1)
@@ -204,8 +204,8 @@ def _fetch_as(kind: RequestKind | None) -> tuple[int, BaseException | None]:
                     with attributed(kind=kind):
                         await network.fetch_with_retry(PAGE_URL, retries=1)
             except RequestKindDisabled as exc:
-                return meter.telegram_requests, exc
-            return meter.telegram_requests, None
+                return tally.requests, exc
+            return tally.requests, None
 
     return asyncio.run(_run())
 

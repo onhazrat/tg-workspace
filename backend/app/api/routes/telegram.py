@@ -1,7 +1,7 @@
 import logging
 import uuid
-from collections.abc import Iterator
-from contextlib import AbstractContextManager, contextmanager
+from collections.abc import AsyncIterator
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from typing import Any
 
 import httpx
@@ -12,13 +12,7 @@ from sqlmodel import Session
 from app.api.deps import CurrentUser, SessionDep, require_kind_enabled
 from app.api.http_cache import etag_for, matches_if_none_match
 from app.core.config import settings
-from app.core.request_recording import (
-    Cause,
-    PageType,
-    RequestKind,
-    attributed,
-    page,
-)
+from app.core.request_recording import Cause, PageType, RequestKind, page
 from app.core.secrets import decrypt_token
 from app.models_tg import BotCredential
 from app.schemas.telegram import (
@@ -45,6 +39,7 @@ from app.services.network_settings import (
 )
 from app.services.post_thumbnails import read_cached_thumb
 from app.services.publish import BotCredentialNotFound, publish_summary_text
+from app.services.request_accounting import Uncharged, accounted_work
 from app.services.scraper import (
     get_channel_info,
     resolve_start_time_to_id,
@@ -143,30 +138,37 @@ def _resolve_bot_token(
     raise HTTPException(status_code=400, detail="credentialId or token is required")
 
 
-def _checking(handle: str) -> AbstractContextManager[None]:
-    # The Requests of a handle checked here are Handle checks (RQS-14): no
-    # Account, Uncharged, the handle as their channel.
-    return attributed(kind=RequestKind.HANDLE, channel=normalize_handle(handle))
+def _checking(
+    asker: uuid.UUID, handle: str | None = None
+) -> AbstractAsyncContextManager[None]:
+    # The Requests of a handle checked here are Handle checks (RQS-14):
+    # Uncharged, named for the caller (the target under View-as), the handle
+    # as their channel.
+    return accounted_work(
+        Uncharged(
+            RequestKind.HANDLE,
+            asker,
+            channel=normalize_handle(handle) if handle is not None else None,
+        )
+    )
 
 
-@contextmanager
-def _handle_check(handle: str) -> Iterator[None]:
+@asynccontextmanager
+async def _handle_check(asker: uuid.UUID, handle: str) -> AsyncIterator[None]:
     # One page of a Handle check. It writes nothing, so an answer is Idle,
     # and no page for the handle is a missing handle.
-    with (
-        _checking(handle),
-        page(PageType.METADATA, soft_block=Cause.MISSING_HANDLE),
-    ):
-        yield
+    async with _checking(asker, handle):
+        with page(PageType.METADATA, soft_block=Cause.MISSING_HANDLE):
+            yield
 
 
 @router.post("/scrape", dependencies=HANDLE_CHECK)
 async def api_scrape(
-    body: ScrapeRequest, _current_user: CurrentUser
+    body: ScrapeRequest, current_user: CurrentUser
 ) -> ScrapeChannelResponse:
     try:
         # A handle check too (RQS-14), with no page around it: it walks several.
-        with attributed(kind=RequestKind.HANDLE):
+        async with _checking(current_user.id):
             scraped = await scrape_channel(
                 body.url,
                 known_latest_id=body.known_latest_id,
@@ -201,10 +203,10 @@ async def api_scrape(
 
 @router.post("/channel-info", dependencies=HANDLE_CHECK)
 async def api_channel_info(
-    body: ChannelInfoRequest, _current_user: CurrentUser
+    body: ChannelInfoRequest, current_user: CurrentUser
 ) -> ChannelInfoResponse:
     try:
-        with _handle_check(body.channel_name):
+        async with _handle_check(current_user.id, body.channel_name):
             info = await get_channel_info(
                 body.channel_name,
                 proxies=_resolve_proxies(body),
@@ -227,10 +229,10 @@ async def api_channel_info(
 
 @router.post("/resolve-start-time", dependencies=HANDLE_CHECK)
 async def api_resolve_start_time(
-    body: ResolveStartTimeRequest, _current_user: CurrentUser
+    body: ResolveStartTimeRequest, current_user: CurrentUser
 ) -> ResolveStartTimeResponse:
     try:
-        with _checking(body.channel_name):
+        async with _checking(current_user.id, body.channel_name):
             start_id = await resolve_start_time_to_id(
                 body.channel_name,
                 body.target_time_ms,
@@ -269,7 +271,7 @@ async def api_bot_info(
 
         target += f"?{urlencode(body.params)}"
     try:
-        with attributed(kind=RequestKind.BOT_API):
+        async with accounted_work(Uncharged(RequestKind.BOT_API, current_user.id)):
             data, telemetry = await fetch_with_retry(
                 target,
                 retries=settings.TELEGRAM_API_RETRIES,
@@ -396,7 +398,7 @@ async def api_bot_file(
         # `TELEGRAM_API_RETRIES`, the ladder the other Bot API calls use, not
         # the page-fetch default — losing a page loses a sync, whereas this is
         # one interactive download the browser can ask for again.
-        with attributed(kind=RequestKind.BOT_API):
+        async with accounted_work(Uncharged(RequestKind.BOT_API, current_user.id)):
             payload, _telemetry = await fetch_with_retry(
                 file_url,
                 retries=settings.TELEGRAM_API_RETRIES,

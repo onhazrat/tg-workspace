@@ -60,7 +60,6 @@ from app.core.request_recording import (
     PageType,
     RequestKind,
     RequestKindDisabled,
-    attributed,
     kind_refusal,
     page,
 )
@@ -84,7 +83,6 @@ from app.services.sync_lanes import DISCOVER_PROBE_LANE
 from app.services.telegram_web import (
     TelegramChannelPrivate,
     TelegramWebViewUnavailable,
-    normalize_handle,
 )
 
 logger = logging.getLogger(__name__)
@@ -172,15 +170,12 @@ async def _probe_one(
     """Fetch one handle and record the outcome. Returns the resulting status.
 
     Its Requests are the Directory's (RQS-12): kind probe, no Account, the
-    handle probed. The page fetch is a metadata page, judged once the verdict
+    handle probed, named by the `Probe` Accounted work its lane message opens. The page fetch is a metadata page, judged once the verdict
     is written: Useful when it changed the entry or brought new sample Posts,
     Wasted as a missing handle when Telegram has no page for it. A private
     Channel's page is an answer like any other (RQS-13).
     """
-    with (
-        attributed(kind=RequestKind.PROBE, channel=normalize_handle(handle)),
-        page(PageType.METADATA, soft_block=Cause.MISSING_HANDLE) as probe_page,
-    ):
+    with page(PageType.METADATA, soft_block=Cause.MISSING_HANDLE) as probe_page:
         verdict = await _fetch_and_store(
             handle,
             proxies=proxies,

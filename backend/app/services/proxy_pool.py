@@ -607,7 +607,7 @@ class ProxyBinding(Protocol):
 
 #: The binding the current task is fetching under, if any.
 #:
-#: A `contextvar` for `core/request_meter.py`'s reason, which is the same shape:
+#: A `contextvar` for `core/request_recording.py`'s reason, which is the same shape:
 #: the value is set by the queue consumer and read by the HTTP client, with
 #: `sync_orchestrator` and `scraper` in between reading neither. Threading it
 #: through would add a parameter to a dozen signatures that nothing on the path

@@ -1765,7 +1765,7 @@ class QuotaUsage(SQLModel, table=True):
     `requests` counts HTTP Requests to the Telegram web view, not channel syncs
     — one sync is anywhere between one request and fifty, so a limit denominated
     in syncs is not a load control (decision 15). `services/quota.py` is the
-    sole writer and `core/request_meter.py` does the counting.
+    sole writer and `services/request_accounting.py` does the counting.
 
     **Never pruned.** A few hundred rows a year per active account, and it is
     the only record an Admin has to set a limit from; `run_retention_cleanup`
@@ -1899,8 +1899,9 @@ class DirectoryProbeUsage(SQLModel, table=True):
 
     #: HTTP Requests to the Telegram web view made while draining the probe
     #: lane. The same unit as `QuotaUsage.requests` and counted by the same
-    #: `core/request_meter.py`, so the two numbers are comparable — which is the
-    #: point of reusing the meter rather than incrementing a counter by hand.
+    #: charge rule in `core/request_recording.py`, so the two numbers are
+    #: comparable, which is the point of one tally rather than a counter
+    #: incremented by hand.
     requests: int = 0
 
     created_at: datetime = Field(default_factory=utc_now)

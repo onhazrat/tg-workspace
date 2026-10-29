@@ -121,25 +121,32 @@ def test_a_probe_is_charged_to_nobody() -> None:
 
     **Ticket 04 opened a meter here and this guard got narrower rather than
     weaker.** The claim was never "no meter"; it was "no account's ledger". A
-    meter is a `contextvars` tally with no owner in it, and the harvest sweep
-    made probe traffic something that runs unprompted — so counting it became
-    the difference between hearing about a runaway crawl from a dashboard and
-    hearing about it from Telegram's response codes.
+    tally has no owner in it, and the harvest sweep made probe traffic
+    something that runs unprompted, so counting it became the difference
+    between hearing about a runaway crawl from a dashboard and hearing about it
+    from Telegram's response codes.
 
     What must stay absent is every route to `tg_quota_usage`: the sync charge,
     the ledger write, and the owner resolution that would have to happen first.
-    The meter's total goes to the deployment tally instead, and that is asserted
-    positively so the guard cannot pass on a probe that meters and then drops
-    the number on the floor.
+    Since ADR-041 the lane names its work and `request_accounting` picks the
+    payer, so the lane must open a `Probe` and nothing that pays from a Budget.
+    That the `Probe`'s tally reaches the deployment tally, and no ledger, is
+    `test_request_accounting.py::test_a_probe_pays_into_the_probe_tally_and_no_budget`.
     """
     source = inspect.getsource(sync_queue._process_probe_message)
 
-    for forbidden in ("charge_sync_job", "charge_requests(", "resolve_charge_owner"):
+    for forbidden in (
+        "charge_sync_job",
+        "charge_requests(",
+        "resolve_charge_owner",
+        "Sync(",
+        "Follow(",
+    ):
         assert forbidden not in source, (
             f"a probe reaches `{forbidden}` — it now charges somebody's ledger "
             "for work nobody asked for"
         )
-    assert "charge_probe_requests" in source, (
+    assert "accounted_work(Probe(" in source, (
         "the probe lane stopped counting what it spends; a crawler nothing "
         "counts is one you hear about from Telegram"
     )

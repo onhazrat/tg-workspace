@@ -55,7 +55,7 @@ from app.models_tg import (
     SyncJob,
     utc_now,
 )
-from app.services.quota import Budget, resolve_charge_owner, usage_rows
+from app.services.quota import Budget, usage_rows
 from app.services.settings_registry import REQUEST_ROLLUP_KEY
 from app.services.settings_store import get_global_setting, put_global_setting
 from app.services.tenancy import unscoped_select
@@ -308,8 +308,9 @@ def _recorded_charges(session: Session, day: date) -> Counter[tuple[Any, str]]:
     The ledger charges a job once, as it ends, so a Request is counted on the
     day its job finished, even made the day before: a sync across midnight
     is no mismatch. A Request whose job never recorded its end is counted on
-    its own day. An Account that is null or gone is billed to the Operator,
-    as `charge_sync_job` does.
+    its own day. Each record already names the Account its Accounted work
+    resolved to pay (ADR-041), the Operator for one that was gone, so nothing
+    is resolved here.
     """
     start = datetime.combine(day, datetime.min.time())
     at = col(RequestRecordRow.at)
@@ -328,8 +329,7 @@ def _recorded_charges(session: Session, day: date) -> Counter[tuple[Any, str]]:
     charges: Counter[tuple[Any, str]] = Counter()
     for account_id, budget, job_id, made_on, n in rows:
         if ended.get(job_id, made_on) == day:
-            owner = resolve_charge_owner(session, account_id)
-            charges[(owner, str(budget))] += int(n)
+            charges[(account_id, str(budget))] += int(n)
     return charges
 
 
@@ -356,7 +356,10 @@ def _job_days(session: Session, ids: set[str]) -> dict[str | None, date]:
 def check_request_ledger(day: date) -> int:
     """Compare a closed UTC day's charged Requests with the quota ledger.
 
-    Per Account and Budget. Logs one warning naming every pair that differs,
+    The canary for swallowed charge writes (ADR-041): the records and the
+    ledger come from one charge decision under one Account, so the only way
+    they part is a ledger write that failed and was logged and dropped. Per
+    Account and Budget. Logs one warning naming every pair that differs,
     carrying the metric, and returns the total difference; a clean day logs
     nothing and returns 0. Each Request counts on the day its job was charged
     (`_recorded_charges`), so a sync across midnight matches on both days.
@@ -379,7 +382,8 @@ def check_request_ledger(day: date) -> int:
         # ponytail: the metric rides the log record, as there is no metrics
         # backend; a counter belongs there once one exists.
         logger.warning(
-            "Requests: %s's charged Requests differ from the ledger: %s",
+            "Requests: %s's charged Requests differ from the ledger, so a "
+            "charge write was swallowed: %s",
             day.isoformat(),
             "; ".join(
                 f"{account} {budget} recorded {r}, ledger {booked}"

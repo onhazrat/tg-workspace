@@ -11,7 +11,6 @@ from collections.abc import AsyncIterator
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass, field
 from datetime import datetime
-from functools import partial
 from typing import Any, Literal, Protocol
 
 import httpx
@@ -90,10 +89,8 @@ from app.services.quota import (
     QuotaCeilingReached,
     assert_within_ceiling,
     budget_for_sync_mode,
-    charge_sync_job,
 )
-from app.services.request_accounting import metered_work
-from app.services.request_kinds import REQUEST_KIND_BY_BUDGET
+from app.services.request_accounting import Sync, accounted_work
 from app.services.scraper import get_channel_info, scrape_channel_page
 from app.services.scraper_jobs import (
     ChannelSyncState,
@@ -1957,17 +1954,12 @@ async def sync_single_channel(
     walked = False
     try:
         # Every Request of the walk, its pictures and metadata included, is
-        # this sync's (RQS-01). Set here, beside the claim, for the claim's
-        # reason: both callers of this function then get it. The run counts
-        # as one sync, failed or not (RQS-04).
+        # this Channel's, inside the sync's Accounted work (RQS-01, ADR-041).
+        # Set here, beside the claim, for the claim's reason: both callers of
+        # this function then get it. The run counts as one sync, failed or not
+        # (RQS-04).
         with (
-            attributed(
-                kind=REQUEST_KIND_BY_BUDGET[budget],
-                account_id=user_id,
-                budget=budget.value,
-                channel=ch_state.channel_name,
-                job_id=job.job_id,
-            ),
+            attributed(channel=ch_state.channel_name),
             sync_run() as run,
         ):
             walked = await _sync_claimed_channel(
@@ -2130,17 +2122,17 @@ async def _sync_claimed_channel(
 async def run_sync_job(job: SyncJobState, user_id: uuid.UUID | None) -> None:
     """Sync every Channel in the job, then charge what it spent (ticket 08).
 
-    The meter is opened here and read once at the end — decision 19's "account
-    at completion", charging the Requests the job actually made rather than the
-    guess an enqueue-time charge would have to use. `asyncio` copies the context
-    into the per-channel tasks below, so every fetch underneath finds this
-    meter, and a second job running beside this one increments its own.
+    Its Accounted work is opened here and pays once at the end, decision 19's
+    "account at completion", charging the Requests the job actually made rather
+    than the guess an enqueue-time charge would have to use. `asyncio` copies
+    the context into the per-channel tasks below, so every fetch underneath
+    counts into this job's tally, and a second job beside this one keeps its own.
 
     A cancelled job is still charged for what it spent before the cancel. Those
     Requests were made, and Telegram answered them.
 
-    The charge is the last thing that happens and cannot fail the job:
-    `charge_sync_job` swallows and logs its own errors, because an accounting
+    The charge is the last thing that happens and cannot fail the job: the
+    charge writer swallows and logs its own errors, because an accounting
     write nobody reads yet must not turn a completed sync into a failed one.
     """
     # This process runs the job, so its own progress notifications coming back
@@ -2148,7 +2140,7 @@ async def run_sync_job(job: SyncJobState, user_id: uuid.UUID | None) -> None:
     # terminal status below and its write, and the row would stay `pending`.
     claim_job(job)
     try:
-        async with metered_work(partial(charge_sync_job, user_id, job.sync_mode)):
+        async with accounted_work(Sync(user_id, job.sync_mode, job.job_id)):
             job.status = "running"
             await touch_job(job)
             # **Slots out of the one Partition, not a semaphore of this job's own**

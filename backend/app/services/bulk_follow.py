@@ -7,7 +7,6 @@ import logging
 import time
 import uuid
 from dataclasses import dataclass, field
-from functools import partial
 from typing import Any, Literal
 
 from sqlmodel import Session
@@ -58,9 +57,8 @@ from app.services.quota import (
     Budget,
     QuotaCeilingReached,
     assert_within_ceiling,
-    charge_sync_job,
 )
-from app.services.request_accounting import metered_work
+from app.services.request_accounting import Follow, accounted_work
 from app.services.request_kinds import is_kind_enabled
 from app.services.scraper import get_channel_info
 from app.services.telegram_web import (
@@ -749,15 +747,15 @@ async def run_follow_job_by_id(follow_job_id: str) -> None:
 async def run_follow_job(job: FollowJobState) -> None:
     """Probe every handle in the batch, then chain a sync for the ones added.
 
-    Metered and charged to `manual_bulk` (ticket 08). The probe phase is one
+    One `Follow` Accounted work, charged to `manual_bulk` (ticket 08). The probe phase is one
     `t.me` fetch per handle and a batch runs to hundreds, so leaving it out
     would hide the largest single manual source of Requests from the very view
     that reports what each account consumed.
 
     The sync this chains is charged **separately and not twice**, but no longer
     for the reason this used to give. It said the sync runs under `run_sync_job`,
-    which opens its own nested meter — since ticket 10 the sync is not run here
-    at all: it is enqueued, and the worker meters each message on its own. The
+    which opened its own nested meter. Since ticket 10 the sync is not run here
+    at all: it is enqueued, and the worker accounts each message on its own. The
     conclusion survives, the mechanism changed, and a docstring describing a
     mechanism that no longer exists is how a true statement becomes a false
     invariant.
@@ -766,13 +764,13 @@ async def run_follow_job(job: FollowJobState) -> None:
     (ticket 24). The probe phase is on no lane, so ticket 23's ladder cannot
     reach it and an account over its bulk allowance still probes at full speed;
     a ceiling can refuse it, because a refusal needs no lane. Once at the top
-    rather than per handle because the whole batch is one metered block charged
+    rather than per handle because the whole batch is one Accounted work charged
     to one Budget, and a batch of hundreds of probes is exactly the runaway the
     ceiling exists for — the chained sync it would have queued is refused
     separately, by `enqueue_sync_job`.
     """
     user_uuid = uuid.UUID(job.user_id)
-    async with metered_work(partial(charge_sync_job, user_uuid, "bulk")):
+    async with accounted_work(Follow(user_uuid, job.follow_job_id)):
         job.status = "running"
         await touch_follow_job(job)
 
@@ -810,18 +808,9 @@ async def run_follow_job(job: FollowJobState) -> None:
                 await touch_follow_job(job)
                 return
             try:
-                # Its Requests are the follow's, charged to manual bulk as
-                # the ledger charges the batch (RQS-14).
-                with (
-                    bound_to(slot),
-                    attributed(
-                        kind=RequestKind.FOLLOW,
-                        account_id=user_uuid,
-                        budget=Budget.MANUAL_BULK.value,
-                        channel=result.name,
-                        job_id=job.follow_job_id,
-                    ),
-                ):
+                # Its Requests are the Follow's, charged to manual bulk with
+                # the batch (RQS-14); this names the handle they checked.
+                with bound_to(slot), attributed(channel=result.name):
                     await _process_one_channel(
                         job,
                         result,

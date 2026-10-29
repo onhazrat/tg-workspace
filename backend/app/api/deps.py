@@ -202,7 +202,7 @@ VIEW_AS_SPEND_PATHS: dict[str, SpendableOperation] = {
     ),
     f"{settings.API_V1_STR}/data/channels/bulk-follow": SpendableOperation(
         "telegram_budget",
-        "resolves every handle against Telegram inside a `metered()` block "
+        "resolves every handle against Telegram inside Accounted work "
         "charged to the caller, which under View-as is the target",
     ),
     f"{settings.API_V1_STR}/data/channels/bulk-reset-sync": SpendableOperation(
@@ -278,19 +278,18 @@ VIEW_AS_NON_SPENDING_PATHS: dict[str, str] = {
         "edits a Channel row; the sync it may schedule is charged when the "
         "*scheduler* runs it, not by this request"
     ),
-    # The three routes that reach Telegram without a ledger charge. They open no
-    # `metered()` block, and `network.record_telegram_request` charges "whatever
-    # meter is active" — which is nothing here, so no Request lands on the
-    # target's Budget. What they do consume is proxy capacity, and that is the
+    # The three routes that reach Telegram without a ledger charge. They open
+    # uncharged Accounted work (ADR-041), which names the caller and pays
+    # nothing, so no Request lands on the target's Budget. What they do consume is proxy capacity, and that is the
     # deployment's, i.e. the Owner's own. Written out per route rather than as
     # one note, because "reaches Telegram" and "spends the target's Budget" look
     # identical from the outside and this is the distinction that decides it.
     f"{settings.API_V1_STR}/telegram/scrape": (
-        "walks a channel's web view outside any `metered()` block, so the "
+        "walks a channel's web view as uncharged Accounted work, so the "
         "Requests are charged to nobody; it spends the deployment's proxies"
     ),
-    f"{settings.API_V1_STR}/telegram/channel-info": ("unmetered, the same"),
-    f"{settings.API_V1_STR}/telegram/resolve-start-time": ("unmetered, the same"),
+    f"{settings.API_V1_STR}/telegram/channel-info": ("uncharged, the same"),
+    f"{settings.API_V1_STR}/telegram/resolve-start-time": ("uncharged, the same"),
     # Setting groups live in `data/channels.py`, which reaches a seam elsewhere
     # in the module. These handlers are plain row writes and reach none of it —
     # the coarseness of a per-module scan, paid for with four explicit answers

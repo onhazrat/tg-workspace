@@ -19,7 +19,6 @@ from stem import Signal
 from stem.control import Controller
 
 from app.core.config import settings
-from app.core.request_meter import record_telegram_request
 from app.core.request_recording import (
     Cause,
     Page,
@@ -572,8 +571,8 @@ async def fetch_with_retry(
     egress IP to Telegram's CDN.
 
     **One Request for quota purposes is one attempt Telegram answered** (ticket
-    08), charged to whatever `core/request_meter` block is active — nothing, for
-    the callers that are not a sync.
+    08), charged by the page record (`Page.record`, the one charge rule) to the
+    Accounted work open around the call. Work that pays nothing pays nothing.
 
     Per *answered attempt*, not per call. An attempt that dies in transport —
     dead proxy, connect timeout — is charged nothing and retried for free, which
@@ -717,8 +716,6 @@ async def fetch_with_retry(
             )
             telemetry["totalDuration"] = int(time.time() * 1000 - start_total)
             telemetry["success"] = True
-            if counts_towards_quota:
-                record_telegram_request()
             recording.record(
                 at=_utc(fetch_started),
                 latency_ms=latency_ms,
@@ -762,8 +759,8 @@ async def fetch_with_retry(
             # it with the dead proxies — which is why this reads the soft-block
             # flag rather than the exception's base class.
             #
-            # Charged here, per attempt, and not once at the exit below. An
-            # `HTTPStatusError` satisfies `is_network` (it subclasses
+            # Charged per attempt, by the record below, and not once at the
+            # exit. An `HTTPStatusError` satisfies `is_network` (it subclasses
             # `httpx.HTTPError`), so the retry branch takes 404s and 429s round
             # again — up to `NETWORK_FETCH_RETRIES`, which is **8**. A per-call
             # charge would bill one Request for eight round trips Telegram
@@ -771,8 +768,6 @@ async def fetch_with_retry(
             # most rate-limit pressure, which are the ones generating the most
             # load. See `docs/quota-ledger-plan.md`.
             answered = isinstance(exc, httpx.HTTPStatusError) or is_soft_block
-            if counts_towards_quota and answered:
-                record_telegram_request()
             _record_wasted(
                 recording,
                 sent=sent,
