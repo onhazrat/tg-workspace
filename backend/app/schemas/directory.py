@@ -254,6 +254,13 @@ def _normalised(handles: list[str]) -> tuple[str, ...]:
     return tuple(sorted({normalize_handle(h) for h in handles}))
 
 
+def _seed_tag(tag: str | None = None, group: str | None = None) -> str | None:
+    """The Tag a named Seed source reads. A Setting group resolves as its
+    derived `group:` Tag: the reader's Follows filed in it, never a stored Tag
+    (DFP-04)."""
+    return group_tag_name(group) if group else tag
+
+
 class _NamedSeeds(_Cond):
     """A Seed source the server resolves on every read: one of the reader's
     Tags, or one of their Setting groups. Send one, or handles."""
@@ -268,10 +275,8 @@ class _NamedSeeds(_Cond):
         if required and given == 0:
             raise ValueError("Seeds need handles, a tag or a group")
 
-    def _seed_tag(self) -> str | None:
-        # A Setting group resolves as its derived `group:` Tag: the reader's
-        # Follows filed in it, never a stored Tag (DFP-04).
-        return group_tag_name(self.group) if self.group else self.tag
+    def seed_tag(self) -> str | None:
+        return _seed_tag(self.tag, self.group)
 
 
 class DirectoryCitedByCondition(_NamedSeeds):
@@ -289,7 +294,7 @@ class DirectoryCitedByCondition(_NamedSeeds):
         return self
 
     def to_cond(self) -> DirectoryCond:
-        return CitedByCond(_normalised(self.handles), self._seed_tag())
+        return CitedByCond(_normalised(self.handles), self.seed_tag())
 
 
 class DirectoryCitesCondition(_NamedSeeds):
@@ -307,7 +312,7 @@ class DirectoryCitesCondition(_NamedSeeds):
         return self
 
     def to_cond(self) -> DirectoryCond:
-        return CitesCond(_normalised(self.handles), self._seed_tag())
+        return CitesCond(_normalised(self.handles), self.seed_tag())
 
 
 class DirectorySharedCondition(_NamedSeeds):
@@ -325,7 +330,7 @@ class DirectorySharedCondition(_NamedSeeds):
 
     def to_cond(self) -> DirectoryCond:
         return SharedCond(
-            self.type, _normalised(self.handles), self.min, self._seed_tag()
+            self.type, _normalised(self.handles), self.min, self.seed_tag()
         )
 
 
@@ -751,6 +756,9 @@ class DirectoryTagSeeds(BaseModel):
 
     tag: str = Field(min_length=1)
 
+    def seed_tag(self) -> str | None:
+        return _seed_tag(tag=self.tag)
+
 
 class DirectoryGroupSeeds(BaseModel):
     """Seeds from one of the reader's Setting groups, resolved by the server."""
@@ -758,6 +766,9 @@ class DirectoryGroupSeeds(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     group: str = Field(min_length=1)
+
+    def seed_tag(self) -> str | None:
+        return _seed_tag(group=self.group)
 
 
 #: A Shared Condition's Seeds: handles the browser resolved, a Tag or a group.
@@ -790,11 +801,9 @@ class DirectoryWhyRequest(DirectoryYoursRequest, _TimeBound):
             op="and",
             children=tuple(
                 TreeAtom(
-                    cond=SharedCond(relation, (), tag=seeds.tag)
-                    if isinstance(seeds, DirectoryTagSeeds)
-                    else SharedCond(relation, (), tag=group_tag_name(seeds.group))
-                    if isinstance(seeds, DirectoryGroupSeeds)
-                    else SharedCond(relation, _normalised(seeds))
+                    cond=SharedCond(relation, _normalised(seeds))
+                    if isinstance(seeds, list)
+                    else SharedCond(relation, (), tag=seeds.seed_tag())
                 )
                 for relation, seeds in sides
                 if seeds is not None
