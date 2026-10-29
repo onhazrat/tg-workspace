@@ -2171,7 +2171,7 @@ export type DirectoryFollowSource = {
  * DirectoryGroupCondition
  *
  * In one of the reader's Setting groups, by name: the Channels they follow
- * filed in it (TGU-04). A group they do not have matches nothing.
+ * filed in it. A group they do not have matches nothing.
  */
 export type DirectoryGroupCondition = {
     /**

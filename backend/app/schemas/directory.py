@@ -256,7 +256,7 @@ def _normalised(handles: list[str]) -> tuple[str, ...]:
 
 class _NamedSeeds(_Cond):
     """A Seed source the server resolves on every read: one of the reader's
-    Tags, or one of their Setting groups (TGU-04). Send one, or handles."""
+    Tags, or one of their Setting groups. Send one, or handles."""
 
     tag: str | None = Field(None, min_length=1)
     group: str | None = Field(None, min_length=1)
@@ -339,9 +339,10 @@ class DirectoryTagCondition(_Cond):
         return TagCond(self.name)
 
 
+# TGU-04: a Setting group is its own Condition, apart from the Tags.
 class DirectoryGroupCondition(_Cond):
     """In one of the reader's Setting groups, by name: the Channels they follow
-    filed in it (TGU-04). A group they do not have matches nothing."""
+    filed in it. A group they do not have matches nothing."""
 
     type: Literal["group"]
     name: str = Field(min_length=1)

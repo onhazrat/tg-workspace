@@ -268,7 +268,7 @@
       "comment": "A Channels tab selection can be the whole account; past this, use \"every follow\".",
       "expression": "10000",
       "file": "backend/app/schemas/directory.py",
-      "line": 419,
+      "line": 420,
       "name": "MAX_YOUR_CHANNELS",
       "value": 10000
     },
@@ -276,7 +276,7 @@
       "comment": "The most handles one paste may add (DADD).",
       "expression": "100000",
       "file": "backend/app/schemas/directory.py",
-      "line": 713,
+      "line": 714,
       "name": "MAX_ADDED_HANDLES",
       "value": 100000
     },

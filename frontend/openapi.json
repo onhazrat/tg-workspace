@@ -9565,7 +9565,7 @@
         "type": "object",
         "required": ["type", "name"],
         "title": "DirectoryGroupCondition",
-        "description": "In one of the reader's Setting groups, by name: the Channels they follow\nfiled in it (TGU-04). A group they do not have matches nothing."
+        "description": "In one of the reader's Setting groups, by name: the Channels they follow\nfiled in it. A group they do not have matches nothing."
       },
       "DirectoryGroupSeeds": {
         "properties": {
