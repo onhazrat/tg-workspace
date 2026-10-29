@@ -805,6 +805,98 @@ test.describe("TG Workspace channels and posts", () => {
   })
 
   /**
+   * TGU-02: the Tags dropdown lists Tags by this tab's Tag uses, kept on the
+   * server. Bulk tagging, a tick and a funnel each record one; the order holds
+   * while the dropdown is open and moves on the next open.
+   */
+  test("the Tags dropdown orders by Tag use and holds while open", async ({
+    page,
+  }) => {
+    const prefix = `use${Date.now()}`
+    const [one, both] = [`${prefix}one`, `${prefix}both`]
+    await gotoWorkspace(page, "summary")
+    await seedBulkChannels(page, 2, prefix)
+
+    await page.goto("/?tab=channels")
+    await page.getByRole("button", { name: "Cards", exact: true }).click()
+    await page.getByPlaceholder("Search channels...").fill(prefix)
+    const cards = page.locator(`[data-channel-name^="${prefix}"]`)
+    await expect(cards).toHaveCount(2, { timeout: 30_000 })
+    const [first] = await cards.evaluateAll((elements) =>
+      elements.map((el) => el.getAttribute("data-channel-name") ?? ""),
+    )
+
+    // Tagging by hand records a use of the Tag.
+    const bulkTag = async (name: string) => {
+      const recorded = page.waitForRequest(
+        (r) =>
+          r.url().endsWith("/data/tags/uses") &&
+          r.postDataJSON()?.name === name,
+      )
+      await page.getByTestId("bulk-tags").click()
+      await page.getByTestId("bulk-add-tag-input").fill(name)
+      await page.getByTestId("bulk-add-tag-button").click()
+      await page.keyboard.press("Escape")
+      await recorded
+    }
+    await clearChannelSelection(page)
+    await page
+      .getByRole("button", { name: `Select ${first}`, exact: true })
+      .click()
+    await bulkTag(one)
+    await clearChannelSelection(page)
+    await page.getByRole("button", { name: "Select all", exact: true }).click()
+    await bulkTag(both)
+
+    const tagsMenu = page.getByTestId("channel-tags")
+    const order = () =>
+      page
+        .locator('[data-testid^="channel-tags-row-"]')
+        .evaluateAll((rows) =>
+          rows.map((row) =>
+            row.getAttribute("data-testid")?.replace("channel-tags-row-", ""),
+          ),
+        )
+    const reopen = async () => {
+      await page.keyboard.press("Escape")
+      await tagsMenu.click()
+      await page.getByPlaceholder("Search tags...").fill(prefix)
+    }
+    // One use each, so `both`, on more Channels, leads.
+    await tagsMenu.click()
+    await expect(async () => {
+      await reopen()
+      expect(await order()).toEqual([both, one])
+    }).toPass({ timeout: 15_000 })
+
+    // Two ticks on `one` make three uses; the open list does not move.
+    const ordered = () =>
+      page.waitForResponse((r) => r.url().includes("/data/tags/order"))
+    const tick = page.getByTestId(`channel-tags-row-${one}`)
+    await tick.click()
+    let refetched = ordered()
+    await tick.click()
+    await refetched
+    expect(await order()).toEqual([both, one])
+    await expect(async () => {
+      await reopen()
+      expect(await order()).toEqual([one, both])
+    }).toPass({ timeout: 15_000 })
+
+    // Three funnels on `both` make four uses.
+    const funnel = page.getByTestId(`channel-tags-funnel-${both}`)
+    for (let i = 0; i < 4; i++) await funnel.click()
+    refetched = ordered()
+    await funnel.click()
+    await refetched
+    expect(await order()).toEqual([one, both])
+    await expect(async () => {
+      await reopen()
+      expect(await order()).toEqual([both, one])
+    }).toPass({ timeout: 15_000 })
+  })
+
+  /**
    * CTB-02: a Reach bound is a number Condition. The Filters dropdown opens
    * Reach's editor, the bound is added, and the grid drops the Channel under
    * it. Reach is mocked onto the channel stats.
