@@ -1492,7 +1492,7 @@
       "comment": "The most handles one Tag request carries: the server's cap on a bulk write's handles, a trust boundary it keeps. A Tag is not capped, so a longer list goes in batches of this size.",
       "expression": "10_000",
       "file": "frontend/src/hooks/useTags.ts",
-      "line": 35,
+      "line": 40,
       "name": "TAG_BATCH",
       "value": 10000
     },

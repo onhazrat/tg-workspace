@@ -4,17 +4,14 @@
  * the dropdown's rename and delete, and recording each use on this tab.
  */
 import { useCallback, useMemo } from "react"
-import type { FacetManage } from "@/components/filter-tree/FacetMenuManage"
-import { useTags } from "@/hooks/useTags"
+import { useTagManage } from "@/hooks/useTags"
 import { recordTagUse, useTagUses } from "@/hooks/useTagUses"
 import { getTagNames } from "@/lib/channels/channel-tag-model"
-import { sameTag } from "@/lib/directory/directory-tags"
-import { byTagUse, deleteText, mergeText } from "@/lib/tags/tag-use"
+import { byTagUse } from "@/lib/tags/tag-use"
 import type { Channel } from "@/types"
 
 export function useChannelTagUse(channels: Channel[]) {
   const score = useTagUses("channels")
-  const tagStore = useTags()
   const counts = useMemo(() => {
     const byTag = new Map<string, number>()
     for (const channel of channels)
@@ -22,15 +19,7 @@ export function useChannelTagUse(channels: Channel[]) {
         byTag.set(tag, (byTag.get(tag) ?? 0) + 1)
     return byTag
   }, [channels])
-  const allChannels = (name: string) =>
-    tagStore.tags.find((t) => sameTag(t.name, name))?.channels
-  const manage: FacetManage = {
-    onRename: (id, to) => void tagStore.rename(id, to),
-    onDelete: (id) => void tagStore.remove(id),
-    mergeText: (id, to) => mergeText(tagStore.tags, id, to),
-    deleteText: (row) =>
-      deleteText(row.label, allChannels(row.id) ?? row.total),
-  }
+  const manage = useTagManage()
   /** `items` by this tab's Tag use, then `count` (by default each Tag's
    * Channels on the tab), then name. Stable until the uses or Channels change. */
   const order = useCallback(

@@ -12,17 +12,11 @@ import { useState } from "react"
 import { toast } from "sonner"
 import { dataReadTagOrder, type TagOrderResponse } from "@/client"
 import { queryKeys } from "@/hooks/queryKeys"
-import { fetchTagHandles, useTags } from "@/hooks/useTags"
+import { fetchTagHandles, useTagManage, useTags } from "@/hooks/useTags"
 import { recordTagUse, useTagUses } from "@/hooks/useTagUses"
 import { errorText } from "@/lib/artifacts/artifact-run"
 import { isVirtualGroupTag } from "@/lib/channels/virtual-group-tags"
-import { sameTag } from "@/lib/directory/directory-tags"
-import {
-  byTagUse,
-  deleteText,
-  mergeText,
-  type TagTab,
-} from "@/lib/tags/tag-use"
+import { byTagUse, type TagTab } from "@/lib/tags/tag-use"
 import { FacetMenu, type FacetMenuRow } from "./FacetMenu"
 
 type TagsDropdownProps = {
@@ -48,6 +42,7 @@ const tickOf = (selected: number, total: number): FacetMenuRow["tick"] =>
 export function TagsDropdown(p: TagsDropdownProps) {
   const [open, setOpen] = useState(false)
   const tags = useTags()
+  const manage = useTagManage()
   const score = useTagUses(p.tab)
   const counts = useQuery({
     queryKey: [...queryKeys.tagOrder(p.tab), p.scope, p.selected],
@@ -107,17 +102,7 @@ export function TagsDropdown(p: TagsDropdownProps) {
       labelOf={(id) => id}
       onFunnel={p.onFunnel}
       onClearFunnels={p.onClearFunnels}
-      manage={{
-        onRename: (id, to) => void tags.rename(id, to),
-        onDelete: (id) => void tags.remove(id),
-        mergeText: (id, to) => mergeText(tags.tags, id, to),
-        deleteText: (row) =>
-          deleteText(
-            row.label,
-            tags.tags.find((t) => sameTag(t.name, row.id))?.channels ??
-              row.total,
-          ),
-      }}
+      manage={manage}
     />
   )
 }

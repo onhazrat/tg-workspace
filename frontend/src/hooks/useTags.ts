@@ -17,10 +17,15 @@ import {
   dataRenameTag,
   type TagResponse,
 } from "@/client"
+import type { FacetManage } from "@/components/filter-tree/FacetMenuManage"
 import { errorText } from "@/lib/artifacts/artifact-run"
-import type { TagChoices, Tagging } from "@/lib/directory/directory-tags"
+import {
+  sameTag,
+  type TagChoices,
+  type Tagging,
+} from "@/lib/directory/directory-tags"
 import { queryClient } from "@/lib/queryClient"
-import { byTagUse } from "@/lib/tags/tag-use"
+import { byTagUse, deleteText, mergeText } from "@/lib/tags/tag-use"
 import { queryKeys } from "./queryKeys"
 import { useSettingGroupsQuery } from "./useSettingGroups"
 import { recordTagUse, useTagUses } from "./useTagUses"
@@ -129,6 +134,20 @@ export function useTagHandles(
   const results = useQueries({ queries: names.map(tagHandlesQuery) })
   const byName = new Map(names.map((name, i) => [name, results[i]?.data]))
   return (name) => byName.get(name)
+}
+
+/** A Tags dropdown's rename and delete, warning before a merge and saying how
+ * many channels, followed or not, a delete takes the Tag off (TGU-02). */
+export function useTagManage(): FacetManage {
+  const tags = useTags()
+  const channels = (name: string) =>
+    tags.tags.find((t) => sameTag(t.name, name))?.channels
+  return {
+    onRename: (id, to) => void tags.rename(id, to),
+    onDelete: (id) => void tags.remove(id),
+    mergeText: (id, to) => mergeText(tags.tags, id, to),
+    deleteText: (row) => deleteText(row.label, channels(row.id) ?? row.total),
+  }
 }
 
 /** Record a Directory Tag use once `write` is done, so a new Tag exists. */
