@@ -45,17 +45,23 @@ export function mergeText(
 export const deleteText = (name: string, channels: number) =>
   `"${name}" is on ${channels} channel${channels === 1 ? "" : "s"}, followed or not; deleting it takes it off every one.`
 
-const tagValues = <C extends BaseCond>(filter: FilterNode<C>) =>
-  atoms(filter).flatMap(({ cond }) =>
-    cond.type === "tag" && "value" in cond ? [String(cond.value)] : [],
-  )
+/** A `tag` Condition's value, as the Channels and Requests tabs hold it. */
+const tagValue = (cond: BaseCond) =>
+  cond.type === "tag" && "value" in cond ? String(cond.value) : undefined
+
+const tagValues = <C extends BaseCond>(
+  filter: FilterNode<C>,
+  named: (cond: C) => string | undefined,
+) => atoms(filter).flatMap(({ cond }) => named(cond) ?? [])
 
 /** The Tag values `after` names that `before` did not: the Tags a filter
- * change used, wherever the change came from. */
+ * change used, wherever the change came from. `named` reads the Tag a
+ * Condition names; the Directory's are In the Tag and a Tag as Seeds. */
 export function newTagValues<C extends BaseCond>(
   before: FilterNode<C>,
   after: FilterNode<C>,
+  named: (cond: C) => string | undefined = tagValue,
 ): string[] {
-  const had = new Set(tagValues(before))
-  return tagValues(after).filter((value) => !had.has(value))
+  const had = new Set(tagValues(before, named))
+  return tagValues(after, named).filter((value) => !had.has(value))
 }

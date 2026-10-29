@@ -1,11 +1,11 @@
 /**
  * Tags in the Directory (DFP-04): a Channel's badges, the picker that puts a
- * Tag on or takes it off (or makes a new one), and the Tags menu that ticks a
- * Tag's Channels, renames it and deletes it after saying how many it is on.
+ * Tag on or takes it off (or makes a new one). The Tags dropdown that selects,
+ * renames and deletes is `TagsDropdown` (TGU-03).
  */
 import { afterEach, describe, expect, test } from "bun:test"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
-import { TagBadges, TagPicker, TagsMenu } from "./DirectoryTags"
+import { TagBadges, TagPicker } from "./DirectoryTags"
 
 afterEach(cleanup)
 
@@ -92,50 +92,6 @@ describe("the picker", () => {
   })
 })
 
-function menu() {
-  const calls = {
-    tick: [] as string[],
-    rename: [] as [string, string][],
-    del: [] as string[],
-  }
-  render(
-    <TagsMenu
-      tags={TAGS}
-      onTick={(n) => calls.tick.push(n)}
-      onRename={(n, to) => calls.rename.push([n, to])}
-      onDelete={(n) => calls.del.push(n)}
-    />,
-  )
-  fireEvent.click(screen.getByTestId("directory-tags-menu"))
-  return calls
-}
-
-describe("the Tags menu", () => {
-  test("ticks exactly a Tag's Channels", () => {
-    const calls = menu()
-    fireEvent.click(screen.getByLabelText("Tick the channels in News"))
-    expect(calls.tick).toEqual(["News"])
-  })
-
-  test("renames a Tag", () => {
-    const calls = menu()
-    fireEvent.click(screen.getByLabelText("Rename Tech"))
-    const input = screen.getByLabelText("New name for Tech")
-    fireEvent.change(input, { target: { value: "Science" } })
-    fireEvent.submit(input)
-    expect(calls.rename).toEqual([["Tech", "Science"]])
-  })
-
-  test("deletes a Tag only after saying how many Channels it is on", () => {
-    const calls = menu()
-    fireEvent.click(screen.getByLabelText("Delete News"))
-    expect(calls.del).toEqual([])
-    expect(screen.getByText(/"News" is on 3 channels/)).toBeTruthy()
-    fireEvent.click(screen.getByTestId("directory-tag-delete-confirm"))
-    expect(calls.del).toEqual(["News"])
-  })
-})
-
 describe("a group: Tag (story 23)", () => {
   const WITH_GROUP = [...TAGS, { name: "group:Fast", channels: 2 }]
 
@@ -152,23 +108,5 @@ describe("a group: Tag (story 23)", () => {
     picker({ tags: WITH_GROUP, current: ["group:Fast"] })
     expect(screen.queryByText("group:Fast")).toBeNull()
     expect(screen.getAllByRole("checkbox")).toHaveLength(2)
-  })
-
-  test("ticks its Channels from the menu but is neither renamed nor deleted", () => {
-    const ticked: string[] = []
-    render(
-      <TagsMenu
-        tags={WITH_GROUP}
-        onTick={(n) => ticked.push(n)}
-        onRename={() => {}}
-        onDelete={() => {}}
-      />,
-    )
-    fireEvent.click(screen.getByTestId("directory-tags-menu"))
-    fireEvent.click(screen.getByLabelText("Tick the channels in group:Fast"))
-    expect(ticked).toEqual(["group:Fast"])
-    expect(screen.queryByLabelText("Rename group:Fast")).toBeNull()
-    expect(screen.queryByLabelText("Delete group:Fast")).toBeNull()
-    expect(screen.getByLabelText("Rename News")).toBeTruthy()
   })
 })

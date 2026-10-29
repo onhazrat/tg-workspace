@@ -4,7 +4,7 @@
  * opens, a Tag with none of the tab's Channels is not listed, and selecting a
  * Tag hands the tab that one Tag's handles and records a Tag use.
  */
-import { afterEach, beforeEach, expect, test } from "bun:test"
+import { afterEach, beforeEach, expect, spyOn, test } from "bun:test"
 import { QueryClientProvider } from "@tanstack/react-query"
 import {
   cleanup,
@@ -13,6 +13,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react"
+import { toast } from "sonner"
 import { configureGeneratedClient } from "@/api/generated-client"
 import { client } from "@/client/client.gen"
 import { queryClient } from "@/lib/queryClient"
@@ -58,17 +59,23 @@ beforeEach(() => {
       if (url.pathname.endsWith("/tags")) return json(TAGS)
       if (url.pathname.endsWith("/tags/order"))
         return json(ORDER.map((row) => ({ ...row, lastUsedAt: null })))
-      if (url.pathname.endsWith("/tags/channels"))
-        return json({ handles: HANDLES[url.searchParams.get("name") ?? ""] })
+      if (url.pathname.endsWith("/tags/channels")) {
+        const handles = HANDLES[url.searchParams.get("name") ?? ""]
+        return handles
+          ? json({ handles })
+          : new Response('{"detail":"boom"}', { status: 500 })
+      }
       return json({ changed: 1 })
     }) as unknown as typeof fetch,
   })
 })
 
+const realConfig = client.getConfig()
+
 afterEach(() => {
   cleanup()
   queryClient.clear()
-  client.setConfig({ fetch: undefined })
+  client.setConfig({ fetch: realConfig.fetch, baseUrl: realConfig.baseUrl })
 })
 
 function mount() {
@@ -151,6 +158,16 @@ test("selecting a Tag hands the tab that one Tag's handles and records a use", a
       sent.filter((s) => s.path.endsWith("/tags/uses")).map((s) => s.body),
     ).toEqual([{ tab: "requests", name: "Bank" }]),
   )
+})
+
+test("a failed read of a Tag's channels says so and selects nothing", async () => {
+  const error = spyOn(toast, "error").mockImplementation(() => "")
+  const { selections } = mount()
+  await open()
+  fireEvent.click(screen.getByTestId("tags-row-Art"))
+  await waitFor(() => expect(error).toHaveBeenCalledTimes(1))
+  expect(selections).toEqual([])
+  error.mockRestore()
 })
 
 test("the funnel filters by the Tag", async () => {

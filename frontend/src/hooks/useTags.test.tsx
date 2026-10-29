@@ -3,13 +3,11 @@
  *
  * Watched to fail:
  * - send one request for every handle -> the batches case
- * - let a failed read of a Tag's Channels reject -> the tick case
  */
-import { afterEach, expect, spyOn, test } from "bun:test"
+import { afterEach, expect, test } from "bun:test"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { cleanup, renderHook } from "@testing-library/react"
 import type { ReactNode } from "react"
-import { toast } from "sonner"
 
 import { client } from "@/client/client.gen"
 import { useTags } from "@/hooks/useTags"
@@ -76,27 +74,4 @@ test("a Tag past the server's cap is sent in batches of at most 10,000", async (
     expect(batches.map((b) => b.length)).toEqual([10_000, 10_000, 5_000])
     expect(batches.flat()).toEqual(handles)
   }
-})
-
-test("ticking a Tag's Channels ticks them, and a failure says so", async () => {
-  let fail = false
-  serve((call) =>
-    call.path.endsWith("/tags/channels")
-      ? fail
-        ? json({ detail: "boom" }, 500)
-        : json({ name: "news", handles: ["a", "b"] })
-      : json([]),
-  )
-  const error = spyOn(toast, "error").mockImplementation(() => "")
-  const tags = mount()
-  const ticked: string[][] = []
-
-  await tags.current.tickTag("news", (handles) => ticked.push(handles))
-  expect(ticked).toEqual([["a", "b"]])
-
-  fail = true
-  await tags.current.tickTag("news", (handles) => ticked.push(handles))
-  expect(ticked).toEqual([["a", "b"]])
-  expect(error).toHaveBeenCalledTimes(1)
-  error.mockRestore()
 })

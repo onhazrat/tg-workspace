@@ -23,7 +23,6 @@ import {
   DirectoryTable,
   PAGE_SIZE,
 } from "@/components/directory/DirectoryTable"
-import { TagsMenu } from "@/components/directory/DirectoryTags"
 import { DirectoryTimeEditor } from "@/components/directory/DirectoryTimeEditor"
 import {
   directoryVocabulary,
@@ -31,12 +30,14 @@ import {
   type MomentEditorRender,
 } from "@/components/directory/directory-vocabulary"
 import { NumberBoundEditor } from "@/components/filter-tree/NumberBoundEditor"
+import { TagsDropdown } from "@/components/filter-tree/TagsDropdown"
 import { useZoomState } from "@/components/SpreadZoom"
 import { queryKeys } from "@/hooks/queryKeys"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { useDirectory } from "@/hooks/useDirectory"
 import { useIsMobile } from "@/hooks/useMobile"
 import { useDirectoryTags } from "@/hooks/useTags"
+import { recordTagUse } from "@/hooks/useTagUses"
 import { errorText } from "@/lib/artifacts/artifact-run"
 import type { MetricBound } from "@/lib/channels/channel-metrics"
 import { seesInternals } from "@/lib/directory/directory-columns"
@@ -49,10 +50,16 @@ import {
   type Measure,
   type MeasureKey,
   type Moment,
+  namedTag,
   type SeedSets,
   seedForms,
 } from "@/lib/directory/directory-filter"
 import { mineWindow } from "@/lib/directory/directory-panel"
+import {
+  clearTagFunnels,
+  funnelledTags,
+  toggleTagFunnel,
+} from "@/lib/directory/directory-tag-funnel"
 import type { Tagging } from "@/lib/directory/directory-tags"
 import {
   chooseSort,
@@ -65,7 +72,19 @@ import {
   tickAllState,
 } from "@/lib/directory/directory-view"
 import { appendAnd, mapGroups } from "@/lib/filter-tree"
+import { newTagValues } from "@/lib/tags/tag-use"
 import type { TimeBound } from "@/lib/time-bound/bound"
+
+/** The Directory selection with a Tag's handles (lowercased) added or taken out. */
+function withHandles(
+  ticks: ReadonlySet<string>,
+  handles: string[],
+  on: boolean,
+): string[] {
+  const these = new Set(handles)
+  const kept = [...ticks].filter((h) => !these.has(h.toLowerCase()))
+  return on ? [...kept, ...handles] : kept
+}
 
 /** The filter without its bounds on `measure`, a measure or a moment, which
  * is what that one's spread is drawn under. */
@@ -324,7 +343,12 @@ export function DirectoryView() {
   const d = useDirectory()
   const { view, patch, list } = d
   const shown = listSummary(list.data, list.isFetching, d.yours.source)
-  const { tags, tagging, choices } = useDirectoryTags()
+  const { tagging, viewTagging, choices } = useDirectoryTags()
+  /** Every filter change, from any control, records the Tags it adds. */
+  const setFilter = (next: DirectoryFilter) => {
+    recordTagUse("directory", ...newTagValues(d.filter, next, namedTag))
+    d.setFilter(next)
+  }
   const internals = seesInternals(d.columnsMenu.catalogue)
   const vocabulary = directoryVocabulary(
     shown.languages,
@@ -355,10 +379,12 @@ export function DirectoryView() {
   const bulkTagging: Tagging = {
     ...tagging,
     onTag: (name, handles) =>
-      held ? void tags.tagView(name, d.request) : tagging.onTag(name, handles),
+      held
+        ? viewTagging.onTag(name, d.request)
+        : tagging.onTag(name, handles),
     onUntag: (name, handles) =>
       held
-        ? void tags.untagView(name, d.request)
+        ? viewTagging.onUntag(name, d.request)
         : tagging.onUntag(name, handles),
   }
   // Below md (DFP-02): the controls in a sheet, the rows as cards.
@@ -382,7 +408,7 @@ export function DirectoryView() {
     <div className="pt-4" data-testid="directory-view">
       <DirectoryBar
         filter={d.filter}
-        onFilter={d.setFilter}
+        onFilter={setFilter}
         vocabulary={vocabulary}
         languages={shown.languages}
         kinds={view.kinds}
@@ -407,20 +433,29 @@ export function DirectoryView() {
         onClearAll={d.clearAll}
         phone={phone}
         onAdd={d.addHandles}
+        tagsMenu={
+          <TagsDropdown
+            tab="directory"
+            testId="directory-tags-facet"
+            tickHint="Select adds its channels, the funnel shows only"
+            scope={null}
+            selected={[...d.ticks]}
+            onSelect={(handles, on) =>
+              d.setTicks(withHandles(d.ticks, handles, on))
+            }
+            funnelled={funnelledTags(d.filter)}
+            onFunnel={(name, on) =>
+              setFilter(toggleTagFunnel(d.filter, name, on))
+            }
+            onClearFunnels={() => setFilter(clearTagFunnels(d.filter))}
+          />
+        }
       />
       {list.error && (
         <p className="mb-2 text-xs text-red-500">
           {errorText(list.error, "The Directory did not load.")}
         </p>
       )}
-      <div className="mb-2 flex justify-end gap-2">
-        <TagsMenu
-          tags={tags.tags}
-          onTick={(name) => void tags.tickTag(name, d.setTicks)}
-          onRename={(name, to) => void tags.rename(name, to)}
-          onDelete={(name) => void tags.remove(name)}
-        />
-      </div>
       <DirectoryBulkBar
         whole={whole}
         onTickAll={() => void d.tickAll(total)}
@@ -482,7 +517,7 @@ export function DirectoryView() {
           onClose={() => d.setOpen(null)}
           onFilter={(cond) => {
             // As the prototype did: close, so the narrowed list shows.
-            d.setFilter(appendAnd(d.filter, cond))
+            setFilter(appendAnd(d.filter, cond))
             d.setOpen(null)
           }}
           tagging={tagging}

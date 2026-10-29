@@ -20,8 +20,10 @@ import {
 import { errorText } from "@/lib/artifacts/artifact-run"
 import { queryClient } from "@/lib/queryClient"
 import type { TagChoices, Tagging } from "@/lib/directory/directory-tags"
+import { byTagUse } from "@/lib/tags/tag-use"
 import { queryKeys } from "./queryKeys"
 import { useSettingGroupsQuery } from "./useSettingGroups"
+import { recordTagUse, useTagUses } from "./useTagUses"
 
 const NO_TAGS: TagResponse[] = []
 
@@ -129,19 +131,41 @@ export function useTagHandles(
   return (name) => byName.get(name)
 }
 
-/** The Tags as the Directory tab wires them: rows, the panel and the filter. */
+/** Record a Directory Tag use once `write` is done, so a new Tag exists. */
+const usedAfter = (write: Promise<void>, name: string) =>
+  void write.then(() => recordTagUse("directory", name))
+
+/**
+ * The Tags as the Directory tab wires them: rows, the panel and the filter,
+ * every list in the Directory's Tag use order (TGU-03). Tagging or untagging
+ * by hand records a use.
+ */
 export function useDirectoryTags() {
   const tags = useTags()
   const groups = useSettingGroupsQuery()
+  const score = useTagUses("directory")
+  const ordered = byTagUse(
+    tags.tags,
+    score,
+    (t) => t.name,
+    (t) => t.channels,
+  )
   const tagging: Tagging = {
-    tags: tags.tags,
-    onTag: (name, handles) => void tags.tag(name, handles),
-    onUntag: (name, handles) => void tags.untag(name, handles),
+    tags: ordered,
+    onTag: (name, handles) => usedAfter(tags.tag(name, handles), name),
+    onUntag: (name, handles) => usedAfter(tags.untag(name, handles), name),
+  }
+  /** Tag or untag every entry a view matches, then record the use. */
+  const viewTagging = {
+    onTag: (name: string, view: DirectoryViewRequest) =>
+      usedAfter(tags.tagView(name, view), name),
+    onUntag: (name: string, view: DirectoryViewRequest) =>
+      usedAfter(tags.untagView(name, view), name),
   }
   const choices: TagChoices = {
-    tags: tags.tags,
+    tags: ordered,
     groups: (groups.data ?? []).map((g) => g.name),
     loaded: tags.loaded && groups.isSuccess,
   }
-  return { tags, tagging, choices }
+  return { tags, tagging, viewTagging, choices }
 }

@@ -1,4 +1,8 @@
 import { expect, test } from "bun:test"
+import {
+  namedTag,
+  parseDirectoryFilter,
+} from "@/lib/directory/directory-filter"
 import { byTagUse, mergeText, newTagValues } from "./tag-use"
 
 const tag = (name: string, channels: number) => ({ name, channels })
@@ -52,4 +56,13 @@ test("the Tag values a filter names that it did not before", () => {
   )
   expect(newTagValues(before, after)).toEqual(["world", "__ui_untagged__"])
   expect(newTagValues(after, before)).toEqual([])
+})
+
+test("in the Directory, In the Tag and a Tag as Seeds are both uses (TGU-03)", () => {
+  const before = parseDirectoryFilter("tag:News")
+  const after = parseDirectoryFilter(
+    'tag:News and tag:Art and parents:"tag:Bank" and lang:fa',
+  )
+  if (!before || !after) throw new Error("unparsed")
+  expect(newTagValues(before, after, namedTag)).toEqual(["Art", "Bank"])
 })
