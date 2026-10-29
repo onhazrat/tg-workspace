@@ -5,7 +5,7 @@
  * (rows carry their Tags) and the Channels (a followed Channel shows its Tags
  * there too).
  */
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
   type DirectoryViewRequest,
@@ -18,6 +18,7 @@ import {
   type TagResponse,
 } from "@/client"
 import { errorText } from "@/lib/artifacts/artifact-run"
+import { queryClient } from "@/lib/queryClient"
 import type { TagChoices, Tagging } from "@/lib/directory/directory-tags"
 import { queryKeys } from "./queryKeys"
 import { useSettingGroupsQuery } from "./useSettingGroups"
@@ -104,16 +105,28 @@ export function useTags() {
         () => dataDeleteTag({ body: { name } }),
         "The Tag was not deleted.",
       ),
-    /** Hand `onTicks` the handles carrying `name` now, `group:` names included. */
-    tickTag: async (name: string, onTicks: (handles: string[]) => void) => {
-      try {
-        const { handles } = await dataListTagChannels({ query: { name } })
-        onTicks(handles)
-      } catch (error) {
-        toast.error(errorText(error, "The Tag's channels did not load."))
-      }
-    },
   }
+}
+
+const tagHandlesQuery = (name: string) => ({
+  queryKey: queryKeys.tagHandles(name),
+  queryFn: async () => {
+    const { handles } = await dataListTagChannels({ query: { name } })
+    return new Set(handles.map((h) => h.toLowerCase()))
+  },
+})
+
+/** The handles carrying `name` now, lowercased: one Tag's, never every Tag's. */
+export const fetchTagHandles = (name: string) =>
+  queryClient.fetchQuery(tagHandlesQuery(name))
+
+/** Each of `names`' handles, lowercased; undefined while one loads. */
+export function useTagHandles(
+  names: string[],
+): (name: string) => ReadonlySet<string> | undefined {
+  const results = useQueries({ queries: names.map(tagHandlesQuery) })
+  const byName = new Map(names.map((name, i) => [name, results[i]?.data]))
+  return (name) => byName.get(name)
 }
 
 /** The Tags as the Directory tab wires them: rows, the panel and the filter. */

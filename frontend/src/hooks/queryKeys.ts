@@ -15,6 +15,8 @@ export const queryKeys = {
   tags: ["tags"] as const,
   /** A tab's Tag uses (TGU-02), under `tags` so a Tag write refetches them. */
   tagOrder: (tab: string) => ["tags", "order", tab] as const,
+  /** One Tag's handles, lowercased (TGU-03). */
+  tagHandles: (name: string) => ["tags", "handles", name] as const,
   bots: ["bots"] as const,
   /**
    * The account's AI Keys (BYOK-01). Separate from `bots` because an AI Key
