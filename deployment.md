@@ -158,6 +158,33 @@ Re-run `backfill_directory_search.py` after raising
 Beside a live worker a racing write can leave a citation count one short, which
 a second run of `backfill_citation_pairs.py` settles.
 
+### The Directory: staging crawls, production merges
+
+Since 2026-10-29 only staging probes the Directory. Production's Directory probe
+Request kind is off (Settings, Telegram work), so the two never pay the proxies
+for the same crawl. Every so often the two Directories are merged, staging into
+production first, then production into staging so staging also crawls from the
+handles production's own Follows cite:
+
+```bash
+ssh root@vm-contabo 'cat > /root/merge-directory.sh' < scripts/merge-directory.sh
+ssh root@vm-contabo 'nohup bash /root/merge-directory.sh to-production > /root/directory-merge.log 2>&1 &'
+ssh root@vm-oracle-amd 'cat > /root/merge-directory.sh' < scripts/merge-directory.sh
+ssh root@vm-oracle-amd 'nohup bash /root/merge-directory.sh to-staging > /root/directory-merge.log 2>&1 &'
+```
+
+Run each pair after the previous merge's log says `done`. The script runs on
+the box being merged into and pulls from the other over SSH, never through the
+machine you start it from. That SSH needs a Tailscale check approved first:
+`ssh root@vm-oracle-amd true` from production (or `ssh root@vm-contabo true` from
+staging) prints the link. It only reads the source. It takes entries the target
+lacks or the source checked more recently, those entries' samples, and every
+Reference the target does not have, then rebuilds citation pairs and the search
+index. A Reference's identity is Telegram's chat id and post number, so the two
+databases agree on it although their Posts differ. `to-production` refuses to
+run while production's probe kind is on, and both boxes must run releases with
+the same Directory columns.
+
 ## Response compression
 
 Traefik gzips responses for both the API and the dashboard. Before this, nothing on
