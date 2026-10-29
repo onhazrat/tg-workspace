@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] A per-Account Tag use table (Account, tab, Tag key, moment), owned by the Tags aggregate as its companion table, `USER_OWNED` in the tenancy seam, with its Alembic revision. The tab is one of `channels`, `directory`, `requests`.
 - [x] A write route records one Tag use for a tab and Tag name, keeping at most the 50 newest per Account, tab and Tag. It is refused in a View-as session by the existing rule.
@@ -14,3 +14,8 @@
 - [x] The Channels tab's Tags dropdown uses them, its rows ordered by score, then channel count, then name. The bulk bar's Tag field and the filter row's Tag options follow the same order. A tick, a filter (dropdown, card Tag chip, filter row), and bulk tagging or untagging record a use; nothing records while viewing as someone.
 - [x] API seam tests: recording and reading per tab, the decay with a frozen clock, the 50-use cap, rename and merge carrying uses, delete and last untag ending them, View-as refusing to record and allowing the read, the read's counts against a scope and a selection, and one Account never seeing another's uses. Component seam tests on `FacetMenu`: order held while open and changed on reopen, rename with and without a merge, delete confirming, no rename or delete on Untagged. Each mutation-checked, named in the commit body.
 - [x] Lint, typecheck, the route guards, the tenancy and isolation guards and the full backend and frontend suites pass.
+
+## Comments
+
+- 2026-10-29: implemented on `claude/tgu-02` and merged into the integration branch in 67362d33 (fast-forward).
+  Open: `selectAction` (a selection action for a tab without ticks) left to TGU-03. `TagUse` is in `EXPORT_OMISSIONS`.
