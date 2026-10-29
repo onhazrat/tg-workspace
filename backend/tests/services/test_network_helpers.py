@@ -17,6 +17,7 @@ import pytest
 from app.services import network
 from app.services.network import parse_telegram_entities, rotate_tor_identity
 from app.services.telegram_web import telegram_channel_post_url
+from tests.utils.sleep import asyncio_without_sleep
 
 
 @pytest.mark.parametrize(
@@ -131,7 +132,7 @@ def rotations(monkeypatch: pytest.MonkeyPatch) -> list[tuple[int, str]]:
         await real_sleep(0)
 
     monkeypatch.setattr(network, "_rotate_tor_identity_sync", fake_sync)
-    monkeypatch.setattr(network.asyncio, "sleep", short_sleep)
+    monkeypatch.setattr(network, "asyncio", asyncio_without_sleep(short_sleep))
     monkeypatch.setattr(network, "_is_rotating_tor", False)
     monkeypatch.setattr(network, "_tor_request_counter", 7)
     return sent
@@ -188,3 +189,27 @@ def test_a_rotation_without_arguments_uses_the_configured_port(
     asyncio.run(rotate_tor_identity())
 
     assert rotations == [(9151, "secret")]
+
+
+def test_markup_scans_hostile_text_in_linear_time() -> None:
+    """Mutation: restore the lazy `(\\[(.*?)\\]\\((.*?)\\))` link alternative.
+
+    Lazy `.*?` in the link was cubic on text full of `[a](` (CodeQL alert 44):
+    1,000 repeats took 3.6 s, so a Summary of them stalled the publish path.
+    """
+    import time
+
+    from app.services.network import TELEGRAM_MARKUP, telegram_segments
+
+    # Small enough that the cubic pattern fails here in seconds, not hours:
+    # 800 repeats took it ~2 s, and take the linear one well under 1 ms.
+    started = time.monotonic()
+    for hostile in ("[a](" * 800, "[a]((b)" * 800):
+        list(TELEGRAM_MARKUP.finditer(hostile))
+    assert time.monotonic() - started < 0.25
+
+    wiki = telegram_segments("[t](https://en.wikipedia.org/wiki/F_(b)) and [a [b]](x)")
+    assert [(s.kind, s.text, s.url) for s in wiki if s.kind == "link"] == [
+        ("link", "t", "https://en.wikipedia.org/wiki/F_(b)"),
+        ("link", "a [b]", "x"),
+    ]

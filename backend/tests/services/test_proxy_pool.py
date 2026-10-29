@@ -22,13 +22,6 @@ from app.services.proxy_pool import (
 )
 
 
-@pytest.fixture(autouse=True)
-def _clear_bad_proxies() -> None:
-    _bad_proxies.clear()
-    yield
-    _bad_proxies.clear()
-
-
 @pytest.fixture
 def pool() -> ProxyPoolManager:
     manager = ProxyPoolManager()

@@ -15,7 +15,6 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-import types
 import uuid
 from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
@@ -69,6 +68,7 @@ from app.services.sync_lanes import (
     MANUAL_SINGLE_NORMAL_LANE,
 )
 from app.services.sync_orchestrator import run_sync_job
+from tests.utils.sleep import asyncio_without_sleep
 from tests.utils.user import authentication_token_from_email
 
 API = settings.API_V1_STR
@@ -153,7 +153,7 @@ def telegram(monkeypatch: pytest.MonkeyPatch) -> FakeTelegram:
     monkeypatch.setattr(
         network,
         "asyncio",
-        types.SimpleNamespace(**{**vars(asyncio), "sleep": _no_sleep}),
+        asyncio_without_sleep(_no_sleep),
     )
     monkeypatch.setattr(settings, "SYNC_RETRY_BACKOFF_BASE_MS", 0)
     return fake

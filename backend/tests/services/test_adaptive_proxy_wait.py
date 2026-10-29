@@ -33,7 +33,6 @@ import asyncio
 import inspect
 import pathlib
 import time
-from collections.abc import Generator
 from dataclasses import replace
 from typing import Any
 
@@ -59,25 +58,12 @@ from app.services.proxy_pacing import (
 )
 from app.services.proxy_pool import ProxyLane, ProxyWorker, ProxyWorkerPool, bound_to
 from app.services.telegram_web import TelegramWebViewUnavailable
+from tests.utils.sleep import asyncio_without_sleep
 
 TELEGRAM_URL = "https://t.me/s/somechannel"
 BOT_API_URL = "https://api.telegram.org/bot123/sendMessage"
 PROXY = "http://proxy-a.example:8080"
 OTHER_PROXY = "http://proxy-b.example:8080"
-
-
-@pytest.fixture(autouse=True)
-def _clean_proxy_state() -> Generator[None]:
-    """Cooldown and pace are module state, so a leak between tests is a lie.
-
-    Both directions matter: a stale cooldown makes the 404 guard pass without
-    the fix, and a stale pace makes a widening guard pass without a rejection.
-    """
-    network._bad_proxies.clear()
-    network.reset_proxy_pacing_for_tests()
-    yield
-    network._bad_proxies.clear()
-    network.reset_proxy_pacing_for_tests()
 
 
 async def _no_sleep(_seconds: float) -> None:
@@ -132,7 +118,7 @@ def _run_fetch(
     record whether the call succeeded or raised.
     """
     monkeypatch.setattr(network, "_fetch_once", fetch_once)
-    monkeypatch.setattr(network.asyncio, "sleep", _no_sleep)
+    monkeypatch.setattr(network, "asyncio", asyncio_without_sleep(_no_sleep))
     effective = settings.NETWORK_FETCH_RETRIES if retries is None else retries
 
     async def _run() -> dict[str, Any]:

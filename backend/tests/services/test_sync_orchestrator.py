@@ -35,6 +35,7 @@ from app.services.telegram_web import (
     telegram_web_view_channel_url,
 )
 from tests.utils.setting_groups import upsert_sync_test_channel
+from tests.utils.sleep import asyncio_without_sleep
 
 
 def _ctx(channel_id: str, channel_name: str) -> _ChannelSyncCtx:
@@ -315,7 +316,7 @@ class _Scrape:
 
         monkeypatch.setattr(sync_orchestrator, "scrape_channel_page", page)
         monkeypatch.setattr(sync_orchestrator, "rotate_tor_identity", rotate)
-        monkeypatch.setattr(sync_orchestrator.asyncio, "sleep", sleep)
+        monkeypatch.setattr(sync_orchestrator, "asyncio", asyncio_without_sleep(sleep))
         monkeypatch.setattr(settings, "SYNC_MAX_RETRIES", 2)
         monkeypatch.setattr(settings, "SYNC_RETRY_BACKOFF_BASE_MS", 100)
 

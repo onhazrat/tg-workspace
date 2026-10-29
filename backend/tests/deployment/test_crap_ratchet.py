@@ -235,3 +235,33 @@ def test_the_local_run_measures_against_the_environment_ci_has() -> None:
     assert '--env-file "$ROOT/.env.example"' in run_sh, (
         "scripts/crap/run.sh no longer layers .env.example under the local .env"
     )
+
+
+def test_a_commit_touching_a_baseline_file_is_reminded_of_it() -> None:
+    """Mutations: unwire the `crap-baseline-touch` hook; match no baseline file.
+
+    An improved score fails CI as surely as a worse one, and only CI scores
+    it, so the reminder at commit is the one local signal.
+    """
+    spec = importlib.util.spec_from_file_location(
+        "crap_baseline_touch", _ROOT / "scripts" / "crap" / "baseline_touch.py"
+    )
+    assert spec and spec.loader
+    touch = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(touch)
+    baseline = json.loads((_ROOT / "scripts" / "crap" / "baseline.json").read_text())
+    some_entry = next(iter(baseline))
+    some_file = some_entry.split("::", 1)[0]
+
+    assert touch.touched([some_file, "backend/app/main.py"]) == [some_entry]
+    assert touch.touched(["backend/app/main.py"]) == []
+    hooks = [
+        hook
+        for repo in yaml.safe_load((_ROOT / ".pre-commit-config.yaml").read_text())[
+            "repos"
+        ]
+        for hook in repo["hooks"]
+    ]
+    [wired] = [h for h in hooks if h["id"] == "crap-baseline-touch"]
+    assert wired["entry"] == "python3 scripts/crap/baseline_touch.py"
+    assert "backend/app/" in wired["files"]

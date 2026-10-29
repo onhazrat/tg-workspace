@@ -13,7 +13,6 @@ from __future__ import annotations
 import ast
 import asyncio
 import pathlib
-import types
 import uuid
 from collections.abc import Callable, Generator, Iterator
 from typing import Any
@@ -42,6 +41,7 @@ from app.services.request_accounting import (
 )
 from app.services.request_stats import flush_recorded_requests
 from app.services.telegram_web import TelegramWebViewUnavailable
+from tests.utils.sleep import asyncio_without_sleep
 
 WEB_VIEW = "https://t.me/s/acwchannel"
 SOFT_BLOCKED = "https://t.me/s/acwrestricted"
@@ -89,15 +89,12 @@ def _telegram(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         return answer
 
     monkeypatch.setattr(network, "_fetch_once", fetch_once)
-    # The soft blocks here widen the direct egress's pace; a table of this
-    # test's own keeps that from slowing every later test's fetches.
-    monkeypatch.setattr(network, "_proxy_pace", {})
     # Only `network`'s view of asyncio loses its sleep, so a cancel still lands
     # where the work under test awaits.
     monkeypatch.setattr(
         network,
         "asyncio",
-        types.SimpleNamespace(**{**vars(asyncio), "sleep": _no_sleep}),
+        asyncio_without_sleep(_no_sleep),
     )
     yield
     drain()

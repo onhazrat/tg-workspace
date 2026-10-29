@@ -900,9 +900,16 @@ def utf16_len(text: str) -> int:
 #: What `parse_telegram_entities` pairs: `**bold**`, `*italic*`, `_italic_`,
 #: `[channel #id]` and `[text](url)`. Public because the Part builder needs to
 #: know when a cut lands inside one of these.
+#:
+#: A link's text and URL each allow one level of nested brackets or parentheses
+#: and no unbalanced one. Lazy `.*?` there was cubic on text full of `[a](`: 16 KB
+#: of it took minutes in the publish path. These classes match each character
+#: one way, so a scan is linear, and a Wikipedia URL like `.../F_(b)` now stays
+#: whole instead of losing its `)`.
 TELEGRAM_MARKUP = re.compile(
     r"(\*\*(.*?)\*\*)|(\*(.*?)\*)|(_(.*?)_)|"
-    r"(\[([a-zA-Z0-9_]+)\s+#(\d+)\])|(\[(.*?)\]\((.*?)\))"
+    r"(\[([a-zA-Z0-9_]+)\s+#(\d+)\])|"
+    r"(\[((?:[^\[\]]|\[[^\[\]]*\])*)\]\(((?:[^()]|\([^()]*\))*)\))"
 )
 
 

@@ -17,6 +17,7 @@ from app.services.scraper import (
     resolve_start_time_to_id,
 )
 from app.services.telegram_web import TelegramWebViewUnavailable
+from tests.utils.sleep import asyncio_without_sleep
 
 client = TestClient(app)
 
@@ -92,7 +93,7 @@ def test_resolve_target_newer_than_latest(
         with (
             patch("app.services.scraper.get_channel_info", channel_info),
             patch("app.services.scraper._fetch_post_at_url", fetch_post),
-            patch("app.services.scraper.asyncio.sleep", AsyncMock()),
+            patch("app.services.scraper.asyncio", asyncio_without_sleep(AsyncMock())),
         ):
             return await resolve_start_time_to_id("testchannel", 9_000)
 
@@ -108,7 +109,7 @@ def test_resolve_target_older_than_oldest(
         with (
             patch("app.services.scraper.get_channel_info", channel_info),
             patch("app.services.scraper._fetch_post_at_url", fetch_post),
-            patch("app.services.scraper.asyncio.sleep", AsyncMock()),
+            patch("app.services.scraper.asyncio", asyncio_without_sleep(AsyncMock())),
         ):
             return await resolve_start_time_to_id("testchannel", 500)
 
@@ -124,7 +125,7 @@ def test_resolve_binary_search_finds_post(
         with (
             patch("app.services.scraper.get_channel_info", channel_info),
             patch("app.services.scraper._fetch_post_at_url", fetch_post),
-            patch("app.services.scraper.asyncio.sleep", AsyncMock()),
+            patch("app.services.scraper.asyncio", asyncio_without_sleep(AsyncMock())),
         ):
             return await resolve_start_time_to_id("testchannel", 3_000)
 
@@ -170,7 +171,7 @@ def test_resolve_last_week_ms_not_low_post_ids() -> None:
             patch(
                 "app.services.scraper._fetch_post_at_url", AsyncMock(side_effect=fetch)
             ),
-            patch("app.services.scraper.asyncio.sleep", AsyncMock()),
+            patch("app.services.scraper.asyncio", asyncio_without_sleep(AsyncMock())),
         ):
             return await resolve_start_time_to_id("activechannel", target_ms)
 
@@ -190,7 +191,7 @@ def test_resolve_no_oldest_post_returns_one() -> None:
         with (
             patch("app.services.scraper.get_channel_info", channel_info),
             patch("app.services.scraper._fetch_post_at_url", fetch_post),
-            patch("app.services.scraper.asyncio.sleep", AsyncMock()),
+            patch("app.services.scraper.asyncio", asyncio_without_sleep(AsyncMock())),
         ):
             return await resolve_start_time_to_id("testchannel", 3_000)
 
@@ -219,7 +220,7 @@ def test_api_resolve_start_time_v1(
     with (
         patch("app.services.scraper.get_channel_info", channel_info),
         patch("app.services.scraper._fetch_post_at_url", fetch_post),
-        patch("app.services.scraper.asyncio.sleep", AsyncMock()),
+        patch("app.services.scraper.asyncio", asyncio_without_sleep(AsyncMock())),
     ):
         response = client.post(
             "/api/v1/telegram/resolve-start-time",

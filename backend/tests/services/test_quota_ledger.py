@@ -65,6 +65,7 @@ from app.services.quota import (
 from app.services.telegram_web import TelegramWebViewUnavailable
 from tests.utils.partition import direct_partition
 from tests.utils.requests import answered_request
+from tests.utils.sleep import asyncio_without_sleep
 
 TELEGRAM_URL = "https://t.me/s/somechannel"
 NOT_TELEGRAM_URL = "https://api.telegram.org/bot123/sendMessage"
@@ -98,7 +99,7 @@ def _count_one_fetch(
 ) -> int:
     """Run one `fetch_with_retry` under a tally and return what it counted."""
     monkeypatch.setattr(network, "_fetch_once", fetch_once)
-    monkeypatch.setattr(network.asyncio, "sleep", _no_sleep)
+    monkeypatch.setattr(network, "asyncio", asyncio_without_sleep(_no_sleep))
 
     async def _run() -> int:
         with tallied() as tally:

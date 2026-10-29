@@ -1,0 +1,37 @@
+[
+  {
+    "name": "drop the conftest proxy-state reset",
+    "file": "backend/tests/conftest.py",
+    "old": "@pytest.fixture(autouse=True)\ndef _clean_proxy_state()",
+    "new": "@pytest.fixture\ndef _clean_proxy_state()",
+    "test": "backend/tests/deployment/test_test_isolation.py"
+  },
+  {
+    "name": "patch the shared asyncio.sleep in a test",
+    "file": "backend/tests/services/test_quota_ledger.py",
+    "old": "monkeypatch.setattr(network, \"asyncio\", asyncio_without_sleep(_no_sleep))",
+    "new": "monkeypatch.setattr(network.asyncio, \"sleep\", _no_sleep)",
+    "test": "backend/tests/deployment/test_test_isolation.py"
+  },
+  {
+    "name": "unwire the crap-baseline-touch hook",
+    "file": ".pre-commit-config.yaml",
+    "old": "      - id: crap-baseline-touch\n",
+    "new": "      - id: crap-baseline-tuch\n",
+    "test": "backend/tests/deployment/test_crap_ratchet.py::test_a_commit_touching_a_baseline_file_is_reminded_of_it"
+  },
+  {
+    "name": "match no baseline file",
+    "file": "scripts/crap/baseline_touch.py",
+    "old": "        if key.split(\"::\", 1)[0] in changed\n",
+    "new": "        if False\n",
+    "test": "backend/tests/deployment/test_crap_ratchet.py::test_a_commit_touching_a_baseline_file_is_reminded_of_it"
+  },
+  {
+    "name": "restore the lazy link alternative",
+    "file": "backend/app/services/network.py",
+    "old": "    r\"(\\[((?:[^\\[\\]]|\\[[^\\[\\]]*\\])*)\\]\\(((?:[^()]|\\([^()]*\\))*)\\))\"\n",
+    "new": "    r\"(\\[(.*?)\\]\\((.*?)\\))\"\n",
+    "test": "backend/tests/services/test_network_helpers.py::test_markup_scans_hostile_text_in_linear_time"
+  }
+]

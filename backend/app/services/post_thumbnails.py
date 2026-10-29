@@ -75,6 +75,22 @@ def _safe_key(channel_name: str, post_id: int) -> str:
     return f"{safe_channel}_{post_id}"
 
 
+def _cache_file(channel_name: str, post_id: int, suffix: str) -> Path:
+    """The Post's file with `suffix` in the cache directory, never outside it.
+
+    `_safe_key` already turns every separator into `_`. The check says so in the
+    form CodeQL's path-injection query recognises, as `channel_photos._cache_file`
+    does, because a route hands this its channel name.
+    """
+    root = os.path.normpath(_thumb_dir())
+    path = os.path.normpath(
+        os.path.join(root, f"{_safe_key(channel_name, post_id)}{suffix}")
+    )
+    if not path.startswith(root + os.sep):
+        raise ValueError(f"channel {channel_name!r} leaves the thumbnail cache")
+    return Path(path)
+
+
 def post_thumb_api_path(channel_name: str, post_id: int) -> str:
     return f"{settings.API_V1_STR}/telegram/post-thumb/{channel_name}/{post_id}"
 
@@ -88,7 +104,7 @@ def has_cached_thumb(channel_name: str, post_id: int) -> bool:
 
 
 def _meta_path(channel_name: str, post_id: int) -> Path:
-    return _thumb_dir() / f"{_safe_key(channel_name, post_id)}{_META_SUFFIX}"
+    return _cache_file(channel_name, post_id, _META_SUFFIX)
 
 
 def _read_meta(channel_name: str, post_id: int) -> dict[str, Any] | None:
@@ -108,10 +124,8 @@ def _find_image_path(channel_name: str, post_id: int) -> Path | None:
     grows into the dominant sync cost once the cache holds tens of thousands
     of files. Only _IMAGE_EXTS can ever be written, so probe those directly.
     """
-    safe = _safe_key(channel_name, post_id)
-    directory = _thumb_dir()
     for ext in _IMAGE_EXTS:
-        path = directory / f"{safe}{ext}"
+        path = _cache_file(channel_name, post_id, ext)
         if path.is_file():
             return path
     return None
@@ -132,10 +146,8 @@ def read_cached_thumb(channel_name: str, post_id: int) -> tuple[bytes, str] | No
 
 
 def delete_cached_thumb(channel_name: str, post_id: int) -> None:
-    safe = _safe_key(channel_name, post_id)
-    directory = _thumb_dir()
     for suffix in (*_IMAGE_EXTS, _META_SUFFIX):
-        path = directory / f"{safe}{suffix}"
+        path = _cache_file(channel_name, post_id, suffix)
         try:
             path.unlink(missing_ok=True)
         except OSError:
@@ -288,19 +300,17 @@ async def cache_post_thumb(
         return has_cached_thumb(channel_name, post_id)
 
     ext = _EXT_BY_CONTENT_TYPE.get(content_type.lower(), _DEFAULT_EXT)
-    safe = _safe_key(channel_name, post_id)
-    directory = _thumb_dir()
 
     for stale_ext in _IMAGE_EXTS:
         if stale_ext == ext:
             continue
         with suppress(OSError):
-            (directory / f"{safe}{stale_ext}").unlink(missing_ok=True)
+            _cache_file(channel_name, post_id, stale_ext).unlink(missing_ok=True)
 
     # Callers gather these with return_exceptions=True, so an unguarded write
     # failure (full disk, read-only mount) vanished with no log line at all.
     try:
-        _write_atomic(directory / f"{safe}{ext}", content)
+        _write_atomic(_cache_file(channel_name, post_id, ext), content)
         _write_atomic(
             _meta_path(channel_name, post_id),
             json.dumps({"sourceUrl": source_url, "contentType": content_type}).encode(
