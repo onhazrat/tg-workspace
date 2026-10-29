@@ -313,12 +313,12 @@
       "value": 50
     },
     {
-      "comment": "The most handles a Tag order read takes in its scope or its selection.",
-      "expression": "100000",
+      "comment": "The most handles a Tag order read takes in its scope or its selection. The Directory selection stays under it (its list read takes no more ticks), and the Requests tab's Channel rows are the Channels synced in its range.",
+      "expression": "10000",
       "file": "backend/app/schemas/tags.py",
-      "line": 70,
+      "line": 72,
       "name": "MAX_ORDER_HANDLES",
-      "value": 100000
+      "value": 10000
     },
     {
       "comment": "A generous fetch-safety bound, so a pathological Scope never materialises a giant result. The token budget is the real user-facing limit.",

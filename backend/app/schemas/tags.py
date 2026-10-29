@@ -66,8 +66,10 @@ class TagRenameRequest(BaseModel):
 #: The tabs that keep their own Tag uses (ADR-042), a closed set.
 TagTab = Literal["channels", "directory", "requests"]
 
-#: The most handles a Tag order read takes in its scope or its selection.
-MAX_ORDER_HANDLES = 100_000
+#: The most handles a Tag order read takes in its scope or its selection. The
+#: Directory selection stays under it (its list read takes no more ticks), and
+#: the Requests tab's Channel rows are the Channels synced in its range.
+MAX_ORDER_HANDLES = 10_000
 
 
 class TagUseRequest(BaseModel):

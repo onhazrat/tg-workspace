@@ -232,6 +232,24 @@ def test_the_order_counts_a_scope_and_a_selection_and_no_setting_group(
     }
 
 
+@pytest.mark.parametrize("field", ["scope", "selected"])
+def test_the_order_takes_up_to_10_000_handles_in_its_scope_or_selection(
+    client: TestClient, accounts: tuple[Headers, Headers], field: str
+) -> None:
+    """The Directory selection and the Requests tab's Channel rows stay under
+    10,000: the Directory's list read takes no more ticks, and the Requests
+    tab lists the Channels synced in its range."""
+    operator, _ = accounts
+
+    def status(n: int) -> int:
+        handles = [f"h{i}" for i in range(n)]
+        body = {"tab": "directory", field: handles}
+        return client.post(f"{TAGS}/order", json=body, headers=operator).status_code
+
+    assert status(10_000) == 200
+    assert status(10_001) == 422
+
+
 @pytest.mark.parametrize("enforced", [True, False])
 def test_one_account_never_sees_or_moves_another_accounts_uses(
     client: TestClient,
