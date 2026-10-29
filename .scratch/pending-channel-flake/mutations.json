@@ -1,0 +1,9 @@
+[
+  {
+    "name": "drop get_job's re-check of a claim made during the row read",
+    "file": "backend/app/services/scraper_jobs.py",
+    "old": "            if job_id in _active_jobs:\n                return _active_jobs[job_id]\n            if row is None:",
+    "new": "            if row is None:",
+    "test": "backend/tests/services/test_cross_process_progress.py::test_a_mirror_refresh_never_overwrites_a_job_claimed_during_its_row_read"
+  }
+]

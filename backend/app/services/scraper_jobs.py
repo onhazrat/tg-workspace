@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import threading
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -31,6 +32,10 @@ SYNC_JOB_PROGRESS_CHANNEL = "sync_job_progress"
 
 _cancel_events: dict[str, asyncio.Event] = {}
 _active_jobs: dict[str, SyncJobState] = {}
+#: Held by `claim_job` and by `get_job`'s mirror refresh. The status route runs
+#: `get_job` on a threadpool thread, so without it a refresh that read the row
+#: before a claim could write that stale row over the job just claimed.
+_claim_lock = threading.Lock()
 _jobs_lock = asyncio.Lock()
 
 #: Jobs this process is *watching* but not running — the SSE mirror (ticket 10).
@@ -313,8 +318,9 @@ def claim_job(job: SyncJobState) -> None:
     moment anything knows the answer — the enqueueing process does not, and
     guessing is what made the API believe it owned every sync it created.
     """
-    _mirrored_jobs.pop(job.job_id, None)
-    _active_jobs[job.job_id] = job
+    with _claim_lock:
+        _mirrored_jobs.pop(job.job_id, None)
+        _active_jobs[job.job_id] = job
 
 
 def _should_publish(job: SyncJobState, changed: ChannelSyncState | None) -> bool:
@@ -536,16 +542,22 @@ def get_job(job_id: str) -> SyncJobState | None:
 
     with Session(engine) as session:
         row = session.get(SyncJobRow, job_id)
-        if row is None:
-            _mirrored_jobs.pop(job_id, None)
-            return None
-        if mirror is None:
-            mirror = _row_to_state(row)
-            mirror._mirror_synced_at_ms = time.monotonic() * 1000
-            _remember(mirror)
-        else:
-            _apply_row(mirror, row)
-        return mirror
+        # Claimed while the row was read: the claim is live state and the row
+        # is up to `SYNC_JOB_PERSIST_INTERVAL_MS` behind it, so applying the
+        # row would put `pending` back over a job that has started.
+        with _claim_lock:
+            if job_id in _active_jobs:
+                return _active_jobs[job_id]
+            if row is None:
+                _mirrored_jobs.pop(job_id, None)
+                return None
+            if mirror is None:
+                mirror = _row_to_state(row)
+                mirror._mirror_synced_at_ms = time.monotonic() * 1000
+                _remember(mirror)
+            else:
+                _apply_row(mirror, row)
+            return mirror
 
 
 async def apply_progress_event(event: dict[str, Any]) -> None:

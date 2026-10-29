@@ -972,7 +972,7 @@
       "comment": "Rows per delete transaction in `prune_finished_jobs`. Bounds transaction length, not memory \u2014 see that function.",
       "expression": "1000",
       "file": "backend/app/services/scraper_jobs.py",
-      "line": 47,
+      "line": 52,
       "name": "SYNC_JOB_DELETE_BATCH",
       "value": 1000
     },
@@ -980,7 +980,7 @@
       "comment": "How many watched-but-not-run jobs this process keeps mirrored. Evicting one costs a row read to rebuild it, never correctness, so a modest cap is free insurance against the mirror becoming a leak: `GET /jobs/sync/{id}` seeds an entry for any job id a client asks about, and nothing about a finished job makes it fall out on its own.",
       "expression": "256",
       "file": "backend/app/services/scraper_jobs.py",
-      "line": 277,
+      "line": 282,
       "name": "MAX_MIRRORED_JOBS",
       "value": 256
     },
@@ -988,7 +988,7 @@
       "comment": "Same bound, same reason, for the cancellation flags. See `_get_cancel_event`.",
       "expression": "256",
       "file": "backend/app/services/scraper_jobs.py",
-      "line": 280,
+      "line": 285,
       "name": "MAX_TRACKED_CANCEL_EVENTS",
       "value": 256
     },
