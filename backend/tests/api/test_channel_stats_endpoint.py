@@ -110,9 +110,26 @@ def test_stats_is_not_captured_as_a_channel_id(client: TestClient) -> None:
         "minId",
         "maxId",
         "velocity",
+        "lastPostAt",
         "reach",
         "reachEstimated",
     }
+
+
+def test_last_post_at_is_the_newest_stored_post(client: TestClient) -> None:
+    """TGU-01: the Last post, from the timestamps the route already reads."""
+    headers = _auth(client)
+    _seed("stats-ep-last", [3, 8, 5])
+    with Session(engine) as session:
+        add_test_channel(session, "stats-ep-undated")
+        session.add(Post(channel_name="stats-ep-undated", post_id=1, timestamp=0))
+        session.commit()
+
+    body = client.get(f"{PREFIX}/channels/stats", headers=headers).json()
+
+    # `_seed` dates the third Post newest, whatever its id.
+    assert body["stats-ep-last"]["lastPostAt"] == 1_700_000_000_000 + 3 * 3_600_000
+    assert body["stats-ep-undated"]["lastPostAt"] is None
 
 
 def test_stats_requires_auth(client: TestClient) -> None:

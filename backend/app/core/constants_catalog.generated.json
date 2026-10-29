@@ -540,7 +540,7 @@
       "comment": "How long a claim stays valid without a heartbeat. This bounds one thing only: how long a **dead** holder blocks its Channel. A live sync renews well inside it (`CHANNEL_CLAIM_HEARTBEAT_SECONDS`), so a deep backfill running for an hour is never at risk of having its claim stolen mid-walk -- which would put a second backward walk into the cursors the first is still writing, the precise interleaving this exists to prevent. Five minutes rather than the visibility timeout's ~2.4 hours, and the difference is the point. The VT decides when a crashed worker's *message* comes back; the lease decides when its *Channel* does. Sizing the lease off the VT would mean a Channel that crashed at 12:00 refusing every sync until 14:24 -- including the ones a person is sitting in front of.",
       "expression": "300",
       "file": "backend/app/services/channels.py",
-      "line": 903,
+      "line": 906,
       "name": "CHANNEL_CLAIM_LEASE_SECONDS",
       "value": 300
     },

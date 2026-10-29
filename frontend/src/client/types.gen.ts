@@ -1160,6 +1160,10 @@ export type ChannelStatsResponse = {
      */
     velocity?: number;
     /**
+     * Lastpostat
+     */
+    lastPostAt?: number | null;
+    /**
      * Reach
      */
     reach: number | null;

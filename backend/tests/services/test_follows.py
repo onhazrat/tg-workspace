@@ -502,3 +502,36 @@ def test_a_handle_in_another_case_reaches_the_channel_already_scraped(
 
     session.exec(delete(User).where(col(User.id).in_([first.id, second.id])))
     session.commit()
+
+
+def test_a_first_follow_leaves_the_new_channel_unsynced(
+    session: Session, user: User
+) -> None:
+    """TGU-01: a Channel nobody has synced has no Last sync.
+
+    Creating it on its first Follow used to stamp `last_updated`, so a
+    brand-new Channel read "Synced just now" before any sync ran. Its first
+    regular sync is still scheduled, one interval after the Follow.
+    """
+    import time
+
+    from app.services.followed_channels import create_followed_channel
+
+    before = int(time.time() * 1000)
+    assert create_followed_channel(
+        "ch_brand_new",
+        display_name="Brand new",
+        photo_url=None,
+        is_unavailable=False,
+        discovered_via=None,
+        user_id=user.id,
+        effective_start_time=0,
+    )
+    after = int(time.time() * 1000)
+
+    channel = session.get(Channel, "ch_brand_new")
+    assert channel is not None
+    assert channel.last_updated is None
+    hour = 60 * 60_000  # the default group's 60-minute interval
+    assert channel.next_regular_sync_at is not None
+    assert before + hour <= channel.next_regular_sync_at <= after + hour
