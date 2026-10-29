@@ -21,6 +21,7 @@ import { channelGridGates } from "@/components/channel-grid/channel-grid-gates"
 import { FollowPasteBox } from "@/components/channel-grid/FollowPasteBox"
 import { useChannelGridActions } from "@/components/channel-grid/useChannelGridActions"
 import { useChannelGridSortState } from "@/components/channel-grid/useChannelGridSortState"
+import { useChannelTagUse } from "@/components/channel-grid/useChannelTagUse"
 import { requestSpotlight } from "@/components/post-card/ChannelSpotlight"
 import { TgInput } from "@/components/ui/tg-input"
 import { useScope } from "@/contexts/ScopeContext"
@@ -83,6 +84,7 @@ import { sortSettingGroupsForDisplay } from "@/lib/channels/setting-groups"
 import { publishShownChannels } from "@/lib/channels/shown-channels"
 import { sortChannelsForGrid } from "@/lib/channels/sort-channels-for-grid"
 import { applyTrimChannelSelection } from "@/lib/channels/trim-selected-channels"
+import { newTagValues } from "@/lib/tags/tag-use"
 import { useData } from "../contexts/DataContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { useSync } from "../contexts/SyncContext"
@@ -164,8 +166,12 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     () => parseChannelFilter(channelFilterText, filterLookup) ?? emptyFilter(),
     [channelFilterText, filterLookup],
   )
-  const setChannelFilter = (next: ChannelFilter) =>
+  // Every Tag a filter change adds is a Tag use, from whichever control.
+  const tagUse = useChannelTagUse(channels)
+  const setChannelFilter = (next: ChannelFilter) => {
+    tagUse.record(...newTagValues(channelFilter, next))
     setChannelFilterText(printChannelFilter(next, filterLookup))
+  }
 
   // Per-channel in-scope counts (SQL GROUP BY, client fallback for semantic).
   const postsInScopeCounts = useScopedPostCounts()
@@ -225,9 +231,24 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     () => channels.map((channel) => channel.name),
     [channels],
   )
-  const tagSuggestions = useMemo(
+  const suggestions = useMemo(
     () => bulkTagSuggestions(channels, targets),
     [channels, targets],
+  )
+  const tagSuggestions = useMemo(
+    () => ({
+      add: tagUse.order(
+        suggestions.add,
+        (s) => s.tag,
+        (s) => s.total,
+      ),
+      remove: tagUse.order(
+        suggestions.remove,
+        (s) => s.tag,
+        (s) => s.inTargets,
+      ),
+    }),
+    [suggestions, tagUse.order],
   )
 
   const sortedFilteredChannels = useMemo(
@@ -404,9 +425,10 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     [channels, sortedSettingGroups],
   )
 
+  const { order: orderTags } = tagUse
   const tagRows = useMemo<FacetRow[]>(
     () => [
-      ...visibleTags.map((tag) => ({
+      ...orderTags(visibleTags, (tag) => tag).map((tag) => ({
         id: tag,
         label: tag,
         names: getChannelNamesWithTag(channels, tag),
@@ -418,7 +440,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
         names: chip.channelNames,
       })),
     ],
-    [channels, pseudoTagChips, visibleTags],
+    [channels, orderTags, pseudoTagChips, visibleTags],
   )
 
   const languageRows = useMemo<FacetRow[]>(
@@ -437,7 +459,10 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   const conditionOptions = useMemo<ConditionOptions>(
     () => ({
       tag: [
-        ...allTags.map((tag) => ({ id: tag, label: tag })),
+        ...orderTags(allTags, (tag) => tag).map((tag) => ({
+          id: tag,
+          label: tag,
+        })),
         ...CHANNEL_PSEUDO_TAGS.map((tag) => ({
           id: tag.id,
           label: tag.label,
@@ -447,7 +472,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
       group: groupRows,
       language: languageRows,
     }),
-    [allTags, groupRows, languageRows],
+    [allTags, groupRows, languageRows, orderTags],
   )
 
   return (
@@ -503,6 +528,12 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
             rows={tagRows}
             search={{ value: tagSearch, onChange: setTagSearch }}
             {...facet("tag")}
+            onToggleSelect={(row) => {
+              tagUse.record(row.id)
+              toggleRowSelection(row)
+            }}
+            manage={tagUse.manage}
+            freezeOrder
           />
           {allLanguages.length > 0 && (
             <ChannelFacetMenu
@@ -588,10 +619,17 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
           onMove={() => void actions.applyBulkMoveToGroup()}
           tagInput={actions.bulkTagInput}
           onTagInputChange={actions.setBulkTagInput}
-          onAddTag={actions.handleBulkAddTag}
+          onAddTag={() =>
+            tagUse.afterTagging(actions.handleBulkAddTag, actions.bulkTagInput)
+          }
           removeTagInput={actions.bulkRemoveTagInput}
           onRemoveTagInputChange={actions.setBulkRemoveTagInput}
-          onRemoveTag={actions.handleBulkRemoveTag}
+          onRemoveTag={() =>
+            tagUse.afterTagging(
+              actions.handleBulkRemoveTag,
+              actions.bulkRemoveTagInput,
+            )
+          }
           tagSuggestions={tagSuggestions}
           groupBySelection={channelGridGroupBySelection}
           onToggleGroupBySelection={() =>

@@ -13,6 +13,8 @@ export const queryKeys = {
   settingGroups: ["settingGroups"] as const,
   /** The Account's Tags with their counts (DFP-04); any Tag write refetches it. */
   tags: ["tags"] as const,
+  /** A tab's Tag uses (TGU-02), under `tags` so a Tag write refetches them. */
+  tagOrder: (tab: string) => ["tags", "order", tab] as const,
   bots: ["bots"] as const,
   /**
    * The account's AI Keys (BYOK-01). Separate from `bots` because an AI Key
