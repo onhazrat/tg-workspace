@@ -1,24 +1,29 @@
 /**
  * The moments a Channel filter Time bound tests (TB-03, ADR-033): every
- * timestamp a followed Channel carries. The key is the URL form's word.
+ * timestamp a followed Channel carries, and its Last post from the channel
+ * stats (TGU-01). The key is the URL form's word.
  */
-import type { Channel } from "@/types"
+import type { Channel, ChannelStats } from "@/types"
 
 export type ChannelMomentKey =
   | "followed_at"
   | "updated_at"
+  | "last_post_at"
   | "sync_start_at"
   | "oldest_post_at"
   | "next_regular_sync_at"
   | "next_dynamic_sync_at"
   | "discovered_at"
 
+/** What a moment reads beside the Channel itself. */
+export type MomentInputs = { channelStats: Record<string, ChannelStats> }
+
 export type ChannelMoment = {
   key: ChannelMomentKey
   label: string
   description: string
   /** Epoch ms, or `null` for a Channel with no value. */
-  value: (c: Channel) => number | null
+  value: (c: Channel, inputs: MomentInputs) => number | null
 }
 
 /** In the Filters dropdown's order. */
@@ -31,9 +36,15 @@ export const CHANNEL_MOMENTS: ChannelMoment[] = [
   },
   {
     key: "updated_at",
-    label: "Last update",
-    description: "When its name, photo and counters were last refreshed.",
+    label: "Last sync",
+    description: "When its most recent sync finished.",
     value: (c) => c.lastUpdated ?? null,
+  },
+  {
+    key: "last_post_at",
+    label: "Last post",
+    description: "When its newest stored Post was published.",
+    value: (c, i) => i.channelStats[c.name]?.lastPostAt ?? null,
   },
   {
     key: "sync_start_at",
@@ -76,8 +87,9 @@ export const channelMoment = (key: ChannelMomentKey): ChannelMoment =>
 export const momentValues = (
   key: ChannelMomentKey,
   channels: Channel[],
+  inputs: MomentInputs,
 ): number[] =>
   channels
-    .map(channelMoment(key).value)
+    .map((c) => channelMoment(key).value(c, inputs))
     .filter((v): v is number => v !== null)
     .sort((a, b) => a - b)

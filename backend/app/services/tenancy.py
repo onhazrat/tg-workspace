@@ -119,6 +119,7 @@ from app.models_tg import (
     SyncMeta,
     Tag,
     TagRun,
+    TagUse,
     UserSetting,
     ViewObservation,
 )
@@ -173,6 +174,8 @@ SCOPES: dict[type[SQLModel], Scope] = {
     # Tag describes a Channel as the Account sees it, and it has to outlive
     # the Follow, which an `EXISTS` against `tg_channel_follows` would undo.
     Tag: Scope.USER_OWNED,
+    # Which Tags an Account reaches for, per tab (ADR-042): its own acts.
+    TagUse: Scope.USER_OWNED,
     TagRun: Scope.USER_OWNED,
     BotCredential: Scope.USER_OWNED,
     # An Account's AI Key. `USER_OWNED` for `BotCredential`'s reason and

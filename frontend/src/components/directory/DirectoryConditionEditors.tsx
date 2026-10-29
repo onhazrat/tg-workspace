@@ -1,7 +1,8 @@
 /**
  * The Directory filter's small Condition editors (DIR-02): Name contains,
  * Cited by your channels, Cited by @x / Cites @x (DIR-05) and Shared parents
- * / children (DIR-07), whose Seeds can be a Tag (DFP-05). Bounds have their
+ * / children (DIR-07), whose Seeds can be a Tag (DFP-05) or a Setting group
+ * (TGU-04). Bounds have their
  * own editor.
  */
 import type React from "react"
@@ -187,19 +188,21 @@ function SourceChoice({
   )
 }
 
-/** The Tag picker a Tag source shows while it is chosen. */
-function TagPicker({
+/** The Tag or Setting group picker a named source shows while it is chosen. */
+function NamePicker({
+  label,
   names,
   value,
   onChange,
 }: {
+  label: string
   names: string[]
   value: string
   onChange: (name: string) => void
 }) {
   return (
     <select
-      aria-label="Tag"
+      aria-label={label}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       className={fieldClass}
@@ -214,10 +217,40 @@ function TagPicker({
 }
 
 const TAG_HINT = "Live: follows the Tag as you tag and untag Channels."
+const GROUP_HINT =
+  "Live: the channels you follow in the Setting group, as you move them."
+
+type Named = "tag" | "group"
+
+/**
+ * The Tag and the Setting group a named source can be, each starting on the
+ * one `seeds` names or the first offered, and the picker for each (TGU-04).
+ */
+function useNamedSeeds(seeds: SeedSource | undefined, tags: TagChoices) {
+  const names: Record<Named, string[]> = {
+    tag: tagNames(tags),
+    group: tags.groups,
+  }
+  const first = (kind: Named) =>
+    seeds?.kind === kind ? seeds.name : (names[kind][0] ?? "")
+  const [chosen, setChosen] = useState({
+    tag: first("tag"),
+    group: first("group"),
+  })
+  const picker = (kind: Named) => (
+    <NamePicker
+      label={kind === "tag" ? "Tag" : "Setting group"}
+      names={names[kind]}
+      value={chosen[kind]}
+      onChange={(name) => setChosen({ ...chosen, [kind]: name })}
+    />
+  )
+  return { names, chosen, picker }
+}
 
 /** Where "Fill from" copies handles, as they are now; the copy stays fixed. */
 const FILL_FROM: [LiveSource, string][] = [
-  ["ticked", "Ticked here"],
+  ["ticked", "Selected here"],
   ["selection", "Channels tab selection"],
   ["follows", "Every follow"],
 ]
@@ -241,11 +274,10 @@ export function HandlesEditor({
   sets: SeedSets
   tags: TagChoices
 }) {
-  const names = tagNames(tags)
   const seeds = start?.seeds
-  const [byTag, setByTag] = useState(seeds?.kind === "tag")
-  const [tag, setTag] = useState(
-    seeds?.kind === "tag" ? seeds.name : (names[0] ?? ""),
+  const named = useNamedSeeds(seeds, tags)
+  const [source, setSource] = useState<Named | "handles">(
+    seeds?.kind ?? "handles",
   )
   const [text, setText] = useState(
     seeds?.kind === "handles" ? seeds.handles.join(" ") : "",
@@ -253,11 +285,13 @@ export function HandlesEditor({
   const handles = parseHandles(text)
   const most = DIRECTORY_FILTER_BOUNDS.handles
   const over = handles.length > most
-  const submit = byTag
-    ? tag && (() => onSubmit({ type, seeds: { kind: "tag", name: tag } }))
-    : handles.length &&
-      !over &&
-      (() => onSubmit({ type, seeds: { kind: "handles", handles } }))
+  const name = source === "handles" ? "" : named.chosen[source]
+  const submit =
+    source === "handles"
+      ? handles.length &&
+        !over &&
+        (() => onSubmit({ type, seeds: { kind: "handles", handles } }))
+      : name && (() => onSubmit({ type, seeds: { kind: source, name } }))
   return (
     <Shell
       title={HANDLES_LABEL[type]}
@@ -271,10 +305,10 @@ export function HandlesEditor({
         label="These channels"
         hint="Fixed: the handles you type or fill in."
         off={false}
-        checked={!byTag}
-        onChoose={() => setByTag(false)}
+        checked={source === "handles"}
+        onChoose={() => setSource("handles")}
       />
-      {!byTag && (
+      {source === "handles" && (
         <>
           <input
             // biome-ignore lint/a11y/noAutofocus: the editor is this one field
@@ -307,15 +341,24 @@ export function HandlesEditor({
           )}
         </>
       )}
-      <SourceChoice
-        group={`${type}-seeds`}
-        label="A Tag"
-        hint={TAG_HINT}
-        off={!names.length}
-        checked={byTag}
-        onChoose={() => setByTag(true)}
-      />
-      {byTag && <TagPicker names={names} value={tag} onChange={setTag} />}
+      {(
+        [
+          ["tag", "A Tag", TAG_HINT],
+          ["group", "A Setting group", GROUP_HINT],
+        ] as const
+      ).map(([kind, label, hint]) => (
+        <div key={kind} className="contents">
+          <SourceChoice
+            group={`${type}-seeds`}
+            label={label}
+            hint={hint}
+            off={!named.names[kind].length}
+            checked={source === kind}
+            onChoose={() => setSource(kind)}
+          />
+          {source === kind && named.picker(kind)}
+        </div>
+      ))}
     </Shell>
   )
 }
@@ -345,8 +388,8 @@ export function SharedEditor({
   tags: TagChoices
 }) {
   const ticked = sets.ticked.length > 0
-  const names = tagNames(tags)
   const seeds = start?.seeds
+  const named = useNamedSeeds(seeds, tags)
   const [choice, setChoice] = useState<SeedChoice>(
     seeds?.kind ??
       (ticked ? "ticked" : sets.selection.length ? "selection" : "follows"),
@@ -354,22 +397,19 @@ export function SharedEditor({
   const [text, setText] = useState(
     seeds?.kind === "handles" ? seeds.handles.join(" ") : "",
   )
-  const [tag, setTag] = useState(
-    seeds?.kind === "tag" ? seeds.name : (names[0] ?? ""),
-  )
   const [min, setMin] = useState(start?.min ?? SHARED_MIN)
   const typed = parseHandles(text)
   const options: [SeedChoice, string, string, boolean][] = [
     [
       "ticked",
-      `Channels ticked in this list (${sets.ticked.length})`,
-      "Live: follows your ticks. A channel you tick while this is on leaves the results, since it is now a Seed.",
+      `Channels selected in this list (${sets.ticked.length})`,
+      "Live: follows your selection. A channel you select while this is on leaves the results, since it is now a Seed.",
       !ticked && seeds?.kind !== "ticked",
     ],
     [
       "saved",
-      `Channels ticked in this list, saved now (${sets.ticked.length})`,
-      "Fixed: keeps these handles; ticking later leaves it alone.",
+      `Channels selected in this list, saved now (${sets.ticked.length})`,
+      "Fixed: keeps these handles; selecting later leaves it alone.",
       !ticked,
     ],
     [
@@ -384,7 +424,18 @@ export function SharedEditor({
       "Live: follows your follows.",
       false,
     ],
-    ["tag", "A Tag", TAG_HINT, !names.length && seeds?.kind !== "tag"],
+    [
+      "tag",
+      "A Tag",
+      TAG_HINT,
+      !named.names.tag.length && seeds?.kind !== "tag",
+    ],
+    [
+      "group",
+      "A Setting group",
+      GROUP_HINT,
+      !named.names.group.length && seeds?.kind !== "group",
+    ],
     ["handles", "These channels", "Fixed: the handles you type.", false],
   ]
   const chosen = (): SeedSource =>
@@ -392,11 +443,15 @@ export function SharedEditor({
       ? { kind: "handles", handles: sets.ticked }
       : choice === "handles"
         ? { kind: "handles", handles: typed }
-        : choice === "tag"
-          ? { kind: "tag", name: tag }
+        : choice === "tag" || choice === "group"
+          ? { kind: choice, name: named.chosen[choice] }
           : { kind: choice }
   const ready =
-    choice === "handles" ? typed.length > 0 : choice !== "tag" || tag
+    choice === "handles"
+      ? typed.length > 0
+      : choice !== "tag" && choice !== "group"
+        ? true
+        : named.chosen[choice] !== ""
   return (
     <Shell
       title={`${SHARED_LABEL[type]} with…`}
@@ -419,9 +474,7 @@ export function SharedEditor({
           onChoose={() => setChoice(value)}
         />
       ))}
-      {choice === "tag" && (
-        <TagPicker names={names} value={tag} onChange={setTag} />
-      )}
+      {(choice === "tag" || choice === "group") && named.picker(choice)}
       {choice === "handles" && (
         <input
           aria-label="Handles"

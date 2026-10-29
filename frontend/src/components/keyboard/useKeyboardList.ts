@@ -144,7 +144,7 @@ function bulk(key: "F" | "D"): boolean {
   const why = button?.closest("[title]")?.getAttribute("title")
   toast(
     !button
-      ? `Nothing ticked to ${key === "F" ? "follow" : "dismiss"}`
+      ? `Nothing selected to ${key === "F" ? "follow" : "dismiss"}`
       : `${label} is off${why ? `: ${why}` : " right now"}`,
     { id: "keyboard-bulk" },
   )

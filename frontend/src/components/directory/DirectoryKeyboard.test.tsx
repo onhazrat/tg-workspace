@@ -63,7 +63,7 @@ function Directory({ shown = 0 }: { shown?: number }) {
         >
           <input
             type="checkbox"
-            aria-label={`Tick @${h}`}
+            aria-label={`Select @${h}`}
             data-shortcut="x"
             checked={ticks.has(h)}
             onChange={() => {
@@ -97,7 +97,7 @@ const ticked = () =>
     document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
   )
     .filter((box) => box.checked)
-    .map((box) => box.getAttribute("aria-label")?.slice("Tick @".length))
+    .map((box) => box.getAttribute("aria-label")?.slice("Select @".length))
 const opened = () => screen.getByTestId("open").textContent
 const type = (...keys: string[]) => {
   for (const init of keydowns(...keys))

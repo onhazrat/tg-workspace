@@ -67,8 +67,11 @@ describe("every Condition prints and parses back unchanged", () => {
     'cites:"tag:World News"',
     "tag:news",
     'tag:"slow reads"',
-    'tag:"group:Slow Feed"',
     "not tag:news",
+    'group:"Slow Feed"',
+    "not group:slow",
+    'citedby:"group:Slow Feed"',
+    'parents:"group:slow 3"',
   ])("%s", (text) => {
     expect(roundTrip(text)).toBe(text)
   })
@@ -465,7 +468,7 @@ describe("Shared parents and Shared children (DIR-07)", () => {
   test.each<[DirectoryCond, string]>([
     [
       { type: "parents", seeds: { kind: "ticked" }, min: 2 },
-      "2+ shared parents with the channels ticked here",
+      "2+ shared parents with the channels selected here",
     ],
     [
       { type: "children", seeds: { kind: "selection" }, min: 3 },
@@ -530,5 +533,62 @@ describe("the tag Condition (DFP-04)", () => {
       not: true,
       cond: { type: "tag", name: "World News" },
     })
+  })
+})
+
+describe("the Setting group Condition (TGU-04)", () => {
+  const none = { ticked: [], selection: [], follows: [] }
+
+  test("names the group and goes to the server by name", () => {
+    expect(conds('group:"Slow Feed"')).toEqual([
+      { cond: { type: "group", name: "Slow Feed" }, not: false },
+    ])
+    expect(directoryConditionLabel({ type: "group", name: "Slow" })).toBe(
+      "In the Setting group Slow",
+    )
+    const filter = parseDirectoryFilter("group:Slow")
+    const body = directoryFilterBody(filter as NonNullable<typeof filter>, none)
+    expect(body?.children?.[0]).toMatchObject({
+      cond: { type: "group", name: "Slow" },
+    })
+  })
+
+  test("an old group: Tag link reads as the group, and prints as one", () => {
+    expect(conds('not tag:"group:Slow Feed"')).toEqual([
+      { cond: { type: "group", name: "Slow Feed" }, not: true },
+    ])
+    expect(roundTrip('tag:"GROUP:Slow"')).toBe("group:Slow")
+    expect(conds('tag:"group: "')).toBeNull()
+  })
+
+  test("is a Seed source, sent by name; an old tag:group: Seed too", () => {
+    expect(conds('citedby:"tag:group:Slow" parents:"group:Slow 3"')).toEqual([
+      {
+        cond: { type: "citedby", seeds: { kind: "group", name: "Slow" } },
+        not: false,
+      },
+      {
+        cond: {
+          type: "parents",
+          seeds: { kind: "group", name: "Slow" },
+          min: 3,
+        },
+        not: false,
+      },
+    ])
+    expect(
+      directoryConditionLabel({
+        type: "cites",
+        seeds: { kind: "group", name: "Slow" },
+      }),
+    ).toBe("Cites the Setting group Slow")
+    const filter = parseDirectoryFilter(
+      'cites:"group:Slow" children:"group:Slow"',
+    )
+    const body = directoryFilterBody(filter as NonNullable<typeof filter>, none)
+    expect(body?.children?.map((c) => c.kind === "atom" && c.cond)).toEqual([
+      { type: "cites", group: "Slow" },
+      { type: "children", group: "Slow", min: 2 },
+    ])
   })
 })

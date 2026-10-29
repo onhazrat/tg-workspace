@@ -1,4 +1,4 @@
-import { Gauge, Layers, Search } from "lucide-react"
+import { Gauge, Layers, Search, Tag } from "lucide-react"
 import { useMemo } from "react"
 import { BarToggle } from "@/components/channel-grid/ChannelBarControls"
 import { FacetMenu } from "@/components/filter-tree/FacetMenu"
@@ -6,8 +6,18 @@ import {
   FilterRow,
   type FilterVocabulary,
 } from "@/components/filter-tree/FilterRow"
+import {
+  type GroupRow,
+  GroupsDropdown,
+  useGroupRows,
+  useOpenSettingGroup,
+} from "@/components/filter-tree/GroupsDropdown"
 import { SortPicker } from "@/components/filter-tree/SortPicker"
+import { TagsDropdown } from "@/components/filter-tree/TagsDropdown"
 import { TgInput } from "@/components/ui/tg-input"
+import { useTags } from "@/hooks/useTags"
+import { useTagUses } from "@/hooks/useTagUses"
+import { isVirtualGroupTag } from "@/lib/channels/virtual-group-tags"
 import {
   addFunnel,
   atoms,
@@ -25,7 +35,9 @@ import {
   type Measure,
   measureOf,
   type Outcome,
+  requestsSelection,
   type SortDirection,
+  selectHandles,
 } from "@/lib/requests/breakdown"
 import {
   addCond,
@@ -40,6 +52,7 @@ import {
   measureMeta,
   staleReason,
 } from "@/lib/requests/channel-filter"
+import { byTagUse } from "@/lib/tags/tag-use"
 import {
   MeasureMenu,
   MeasureNumberEditor,
@@ -61,6 +74,9 @@ export interface ChannelBarProps {
   onToggleDirection: () => void
   hiddenKinds: ReadonlySet<string>
   hiddenOutcomes: ReadonlySet<Outcome>
+  /** The rows out of the Requests selection, which a Tag's select sets. */
+  leftOut: ReadonlySet<string>
+  onLeftOut: (leftOut: Set<string>) => void
 }
 
 /**
@@ -72,11 +88,19 @@ export function ChannelBar(p: ChannelBarProps) {
   const kinds = KINDS.map((k) => k.id).filter((k) => !p.hiddenKinds.has(k))
   const groups = criteria(kinds, p.hiddenOutcomes)
   const values = useMeasureValues(p.rows)
+  const tagNames = useRequestsTagNames()
+  const selection = useMemo(
+    () => requestsSelection(p.rows, p.leftOut),
+    [p.rows, p.leftOut],
+  )
+  const groupRows = useGroupRows(selection.scope)
   return (
     <>
       <div className="flex flex-wrap items-center gap-2 px-3 pt-2">
         <SearchBox value={p.search} onChange={p.onSearch} />
         <KindsFacet {...p} kinds={kinds} />
+        <RequestsTags {...p} selection={selection} />
+        <RequestsGroups {...p} selection={selection} groups={groupRows} />
         <BarToggle
           on={switchOn(p.filter, isUncharged, true)}
           label="Hide uncharged"
@@ -120,7 +144,7 @@ export function ChannelBar(p: ChannelBarProps) {
       <FilterRow
         filter={p.filter}
         onChange={p.onFilter}
-        vocabulary={vocabulary(p, kinds, groups, values)}
+        vocabulary={vocabulary(p, kinds, groups, values, tagNames, groupRows)}
         testId="requests-filter"
         search={p.search}
         shownCount={p.shown}
@@ -198,6 +222,75 @@ function KindsFacet({
   )
 }
 
+/** The Tags dropdown (TGU-03): selecting a Tag puts its rows back in the
+ * Requests selection, unselecting takes them out of every total. */
+function RequestsTags(p: ChannelBarProps & { selection: RequestsSelection }) {
+  return (
+    <TagsDropdown
+      tab="requests"
+      testId="requests-tags"
+      tickHint="Unselecting takes out, the funnel shows only"
+      scope={p.selection.scope}
+      selected={p.selection.selected}
+      onSelect={(handles, on) =>
+        p.onLeftOut(selectHandles(p.leftOut, p.rows, handles, on))
+      }
+      funnelled={funnelledValues(p.filter, "tag")}
+      onFunnel={(value, on) =>
+        p.onFilter(
+          on
+            ? addFunnel(p.filter, { type: "tag", value })
+            : removeFunnel(p.filter, "tag", value),
+        )
+      }
+      onClearFunnels={() => p.onFilter(clearFunnels(p.filter, "tag"))}
+    />
+  )
+}
+
+/** The Groups dropdown (TGU-04): selecting a Setting group puts its rows back
+ * in the Requests selection; its funnel is the Setting group Condition. */
+function RequestsGroups(
+  p: ChannelBarProps & { selection: RequestsSelection; groups: GroupRow[] },
+) {
+  const openSettingGroup = useOpenSettingGroup()
+  return (
+    <GroupsDropdown
+      testId="requests-groups"
+      tickHint="Unselecting takes out, the funnel shows only"
+      groups={p.groups}
+      selected={new Set(p.selection.selected.map((h) => h.toLowerCase()))}
+      onSelect={(handles, on) =>
+        p.onLeftOut(selectHandles(p.leftOut, p.rows, handles, on))
+      }
+      funnelled={funnelledValues(p.filter, "group")}
+      onFunnel={(value, on) =>
+        p.onFilter(
+          on
+            ? addFunnel(p.filter, { type: "group", value })
+            : removeFunnel(p.filter, "group", value),
+        )
+      }
+      onClearFunnels={() => p.onFilter(clearFunnels(p.filter, "group"))}
+      onOpen={openSettingGroup}
+    />
+  )
+}
+
+type RequestsSelection = ReturnType<typeof requestsSelection>
+
+/** The Tag names "In the Tag" offers, in the Requests tab's Tag use order. */
+function useRequestsTagNames() {
+  const tags = useTags().tags.filter((t) => !isVirtualGroupTag(t.name))
+  const score = useTagUses("requests")
+  return byTagUse(
+    tags,
+    score,
+    (t) => t.name,
+    (t) => t.channels,
+  ).map((t) => t.name)
+}
+
 /** Each measure's values across the rows, sorted once and kept per render of `rows`. */
 function useMeasureValues(rows: readonly ChannelRow[]): MeasureValues {
   return useMemo(() => {
@@ -225,9 +318,36 @@ function vocabulary(
   kinds: string[],
   groups: CriteriaGroup[],
   values: MeasureValues,
+  tagNames: string[],
+  settingGroups: GroupRow[],
 ): FilterVocabulary<ChannelCond> {
+  const groupName = (id: string) =>
+    settingGroups.find((g) => g.id === id)?.name ?? id
   return {
     sections: [
+      {
+        heading: "Tag",
+        entries: [
+          {
+            kind: "list",
+            id: "tag",
+            label: "In the Tag",
+            icon: Tag,
+            options: tagNames.map((name) => ({ id: name, label: name })),
+            make: (value) => ({ type: "tag", value }),
+            current: (c) => (c.type === "tag" ? c.value : undefined),
+          },
+          {
+            kind: "list",
+            id: "group",
+            label: "In the Setting group",
+            icon: Layers,
+            options: settingGroups.map((g) => ({ id: g.id, label: g.name })),
+            make: (value) => ({ type: "group", value }),
+            current: (c) => (c.type === "group" ? c.value : undefined),
+          },
+        ],
+      },
       {
         heading: "Kind",
         entries: [
@@ -278,14 +398,17 @@ function vocabulary(
     ],
     entryOf: (c) =>
       c.type === "measure" ? `${c.kind ?? ""}|${c.measure}` : c.type,
-    label: condLabel,
-    icon: (c) => (c.type === "measure" ? Gauge : Layers),
+    label: (c) => condLabel(c, groupName),
+    icon: (c) =>
+      c.type === "measure" ? Gauge : c.type === "tag" ? Tag : Layers,
     chipId: (c) =>
-      c.type === "kind"
-        ? c.value
-        : c.type === "uncharged"
-          ? "uncharged"
-          : `${c.kind ?? "row"}-${c.measure}`,
+      c.type === "measure"
+        ? `${c.kind ?? "row"}-${c.measure}`
+        : c.type === "tag" || c.type === "group"
+          ? `${c.type}-${c.value}`
+          : c.type === "kind"
+            ? c.value
+            : "uncharged",
     stale: (c) => staleReason(c, p.hiddenKinds, p.hiddenOutcomes),
   }
 }

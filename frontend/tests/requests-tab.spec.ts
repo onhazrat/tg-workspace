@@ -843,7 +843,7 @@ test("New Posts per Request ranks the Channels, the aggregate rows last", async 
   await expect(channelRows(page).last()).toContainText("Directory probes")
 })
 
-test("a Channel left out leaves the whole tab, stays listed, and Pick all brings it back", async ({
+test("an unselected Channel leaves the whole tab, stays listed, and Select all brings it back", async ({
   page,
 }) => {
   const seen = await mockBreakdown(page)
@@ -852,30 +852,82 @@ test("a Channel left out leaves the whole tab, stays listed, and Pick all brings
   await expect(total(page)).toHaveText("1,720 Requests")
 
   // chan00 made 50 Requests.
-  await page.getByRole("checkbox", { name: "Pick @chan00" }).uncheck()
+  await page.getByRole("checkbox", { name: "Select @chan00" }).uncheck()
   await expect(total(page)).toHaveText("1,670 Requests")
   await expect(page.getByTestId("requests-left-out")).toHaveText(
-    "1 Channel left out Pick all",
+    "1 Channel unselected Select all",
   )
   expect(seen.at(-1)?.searchParams.getAll("leftOut")).toEqual(["chan00"])
   expect(trend.at(-1)?.searchParams.getAll("leftOut")).toEqual(["chan00"])
   await expect(row(page, "@chan00")).toHaveCSS("opacity", "0.4")
 
   // The probes row leaves by its kind.
-  await page.getByRole("checkbox", { name: "Pick Directory probes" }).uncheck()
+  await page
+    .getByRole("checkbox", { name: "Select Directory probes" })
+    .uncheck()
   await expect(total(page)).toHaveText("870 Requests")
   expect(seen.at(-1)?.searchParams.getAll("leftOutKinds")).toEqual(["probe"])
 
-  await page.getByRole("button", { name: "Pick all" }).click()
+  await page.getByRole("button", { name: "Select all" }).click()
   await expect(total(page)).toHaveText("1,720 Requests")
   await expect(page.getByTestId("requests-left-out")).toHaveCount(0)
 
   // The header box leaves out every listed row: the search keeps ten.
   await channels(page).getByLabel("Search Channels").fill("@chan2")
-  await page.getByRole("checkbox", { name: "Pick every listed row" }).uncheck()
+  await page
+    .getByRole("checkbox", { name: "Select every listed row" })
+    .uncheck()
   await expect(page.getByTestId("requests-left-out")).toHaveText(
-    "10 Channels left out Pick all",
+    "10 Channels unselected Select all",
   )
+})
+
+test("the Tags dropdown unselects a Tag's rows and funnels by it (TGU-03)", async ({
+  page,
+}) => {
+  await mockBreakdown(page)
+  await page.route("**/api/v1/data/tags", (route) =>
+    route.fulfill({ json: [{ name: "Busy", channels: 5 }] }),
+  )
+  const reads: { scope: string[] | null; selected?: string[] }[] = []
+  await page.route("**/api/v1/data/tags/order", (route) => {
+    const body = route.request().postDataJSON() as (typeof reads)[number]
+    reads.push(body)
+    const selected = body.selected ?? []
+    return route.fulfill({
+      json: [
+        {
+          name: "Busy",
+          channels: 1,
+          selected: selected.includes("chan00") ? 1 : 0,
+          score: 0,
+          lastUsedAt: null,
+        },
+      ],
+    })
+  })
+  await page.route("**/api/v1/data/tags/channels?**", (route) =>
+    route.fulfill({ json: { handles: ["CHAN00", "elsewhere"] } }),
+  )
+  await page.route("**/api/v1/data/tags/uses", (route) =>
+    route.fulfill({ json: { changed: 1 } }),
+  )
+  await openRequests(page)
+  await expect(total(page)).toHaveText("1,720 Requests")
+
+  await page.getByTestId("requests-tags").click()
+  await expect(page.getByTestId("requests-tags-count-Busy")).toHaveText("1/1")
+  expect(reads.at(-1)?.scope).toContain("chan00")
+  await page.getByTestId("requests-tags-row-Busy").click()
+  await expect(total(page)).toHaveText("1,670 Requests")
+  await expect(page.getByTestId("requests-left-out")).toHaveText(
+    "1 Channel unselected Select all",
+  )
+  await expect(page.getByTestId("requests-tags-count-Busy")).toHaveText("0/1")
+
+  await page.getByTestId("requests-tags-funnel-Busy").click()
+  await expect(channelRows(page)).toHaveCount(1)
+  await expect(channelRows(page)).toContainText("@chan00")
 })
 
 /**
@@ -992,7 +1044,7 @@ test("the sheet reads the hidden kinds and outcomes and the Channels left out", 
   await openRequests(page)
   await page.getByRole("checkbox", { name: "Show Directory probe" }).uncheck()
   await kinds(page).getByRole("button", { name: "Wasted", exact: true }).click()
-  await page.getByRole("checkbox", { name: "Pick @chan01" }).uncheck()
+  await page.getByRole("checkbox", { name: "Select @chan01" }).uncheck()
   await row(page, "@chan00").getByText("@chan00").click()
 
   const counts = page

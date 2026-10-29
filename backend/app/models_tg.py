@@ -259,6 +259,28 @@ class Tag(SQLModel, table=True):
     assigned_at: int = Field(default=0, sa_column=_ms_ts())
 
 
+class TagUse(SQLModel, table=True):
+    """One Tag use: an Account naming one of its Tags on a tab (ADR-042, TGU-02).
+
+    The Tags aggregate's companion table, so `services/tags.py` is its sole
+    writer too: a rename moves these rows and the Tag's end deletes them in the
+    same write as the Tag rows. `tab` is `channels`, `directory` or `requests`.
+    Two uses in the same millisecond are one.
+    """
+
+    __tablename__ = "tg_tag_uses"
+
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id",
+        primary_key=True,
+        ondelete="CASCADE",
+    )
+    tab: str = Field(primary_key=True)
+    tag_key: str = Field(primary_key=True)
+    #: Millisecond epoch.
+    used_at: int = Field(sa_column=Column(BigInteger, primary_key=True))
+
+
 class Post(SQLModel, table=True):
     __tablename__ = "tg_posts"
     __table_args__ = (

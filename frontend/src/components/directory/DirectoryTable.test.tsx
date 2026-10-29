@@ -163,7 +163,7 @@ describe("opening the panel", () => {
     const calls = mount()
     fireEvent.click(screen.getByText("alpha name"))
     fireEvent.click(screen.getByRole("link", { name: "@beta" }))
-    fireEvent.click(box("Tick @beta"))
+    fireEvent.click(box("Select @beta"))
     fireEvent.click(screen.getByRole("button", { name: "Follow @beta" }))
     expect(calls.open).toEqual(["alpha"])
   })
@@ -172,26 +172,26 @@ describe("opening the panel", () => {
 describe("ticks", () => {
   test("a followed row ticks and unticks like any other (DFP-01)", () => {
     const calls = mount()
-    expect(box("Tick @gamma").checked).toBe(false)
-    expect(box("Tick @gamma").disabled).toBe(false)
-    fireEvent.click(box("Tick @gamma"))
+    expect(box("Select @gamma").checked).toBe(false)
+    expect(box("Select @gamma").disabled).toBe(false)
+    fireEvent.click(box("Select @gamma"))
     cleanup()
     const again = mount({ ticks: new Set(["gamma"]) })
-    expect(box("Tick @gamma").checked).toBe(true)
-    fireEvent.click(box("Tick @gamma"))
+    expect(box("Select @gamma").checked).toBe(true)
+    fireEvent.click(box("Select @gamma"))
     expect([...calls.ticks, ...again.ticks]).toEqual([["gamma"], []])
   })
 
   test("the header ticks every row on the page, followed or not", () => {
     const calls = mount({ ticks: new Set(["zeta"]) })
-    fireEvent.click(box("Tick every channel on this page"))
+    fireEvent.click(box("Select every channel on this page"))
     expect(calls.ticks).toEqual([["alpha", "beta", "gamma", "zeta"]])
   })
 
   test("the header is partial while some are ticked, and a row ticks itself", () => {
     const calls = mount({ ticks: new Set(["alpha"]) })
-    expect(box("Tick every channel on this page").indeterminate).toBe(true)
-    fireEvent.click(box("Tick @beta"))
+    expect(box("Select every channel on this page").indeterminate).toBe(true)
+    fireEvent.click(box("Select @beta"))
     expect(calls.ticks).toEqual([["alpha", "beta"]])
   })
 })
@@ -207,7 +207,7 @@ describe("keyboard mode (DFP-01)", () => {
     const key = (k: string) =>
       row.querySelector(`[data-shortcut="${k}"]`)?.getAttribute("aria-label") ??
       row.querySelector(`[data-shortcut="${k}"]`)?.textContent
-    expect(key("x")).toBe("Tick @beta")
+    expect(key("x")).toBe("Select @beta")
     expect(key("f")).toBe("Follow @beta")
     expect(key("d")).toBe("Dismiss @beta")
     expect(key("o")).toBe("@beta")
@@ -223,7 +223,7 @@ describe("keyboard mode (DFP-01)", () => {
       const row = screen.getByTestId("directory-row-beta")
       const title = (k: string) =>
         row.querySelector(`[data-shortcut="${k}"]`)?.getAttribute("title")
-      expect(title("x")).toBe("Tick @beta (x)")
+      expect(title("x")).toBe("Select @beta (x)")
       expect(title("f")).toBe("Follow @beta (f)")
       expect(title("d")).toBe("Hide this channel here and in Discover (d)")
       expect(title("o")).toBe("Open @beta in Telegram (o)")
@@ -535,7 +535,7 @@ describe("as cards on a phone (DFP-02)", () => {
     expect(screen.queryByRole("table")).toBeNull()
     expect(card("alpha").textContent).toContain("alpha name")
     expect(screen.getByRole("link", { name: "@alpha" })).toBeTruthy()
-    expect(box("Tick @alpha")).toBeTruthy()
+    expect(box("Select @alpha")).toBeTruthy()
     // The sorted measure leads, then Subscribers, Reach, Posts per week, Language.
     expect(measures("alpha")).toEqual([
       "Cites 7",
@@ -563,7 +563,7 @@ describe("as cards on a phone (DFP-02)", () => {
 
   test("tapping a card opens it; its tick and Follow do not", () => {
     const calls = mount({ cards: true })
-    fireEvent.click(box("Tick @alpha"))
+    fireEvent.click(box("Select @alpha"))
     fireEvent.click(screen.getByRole("button", { name: "Follow @alpha" }))
     expect(calls.ticks).toEqual([["alpha"]])
     expect(calls.follow).toEqual(["alpha"])
@@ -574,8 +574,8 @@ describe("as cards on a phone (DFP-02)", () => {
 
   test("a followed card ticks too, and the pages stay", () => {
     const calls = mount({ cards: true, ticks: new Set(["beta"]) })
-    expect(box("Tick @beta").checked).toBe(true)
-    fireEvent.click(box("Tick @gamma"))
+    expect(box("Select @beta").checked).toBe(true)
+    fireEvent.click(box("Select @gamma"))
     expect(calls.ticks).toEqual([["beta", "gamma"]])
     fireEvent.click(screen.getByRole("button", { name: "Next page" }))
     expect(calls.page).toEqual([1])

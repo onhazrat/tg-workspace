@@ -3,6 +3,14 @@ import type React from "react"
 import { useState } from "react"
 import { BarHeading, BarPopover, BarSearch } from "@/components/BarPopover"
 import { pillClass } from "@/components/PostFilterParts"
+import {
+  type FacetManage,
+  FacetManageButtons,
+  FacetManageDialogs,
+  type FacetRowAction,
+  RenameForm,
+  useFacetManage,
+} from "./FacetMenuManage"
 
 /** One value in a facet dropdown, with how much of it is selected. */
 export type FacetMenuRow = {
@@ -56,6 +64,22 @@ type FacetMenuProps = {
    * dropdown does. Resolves true once created, which clears the search.
    */
   onCreate?: (name: string) => Promise<boolean>
+  /** Rename and delete each row but a derived one, asking first (TGU-02). */
+  manage?: FacetManage
+  /** One more action per row, between its name and its count: the Groups gear. */
+  rowAction?: FacetRowAction
+  /** Keep the rows' order from open to close, so a click never moves a row. */
+  freezeOrder?: boolean
+}
+
+/** `rows` in the order `held` lists them; a row it lacks goes last. */
+function inHeldOrder(rows: FacetMenuRow[], held: string[] | null) {
+  if (!held) return rows
+  const place = (id: string) => {
+    const at = held.indexOf(id)
+    return at === -1 ? held.length : at
+  }
+  return [...rows].sort((a, b) => place(a.id) - place(b.id))
 }
 
 function Tick({ row }: { row: FacetMenuRow }) {
@@ -119,20 +143,28 @@ export function FacetMenu({
   onFunnel,
   onClearFunnels,
   search,
-  tickHint = "Tick selects, the funnel shows only",
+  tickHint = "Select adds its channels, the funnel shows only",
   countLabel = "in the window",
   onOpenChange,
   onCreate,
+  manage,
+  rowAction,
+  freezeOrder,
 }: FacetMenuProps) {
   const ticks = onToggleSelect !== undefined
   const [ownQuery, setOwnQuery] = useState("")
+  const [held, setHeld] = useState<string[] | null>(null)
+  const managing = useFacetManage(manage)
   const query = search ? search.value : ownQuery
   const needle = query.trim().toLowerCase()
-  const shown = search
-    ? rows
-    : rows.filter((row) =>
-        `${row.label} ${row.hint ?? ""}`.toLowerCase().includes(needle),
-      )
+  const shown = inHeldOrder(
+    search
+      ? rows
+      : rows.filter((row) =>
+          `${row.label} ${row.hint ?? ""}`.toLowerCase().includes(needle),
+        ),
+    held,
+  )
   const withSelection = ticks
     ? rows.filter((row) => row.selected > 0).length
     : 0
@@ -163,132 +195,150 @@ export function FacetMenu({
   }
 
   return (
-    <BarPopover
-      width="w-80"
-      onOpenChange={onOpenChange}
-      trigger={
-        <button
-          type="button"
-          data-testid={testId}
-          data-active={active}
-          className={pillClass(active)}
-        >
-          {icon}
-          <span className="max-w-40 truncate">{title}</span>
-          {withSelection > 0 && (
-            <span className="rounded-full bg-app-ink/15 px-1.5 text-[10px] tabular-nums">
-              {withSelection}
-            </span>
-          )}
-          <ChevronDown size={12} className="opacity-60" />
-        </button>
-      }
-    >
-      <BarSearch
-        value={query}
-        onChange={search ? search.onChange : setOwnQuery}
-        placeholder={`Search ${label.toLowerCase()}...`}
-      />
-      <div className="flex justify-between px-2 pb-1 pt-1 text-[11px] text-app-ink/50">
-        <span>{ticks ? tickHint : "The funnel shows only"}</span>
-        <span>{ticks ? "selected/total" : countLabel}</span>
-      </div>
-      {active && (
-        <button
-          type="button"
-          onClick={onClearFunnels}
-          className="mb-1 flex items-center gap-1.5 rounded-md px-2 py-1 text-app-ink/60 hover:bg-app-ink/5 hover:text-app-ink"
-        >
-          <X size={11} /> Clear {funnelled.length} funnel
-          {funnelled.length > 1 ? "s" : ""}
-        </button>
-      )}
-      {shown.length === 0 && (
-        <p className="px-2 py-3 text-app-ink/50">
-          No {noun} matches {query.trim()}
-        </p>
-      )}
-      {shown.map((row, index) => {
-        const on = funnelled.includes(row.id)
-        const heading = row.explanation && !shown[index - 1]?.explanation
-        return (
-          <div key={row.id}>
-            {heading && <BarHeading>Derived</BarHeading>}
-            <div className="group flex items-center gap-1 rounded-md hover:bg-app-ink/5">
-              {ticks ? (
-                // biome-ignore lint/a11y/useSemanticElements: a native checkbox cannot say "mixed" without a ref, and a partly selected row must.
+    <>
+      <BarPopover
+        width="w-80"
+        onOpenChange={(open) => {
+          if (!open) managing.stopRenaming()
+          setHeld(open && freezeOrder ? rows.map((row) => row.id) : null)
+          onOpenChange?.(open)
+        }}
+        trigger={
+          <button
+            type="button"
+            data-testid={testId}
+            data-active={active}
+            className={pillClass(active)}
+          >
+            {icon}
+            <span className="max-w-40 truncate">{title}</span>
+            {withSelection > 0 && (
+              <span className="rounded-full bg-app-ink/15 px-1.5 text-[10px] tabular-nums">
+                {withSelection}
+              </span>
+            )}
+            <ChevronDown size={12} className="opacity-60" />
+          </button>
+        }
+      >
+        <BarSearch
+          value={query}
+          onChange={search ? search.onChange : setOwnQuery}
+          placeholder={`Search ${label.toLowerCase()}...`}
+        />
+        <div className="flex justify-between px-2 pb-1 pt-1 text-[11px] text-app-ink/50">
+          <span>{ticks ? tickHint : "The funnel shows only"}</span>
+          <span>{ticks ? "selected/total" : countLabel}</span>
+        </div>
+        {active && (
+          <button
+            type="button"
+            onClick={onClearFunnels}
+            className="mb-1 flex items-center gap-1.5 rounded-md px-2 py-1 text-app-ink/60 hover:bg-app-ink/5 hover:text-app-ink"
+          >
+            <X size={11} /> Clear {funnelled.length} funnel
+            {funnelled.length > 1 ? "s" : ""}
+          </button>
+        )}
+        {shown.length === 0 && (
+          <p className="px-2 py-3 text-app-ink/50">
+            No {noun} matches {query.trim()}
+          </p>
+        )}
+        {shown.map((row, index) => {
+          const on = funnelled.includes(row.id)
+          const heading = row.explanation && !shown[index - 1]?.explanation
+          return (
+            <div key={row.id}>
+              {heading && <BarHeading>Derived</BarHeading>}
+              <div className="group flex items-center gap-1 rounded-md hover:bg-app-ink/5">
+                {managing.renaming === row.id ? (
+                  <RenameForm row={row} managing={managing} />
+                ) : ticks ? (
+                  // biome-ignore lint/a11y/useSemanticElements: a native checkbox cannot say "mixed" without a ref, and a partly selected row must.
+                  <button
+                    type="button"
+                    role="checkbox"
+                    aria-checked={row.tick}
+                    disabled={row.busy}
+                    data-testid={`${testId}-row-${row.id}`}
+                    onClick={() => onToggleSelect(row)}
+                    className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left"
+                  >
+                    <Tick row={row} />
+                    <RowLabel row={row} />
+                  </button>
+                ) : (
+                  <span
+                    data-testid={`${testId}-row-${row.id}`}
+                    className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5"
+                  >
+                    <RowLabel row={row} />
+                  </span>
+                )}
+                {managing.renaming !== row.id && (
+                  <FacetManageButtons
+                    row={row}
+                    rowAction={rowAction}
+                    managing={managing}
+                  />
+                )}
+                <span
+                  data-testid={`${testId}-count-${row.id}`}
+                  className="font-mono text-[10px] text-app-ink/50"
+                >
+                  {ticks ? `${row.selected}/${row.total}` : row.total}
+                </span>
                 <button
                   type="button"
-                  role="checkbox"
-                  aria-checked={row.tick}
-                  disabled={row.busy}
-                  data-testid={`${testId}-row-${row.id}`}
-                  onClick={() => onToggleSelect(row)}
-                  className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left"
+                  aria-pressed={on}
+                  aria-label={
+                    on
+                      ? `Stop showing only ${row.label}`
+                      : `Show only ${row.label}`
+                  }
+                  title={
+                    on ? `Stop showing only this ${noun}` : "Show only this"
+                  }
+                  data-testid={`${testId}-funnel-${row.id}`}
+                  onClick={() => onFunnel(row.id, !on)}
+                  className={`mr-1 grid h-6 w-6 place-items-center rounded ${
+                    on
+                      ? "bg-app-ink text-app-bg"
+                      : "text-app-ink/40 hover:bg-app-ink/10 hover:text-app-ink"
+                  }`}
                 >
-                  <Tick row={row} />
-                  <RowLabel row={row} />
+                  <Filter size={11} />
                 </button>
-              ) : (
-                <span
-                  data-testid={`${testId}-row-${row.id}`}
-                  className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5"
-                >
-                  <RowLabel row={row} />
-                </span>
-              )}
-              <span
-                data-testid={`${testId}-count-${row.id}`}
-                className="font-mono text-[10px] text-app-ink/50"
-              >
-                {ticks ? `${row.selected}/${row.total}` : row.total}
-              </span>
-              <button
-                type="button"
-                aria-pressed={on}
-                aria-label={
-                  on
-                    ? `Stop showing only ${row.label}`
-                    : `Show only ${row.label}`
-                }
-                title={on ? `Stop showing only this ${noun}` : "Show only this"}
-                data-testid={`${testId}-funnel-${row.id}`}
-                onClick={() => onFunnel(row.id, !on)}
-                className={`mr-1 grid h-6 w-6 place-items-center rounded ${
-                  on
-                    ? "bg-app-ink text-app-bg"
-                    : "text-app-ink/40 hover:bg-app-ink/10 hover:text-app-ink"
-                }`}
-              >
-                <Filter size={11} />
-              </button>
+              </div>
             </div>
-          </div>
-        )
-      })}
-      {canCreate && (
-        <button
-          type="button"
-          disabled={creating}
-          data-testid={`${testId}-create`}
-          onClick={() => void create()}
-          className="mt-1 flex w-full items-center gap-1.5 rounded-md border-t border-app-ink/10 px-2 py-1.5 text-left font-semibold hover:bg-app-ink/5 disabled:opacity-50"
-        >
-          {creating ? (
-            <Loader2 size={11} className="animate-spin" />
-          ) : (
-            <Plus size={11} />
-          )}
-          <span className="truncate">
-            Create {noun} "{name}"
-          </span>
-        </button>
-      )}
-      {onCreate && name === "" && (
-        <p className="mt-1 border-t border-app-ink/10 px-2 pt-1.5 text-[11px] text-app-ink/50">
-          Type a name to create a {noun}
-        </p>
-      )}
-    </BarPopover>
+          )
+        })}
+        {canCreate && (
+          <button
+            type="button"
+            disabled={creating}
+            data-testid={`${testId}-create`}
+            onClick={() => void create()}
+            className="mt-1 flex w-full items-center gap-1.5 rounded-md border-t border-app-ink/10 px-2 py-1.5 text-left font-semibold hover:bg-app-ink/5 disabled:opacity-50"
+          >
+            {creating ? (
+              <Loader2 size={11} className="animate-spin" />
+            ) : (
+              <Plus size={11} />
+            )}
+            <span className="truncate">
+              Create {noun} "{name}"
+            </span>
+          </button>
+        )}
+        {onCreate && name === "" && (
+          <p className="mt-1 border-t border-app-ink/10 px-2 pt-1.5 text-[11px] text-app-ink/50">
+            Type a name to create a {noun}
+          </p>
+        )}
+      </BarPopover>
+      <FacetManageDialogs managing={managing} noun={noun} testId={testId} />
+    </>
   )
 }

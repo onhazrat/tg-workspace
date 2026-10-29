@@ -329,3 +329,33 @@ describe("what each size says about syncing", () => {
     }
   })
 })
+
+describe("the Last post line (TGU-01)", () => {
+  const posted = (lastPostAt: number | null): ChannelStats => ({
+    count: 1,
+    reach: null,
+    reachEstimated: false,
+    lastPostAt,
+  })
+
+  test("every card size shows it under the sync line", () => {
+    for (const zoom of [-1, 0, 1] as const) {
+      renderCard(synced, zoom, { stats: posted(NOW - 72 * H) })
+      const line = screen.getByText(/^Last post/)
+      expect(line.textContent).toBe("Last post 3d ago")
+      expect(
+        lastSync().compareDocumentPosition(line) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy()
+      cleanup()
+    }
+  })
+
+  test("shows nothing before the stats load, or with no Last post", () => {
+    for (const stats of [undefined, posted(null)]) {
+      renderCard(synced, 0, { stats })
+      expect(screen.queryByText(/^Last post/)).toBeNull()
+      cleanup()
+    }
+  })
+})

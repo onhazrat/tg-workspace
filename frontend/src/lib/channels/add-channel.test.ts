@@ -269,6 +269,8 @@ describe("addChannelByName", () => {
       isUnavailableOnWebView: false,
       telegramChatId: -1005,
     })
+    // TGU-01: no Last sync until a sync finishes.
+    expect(calls.upserts[0]?.lastUpdated).toBeUndefined()
     expect(calls.loaded).toBe(1)
     expect([...calls.selected]).toEqual(["News"])
     expect(calls.queued).toEqual([["News", "Initial Sync"]])
@@ -376,6 +378,8 @@ describe("addForwardedChannel", () => {
       discoveredVia: via,
     })
     expect(calls.upserts[0]?.bio).toBeUndefined()
+    // TGU-01: no Last sync until a sync finishes.
+    expect(calls.upserts[0]?.lastUpdated).toBeUndefined()
     expect(calls.loaded).toBe(1)
     expect(calls.selected.size).toBe(0)
     expect(calls.queued).toEqual([["news", "Manual (Added from Forward)"]])

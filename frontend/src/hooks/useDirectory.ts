@@ -4,7 +4,7 @@
  * The view lives in the URL (`lib/directory/directory-view.ts`) and the last
  * one is remembered per Account through the scoped storage: a tab opened with
  * no `dir*` parameter adopts it. The ticks and the column choices (DCOL) are
- * per browser and Account and never in the URL; "Channels ticked here" and
+ * per browser and Account and never in the URL; "Channels selected here" and
  * DIR-07's Seeds read the ticks from here.
  */
 import {

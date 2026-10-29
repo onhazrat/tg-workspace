@@ -308,7 +308,7 @@ describe("a Discovery report's keyboard mode", () => {
   test("F and D press the bulk bar's buttons; with nothing ticked a toast says so", async () => {
     render(tab())
     type("F")
-    expect(await screen.findByText("Nothing ticked to follow")).toBeTruthy()
+    expect(await screen.findByText("Nothing selected to follow")).toBeTruthy()
     type("j", "x", "F", "D")
     expect(calls.bulkFollow.mock.calls).toEqual([[["a"]]])
     expect(calls.bulkDismiss.mock.calls).toEqual([[["a"]]])

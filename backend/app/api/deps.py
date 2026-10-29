@@ -107,6 +107,10 @@ VIEW_AS_READ_ONLY_PATHS: dict[str, str] = {
         "the Parts a Publication would send, for the publish panel's preview "
         "(SUMTAB-09); POST only because the options travel in the body"
     ),
+    f"{settings.API_V1_STR}/data/tags/order": (
+        "each Tag's counts and Tag use score on a tab (TGU-02); POST only "
+        "because the scope and the selection travel in the body"
+    ),
 }
 
 #: What a refused write says. One string, so the browser can recognise it and

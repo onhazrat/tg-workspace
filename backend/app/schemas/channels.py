@@ -44,6 +44,8 @@ class ChannelStatsResponse(BaseModel):
     min_id: int | None = Field(default=None, alias="minId")
     max_id: int | None = Field(default=None, alias="maxId")
     velocity: float = 0.0
+    #: The Last post, epoch ms; `None` when no stored Post has a timestamp.
+    last_post_at: int | None = Field(default=None, alias="lastPostAt")
     # No defaults: both routes that answer this always compute Reach, and a
     # default would let one that forgot answer "not measured" instead of failing.
     reach: int | None

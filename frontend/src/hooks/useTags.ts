@@ -5,7 +5,7 @@
  * (rows carry their Tags) and the Channels (a followed Channel shows its Tags
  * there too).
  */
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
   type DirectoryViewRequest,
@@ -17,10 +17,18 @@ import {
   dataRenameTag,
   type TagResponse,
 } from "@/client"
+import type { FacetManage } from "@/components/filter-tree/FacetMenuManage"
 import { errorText } from "@/lib/artifacts/artifact-run"
-import type { TagChoices, Tagging } from "@/lib/directory/directory-tags"
+import {
+  sameTag,
+  type TagChoices,
+  type Tagging,
+} from "@/lib/directory/directory-tags"
+import { queryClient } from "@/lib/queryClient"
+import { byTagUse, deleteText, mergeText } from "@/lib/tags/tag-use"
 import { queryKeys } from "./queryKeys"
 import { useSettingGroupsQuery } from "./useSettingGroups"
+import { recordTagUse, useTagUses } from "./useTagUses"
 
 const NO_TAGS: TagResponse[] = []
 
@@ -104,31 +112,79 @@ export function useTags() {
         () => dataDeleteTag({ body: { name } }),
         "The Tag was not deleted.",
       ),
-    /** Hand `onTicks` the handles carrying `name` now, `group:` names included. */
-    tickTag: async (name: string, onTicks: (handles: string[]) => void) => {
-      try {
-        const { handles } = await dataListTagChannels({ query: { name } })
-        onTicks(handles)
-      } catch (error) {
-        toast.error(errorText(error, "The Tag's channels did not load."))
-      }
-    },
   }
 }
 
-/** The Tags as the Directory tab wires them: rows, the panel and the filter. */
+const tagHandlesQuery = (name: string) => ({
+  queryKey: queryKeys.tagHandles(name),
+  queryFn: async () => {
+    const { handles } = await dataListTagChannels({ query: { name } })
+    return new Set(handles.map((h) => h.toLowerCase()))
+  },
+})
+
+/** The handles carrying `name` now, lowercased: one Tag's, never every Tag's. */
+export const fetchTagHandles = (name: string) =>
+  queryClient.fetchQuery(tagHandlesQuery(name))
+
+/** Each of `names`' handles, lowercased; undefined while one loads. */
+export function useTagHandles(
+  names: string[],
+): (name: string) => ReadonlySet<string> | undefined {
+  const results = useQueries({ queries: names.map(tagHandlesQuery) })
+  const byName = new Map(names.map((name, i) => [name, results[i]?.data]))
+  return (name) => byName.get(name)
+}
+
+/** A Tags dropdown's rename and delete, warning before a merge and saying how
+ * many channels, followed or not, a delete takes the Tag off (TGU-02). */
+export function useTagManage(): FacetManage {
+  const tags = useTags()
+  const channels = (name: string) =>
+    tags.tags.find((t) => sameTag(t.name, name))?.channels
+  return {
+    onRename: (id, to) => void tags.rename(id, to),
+    onDelete: (id) => void tags.remove(id),
+    mergeText: (id, to) => mergeText(tags.tags, id, to),
+    deleteText: (row) => deleteText(row.label, channels(row.id) ?? row.total),
+  }
+}
+
+/** Record a Directory Tag use once `write` is done, so a new Tag exists. */
+const usedAfter = (write: Promise<void>, name: string) =>
+  void write.then(() => recordTagUse("directory", name))
+
+/**
+ * The Tags as the Directory tab wires them: rows, the panel and the filter,
+ * every list in the Directory's Tag use order (TGU-03). Tagging or untagging
+ * by hand records a use.
+ */
 export function useDirectoryTags() {
   const tags = useTags()
   const groups = useSettingGroupsQuery()
+  const score = useTagUses("directory")
+  const ordered = byTagUse(
+    tags.tags,
+    score,
+    (t) => t.name,
+    (t) => t.channels,
+  )
   const tagging: Tagging = {
-    tags: tags.tags,
-    onTag: (name, handles) => void tags.tag(name, handles),
-    onUntag: (name, handles) => void tags.untag(name, handles),
+    tags: ordered,
+    onTag: (name, handles) => usedAfter(tags.tag(name, handles), name),
+    onUntag: (name, handles) => usedAfter(tags.untag(name, handles), name),
+  }
+  /** Tag or untag every entry a view matches, then record the use. */
+  const viewTagging = {
+    onTag: (name: string, view: DirectoryViewRequest) =>
+      usedAfter(tags.tagView(name, view), name),
+    onUntag: (name: string, view: DirectoryViewRequest) =>
+      usedAfter(tags.untagView(name, view), name),
   }
   const choices: TagChoices = {
-    tags: tags.tags,
+    tags: ordered,
     groups: (groups.data ?? []).map((g) => g.name),
     loaded: tags.loaded && groups.isSuccess,
   }
-  return { tags, tagging, choices }
+  return { tags, tagging, viewTagging, choices }
 }

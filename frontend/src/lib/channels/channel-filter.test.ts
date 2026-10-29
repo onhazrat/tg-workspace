@@ -14,6 +14,7 @@ import {
   groupWith,
   matchesChannelFilter,
   moveNode,
+  noPostIn30Days,
   parseChannelFilter,
   printChannelFilter,
   removeFunnel,
@@ -817,6 +818,83 @@ describe("Time bound Conditions (TB-03)", () => {
     expect(label("next_dynamic_sync_at = none")).toBe(
       "Next dynamic sync: no value",
     )
+  })
+
+  test("the Last sync is named for what writes it (TGU-01)", () => {
+    expect(label("updated_at -1d..")).toBe("Last sync from 1 day ago")
+  })
+
+  describe("Last post (TGU-01)", () => {
+    // The Last post is the channel stats' `lastPostAt`, not a Channel field.
+    const withPost = (lastPostAt: number | null): MetricInputs => ({
+      ...noMetrics,
+      now: T,
+      channelStats: {
+        c: { count: 1, reach: null, reachEstimated: false, lastPostAt },
+      },
+    })
+    const judge = (text: string, inputs: MetricInputs) =>
+      matchesChannelFilter(
+        parseChannelFilter(text, names) as ChannelFilter,
+        channel({}),
+        inputs,
+      )
+
+    test("prints and reads back", () => {
+      for (const text of ["last_post_at -30d..now", "last_post_at = none"]) {
+        const parsed = parseChannelFilter(text, names)
+        expect(parsed && printChannelFilter(parsed, names)).toBe(text)
+      }
+      expect(label("last_post_at -1d..")).toBe("Last post from 1 day ago")
+    })
+
+    test("bounds the stats' Last post; none is no Post, or no stats yet", () => {
+      expect(judge("last_post_at 2026-10-20T12:00Z..", withPost(T))).toBe(true)
+      expect(judge("last_post_at ..2026-10-20T12:00Z", withPost(T))).toBe(false)
+      expect(judge("last_post_at = none", withPost(T))).toBe(false)
+      expect(judge("last_post_at -100w..+100w", withPost(null))).toBe(false)
+      expect(judge("last_post_at = none", withPost(null))).toBe(true)
+      expect(judge("last_post_at = none", at(T))).toBe(true)
+    })
+  })
+
+  describe("the No post in 30 days preset (TGU-01)", () => {
+    const preset = (text: string) =>
+      printChannelFilter(
+        noPostIn30Days(parseChannelFilter(text, names) ?? emptyFilter()),
+        names,
+      )
+
+    test("is an OR of a bound ending 30 days ago and none, joined with AND", () => {
+      expect(preset("")).toBe("(last_post_at ..-30d or last_post_at = none)")
+      expect(preset("tag:a")).toBe(
+        "tag:a and (last_post_at ..-30d or last_post_at = none)",
+      )
+      expect(preset("tag:a or tag:b")).toBe(
+        "(tag:a or tag:b) and (last_post_at ..-30d or last_post_at = none)",
+      )
+    })
+
+    test("round-trips through the URL form", () => {
+      const text = preset("tag:a or tag:b")
+      const parsed = parseChannelFilter(text, names)
+      expect(parsed && printChannelFilter(parsed, names)).toBe(text)
+    })
+
+    test("matches a Last post over 30 days ago, or none", () => {
+      const filter = noPostIn30Days(emptyFilter())
+      const judgeAt = (lastPostAt: number | null) =>
+        matchesChannelFilter(filter, channel({}), {
+          ...noMetrics,
+          now: T,
+          channelStats: {
+            c: { count: 1, reach: null, reachEstimated: false, lastPostAt },
+          },
+        })
+      expect(judgeAt(T - 31 * DAY)).toBe(true)
+      expect(judgeAt(null)).toBe(true)
+      expect(judgeAt(T - 29 * DAY)).toBe(false)
+    })
   })
 
   test("the two day counts no longer parse, so the tab opens unfiltered", () => {

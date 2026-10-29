@@ -88,8 +88,10 @@ test("a second device keeps the Account's model, and switching Key still restore
     route.fulfill({ json: { models: [], default: "" } }),
   )
 
-  // This browser last ran another model on the Key it has selected.
-  await page.goto("/")
+  // This browser last ran another model on the Key it has selected. Settle
+  // first: a navigation that aborts lazy chunks in flight left the next
+  // page's networkidle wait hanging in CI.
+  await page.goto("/", { waitUntil: "networkidle" })
   await seedScopedStorage(page, {
     selected_ai_key: "k-work",
     ai_key_models: JSON.stringify({

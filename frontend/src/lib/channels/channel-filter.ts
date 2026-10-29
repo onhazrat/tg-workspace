@@ -49,9 +49,11 @@ import {
 } from "@/lib/filter-text"
 import {
   addFunnel as addTreeFunnel,
+  andRoot,
   emptyTree,
   evalTree,
   type Joiner,
+  newId,
   type AtomNode as TreeAtom,
   type GroupNode as TreeGroup,
   type FilterNode as TreeNode,
@@ -130,7 +132,7 @@ function testCond(cond: Cond, channel: Channel, inputs: MetricInputs): boolean {
     case "metric":
       return inBound(metricValue(cond.metric, channel, inputs), cond)
     case "time": {
-      const at = channelMoment(cond.moment).value(channel)
+      const at = channelMoment(cond.moment).value(channel, inputs)
       if (cond.none) return at === null
       return at !== null && inTimeBound(at, cond, inputs.now)
     }
@@ -152,6 +154,30 @@ export const addFunnel = (
   type: CondType,
   value: string,
 ): ChannelFilter => addTreeFunnel<Cond>(filter, { type, value })
+
+const lastPostAtom = (bound: TimeBound & { none?: true }): AtomNode => ({
+  kind: "atom",
+  id: newId(),
+  cond: { type: "time", moment: "last_post_at", ...bound },
+})
+
+/**
+ * The Filters menu's "No post in 30 days" preset (TGU-01): a Last post over
+ * 30 days ago or none at all, joined to the rest of the filter with AND.
+ */
+export function noPostIn30Days(filter: ChannelFilter): ChannelFilter {
+  const root = andRoot(filter)
+  const preset: GroupNode = {
+    kind: "group",
+    id: newId(),
+    op: "or",
+    children: [
+      lastPostAtom({ mode: "live", end: -30 * 86_400_000 }),
+      lastPostAtom({ mode: "fixed", none: true }),
+    ],
+  }
+  return { ...root, children: [...root.children, preset] }
+}
 
 // ---- The URL form ----------------------------------------------------------
 

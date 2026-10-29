@@ -40,6 +40,7 @@ export function ChannelCardFooter({
   channel,
   showStartId,
   showStatus,
+  lastPostAt,
   detailed,
   isScraping,
   busy,
@@ -51,6 +52,8 @@ export function ChannelCardFooter({
   showStartId: boolean
   /** The card's status block; off on the compact card, which shows a line. */
   showStatus: boolean
+  /** The Last post from the channel stats; nothing shows until they load. */
+  lastPostAt?: number | null
   /** List both schedules instead of the earliest. */
   detailed: boolean
   isScraping: boolean
@@ -84,6 +87,7 @@ export function ChannelCardFooter({
           <p className="truncate text-[9px] text-app-ink/45">
             {nextSyncText(slots)}
           </p>
+          <LastPostLine at={lastPostAt} />
         </div>
         <SyncButton
           channel={channel}
@@ -125,6 +129,7 @@ export function ChannelCardFooter({
           ) : (
             <p className="text-[9px] text-app-ink/45">{nextSyncText(slots)}</p>
           )}
+          <LastPostLine at={lastPostAt} />
         </div>
       </div>
 
@@ -135,6 +140,16 @@ export function ChannelCardFooter({
         onSync={onSync}
       />
     </div>
+  )
+}
+
+/** "Last post 3d ago" under the sync line (TGU-01). */
+function LastPostLine({ at }: { at: number | null | undefined }) {
+  if (!at) return null
+  return (
+    <p className="truncate text-[9px] text-app-ink/45">
+      Last post <RelativeTime timestamp={at} />
+    </p>
   )
 }
 

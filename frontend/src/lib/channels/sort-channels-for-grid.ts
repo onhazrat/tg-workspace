@@ -6,6 +6,7 @@ export type ChannelGridSortOption =
   | "total_posts"
   | "posts_in_scope"
   | "last_updated"
+  | "last_post"
   | "channel_id"
   | "channel_name"
   | "followed_at"
@@ -19,7 +20,8 @@ export const CHANNEL_GRID_SORT_LABELS: Record<ChannelGridSortOption, string> = {
   activity_rate: "Activity Rate",
   total_posts: "Total Posts",
   posts_in_scope: "Posts in Scope",
-  last_updated: "Last Updated",
+  last_updated: "Last Sync",
+  last_post: "Last Post",
   channel_id: "Channel ID",
   channel_name: "Channel Name",
   followed_at: "Followed At",
@@ -108,6 +110,9 @@ const SORT_COMPARATORS: Record<ChannelGridSortOption, ChannelComparator> = {
   posts_in_scope: (a, b, { postsInScopeCounts }) =>
     (postsInScopeCounts[a.name] ?? 0) - (postsInScopeCounts[b.name] ?? 0),
   last_updated: (a, b) => (a.lastUpdated || 0) - (b.lastUpdated || 0),
+  last_post: (a, b, { channelStats }) =>
+    (channelStats[a.name]?.lastPostAt ?? 0) -
+    (channelStats[b.name]?.lastPostAt ?? 0),
   followed_at: (a, b) => (a.followedAt || 0) - (b.followedAt || 0),
   channel_id: (a, b) => (a.startId || 0) - (b.startId || 0),
   channel_name: (a, b) =>
@@ -129,6 +134,27 @@ const SORT_COMPARATORS: Record<ChannelGridSortOption, ChannelComparator> = {
   next_auto_sync: (a, b) =>
     compareNullableSyncAt(getNextAutoSyncAt(a), getNextAutoSyncAt(b)),
 }
+
+/** The moments whose Channels with no value sort last either way (TGU-01). */
+const MOMENT_SORTS: Partial<
+  Record<
+    ChannelGridSortOption,
+    (c: Channel, inputs: SortInputs) => number | null | undefined
+  >
+> = {
+  last_updated: (c) => c.lastUpdated,
+  last_post: (c, { channelStats }) => channelStats[c.name]?.lastPostAt,
+}
+
+const hasNoMoment = (
+  c: Channel,
+  inputs: SortInputs,
+  sortBy: ChannelGridSortOption,
+): number =>
+  Object.hasOwn(MOMENT_SORTS, sortBy) &&
+  MOMENT_SORTS[sortBy]?.(c, inputs) == null
+    ? 1
+    : 0
 
 const compareBySortOption = (
   a: Channel,
@@ -165,8 +191,12 @@ export function sortChannelsForGrid({
   sortDirection,
   groupBySelection,
 }: SortChannelsForGridParams): Channel[] {
+  const inputs = { channelStats, postsInScopeCounts }
+  // Within each selection tier, a Channel with no value for a moment sort
+  // comes after those with one, whatever the direction.
   const tier = (channel: Channel) =>
-    groupBySelection ? getSelectionTier(channel, selectedChannels) : 0
+    (groupBySelection ? getSelectionTier(channel, selectedChannels) : 0) * 2 +
+    hasNoMoment(channel, inputs, sortBy)
   return [...channels].sort((a, b) => {
     const aGroup = tier(a)
     const bGroup = tier(b)
@@ -175,12 +205,7 @@ export function sortChannelsForGrid({
       return aGroup - bGroup
     }
 
-    let comparison = compareBySortOption(
-      a,
-      b,
-      { channelStats, postsInScopeCounts },
-      sortBy,
-    )
+    let comparison = compareBySortOption(a, b, inputs, sortBy)
     if (comparison === 0) {
       const aName = a.displayName || a.name
       const bName = b.displayName || b.name

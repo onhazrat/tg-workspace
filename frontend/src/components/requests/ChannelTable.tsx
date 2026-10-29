@@ -1,4 +1,8 @@
 import { useState } from "react"
+import { useGroupRows } from "@/components/filter-tree/GroupsDropdown"
+import { useTagHandles } from "@/hooks/useTags"
+import { recordTagUse } from "@/hooks/useTagUses"
+import { funnelledValues } from "@/lib/filter-tree"
 import {
   type ChannelRow,
   type ChannelSort,
@@ -14,6 +18,7 @@ import {
   toggled,
 } from "@/lib/requests/breakdown"
 import { type ChannelFilter, keepRow } from "@/lib/requests/channel-filter"
+import { newTagValues } from "@/lib/tags/tag-use"
 import { ChannelBar } from "./ChannelBar"
 import { td, th } from "./KindTable"
 import { kindColor, OutcomeBar, Swatch } from "./parts"
@@ -57,13 +62,20 @@ export function ChannelTable({
   const kept = !hiddenSort(chosenSort, hiddenOutcomes)
   const sort = kept ? chosenSort : "total"
   const direction = kept ? chosenDirection : "desc"
+  const tagHandles = useTagHandles(funnelledValues(filter, "tag"))
+  const groupHandles = useGroupHandles()
   const listed = listChannels(
     rows,
     search,
     sort,
     direction,
-    keepRow(filter, hiddenKinds, hiddenOutcomes),
+    keepRow(filter, hiddenKinds, hiddenOutcomes, tagHandles, groupHandles),
   )
+  /** Every filter change, from any control, records the Tags it adds. */
+  const filterAndRecord = (next: ChannelFilter) => {
+    recordTagUse("requests", ...newTagValues(filter, next))
+    onFilter(next)
+  }
   const max = Math.max(
     0,
     ...listed.filter((r) => !r.aggregate).map((r) => r.total),
@@ -107,7 +119,7 @@ export function ChannelTable({
         search={search}
         onSearch={restart(setSearch)}
         filter={filter}
-        onFilter={restart(onFilter)}
+        onFilter={restart(filterAndRecord)}
         sort={sort}
         onSort={(key) => {
           setSort(key)
@@ -119,6 +131,8 @@ export function ChannelTable({
         }
         hiddenKinds={hiddenKinds}
         hiddenOutcomes={hiddenOutcomes}
+        leftOut={leftOut}
+        onLeftOut={onLeftOut}
       />
       <table className="mt-1 w-full table-fixed text-[12px]">
         <thead>
@@ -208,8 +222,8 @@ function PickEvery({
   return (
     <input
       type="checkbox"
-      aria-label="Pick every listed row"
-      title="Pick or leave out every row listed"
+      aria-label="Select every listed row"
+      title="Select or unselect every row listed"
       checked={listed.length > 0 && out === 0}
       ref={(el) => {
         if (el) el.indeterminate = out > 0 && out < listed.length
@@ -253,7 +267,7 @@ function ChannelTr({
       <td className="pl-3 max-sm:pl-1.5">
         <input
           type="checkbox"
-          aria-label={`Pick ${r.label}`}
+          aria-label={`Select ${r.label}`}
           checked={picked}
           onClick={(e) => e.stopPropagation()}
           onChange={onPick}
@@ -316,4 +330,11 @@ function YieldCell({ row }: { row: ChannelRow }) {
       {none ? "–" : yieldText(row.posts / row.total)}
     </td>
   )
+}
+
+/** Each Setting group's followed handles by id, lowercased (TGU-04). */
+function useGroupHandles(): (id: string) => ReadonlySet<string> | undefined {
+  const groups = useGroupRows(null)
+  const byId = new Map(groups.map((g) => [g.id, new Set(g.handles)]))
+  return (id) => byId.get(id)
 }

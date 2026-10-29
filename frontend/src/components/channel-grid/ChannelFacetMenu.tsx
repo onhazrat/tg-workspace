@@ -44,6 +44,10 @@ export function ChannelFacetMenu({
   onClearFunnels: () => void
   search?: { value: string; onChange: (value: string) => void }
   onCreate?: (name: string) => Promise<boolean>
+  manage?: React.ComponentProps<typeof FacetMenu>["manage"]
+  rowAction?: React.ComponentProps<typeof FacetMenu>["rowAction"]
+  freezeOrder?: boolean
+  tickHint?: string
 }) {
   const byId = new Map(rows.map((row) => [row.id, row]))
   const counted: FacetMenuRow[] = rows.map((row) => {

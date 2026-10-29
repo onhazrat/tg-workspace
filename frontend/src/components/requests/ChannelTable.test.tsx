@@ -3,6 +3,7 @@
  * and its filters, yield and pick boxes (RQS-04).
  */
 import { afterEach, describe, expect, test } from "bun:test"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { useState } from "react"
 import type { ChannelRow, Outcome } from "@/lib/requests/breakdown"
@@ -58,21 +59,28 @@ function Table({
   const [filter, setFilter] = useState(emptyChannelFilter)
   const [leftOut, setLeftOut] = useState<ReadonlySet<string>>(new Set())
   return (
-    <ChannelTable
-      rows={rows}
-      hiddenOutcomes={hiddenOutcomes}
-      hiddenKinds={new Set()}
-      filter={filter}
-      onFilter={setFilter}
-      leftOut={leftOut}
-      onLeftOut={(next) => {
-        onLeftOut(next)
-        setLeftOut(next)
-      }}
-      onOpen={onOpen}
-    />
+    <QueryClientProvider client={TAGS_OFFLINE}>
+      <ChannelTable
+        rows={rows}
+        hiddenOutcomes={hiddenOutcomes}
+        hiddenKinds={new Set()}
+        filter={filter}
+        onFilter={setFilter}
+        leftOut={leftOut}
+        onLeftOut={(next) => {
+          onLeftOut(next)
+          setLeftOut(next)
+        }}
+        onOpen={onOpen}
+      />
+    </QueryClientProvider>
   )
 }
+
+/** The Tags dropdown's reads, which these tests leave unanswered. */
+const TAGS_OFFLINE = new QueryClient({
+  defaultOptions: { queries: { retry: false } },
+})
 
 const names = () =>
   screen
@@ -211,13 +219,13 @@ describe("ChannelTable's filters, yield and picking (RQS-04)", () => {
   test("a pick box leaves its row out, faded but listed; the header box picks every listed row", () => {
     const seen: Set<string>[] = []
     render(<Table rows={rows} onLeftOut={(next) => seen.push(next)} />)
-    fireEvent.click(screen.getByRole("checkbox", { name: "Pick @news" }))
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select @news" }))
     expect([...(seen.at(-1) ?? [])]).toEqual(["news"])
     expect(names()).toContain("@news")
-    const news = screen.getByRole("checkbox", { name: "Pick @news" })
+    const news = screen.getByRole("checkbox", { name: "Select @news" })
     expect(news.closest("tr")?.className).toContain("opacity-40")
     const every = screen.getByRole("checkbox", {
-      name: "Pick every listed row",
+      name: "Select every listed row",
     }) as HTMLInputElement
     expect(every.indeterminate).toBe(true)
     fireEvent.click(every)
@@ -236,7 +244,7 @@ describe("ChannelTable's filters, yield and picking (RQS-04)", () => {
     const [probes, news] = screen.getAllByTestId("requests-channel-row")
     fireEvent.click(news.querySelectorAll("td")[2])
     fireEvent.click(probes)
-    fireEvent.click(screen.getByLabelText("Pick @tech"))
+    fireEvent.click(screen.getByLabelText("Select @tech"))
     expect(opened).toEqual(["news", "kind:probe"])
   })
 })

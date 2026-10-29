@@ -22,7 +22,7 @@ from app.services.follows import (
 from app.services.logs import upsert_network_log
 from app.services.network_settings import redact_proxy_url
 from app.services.sync_meta import touch_sync
-from app.services.sync_schedule import compute_next_regular_sync_at_from_last_updated
+from app.services.sync_schedule import compute_next_regular_sync_at
 
 
 def _save_network_telemetry(
@@ -195,13 +195,10 @@ def create_followed_channel(
             name=clean,
             display_name=display_name,
             photo_url=photo_url,
-            last_updated=now,
+            # No Last sync until a sync finishes (TGU-01); the first regular
+            # sync is scheduled from the Follow's moment instead.
             next_regular_sync_at=(
-                compute_next_regular_sync_at_from_last_updated(
-                    now,
-                    group.auto_sync_interval_minutes,
-                    now,
-                )
+                compute_next_regular_sync_at(now, group.auto_sync_interval_minutes)
                 if group.regular_sync_enabled
                 else None
             ),

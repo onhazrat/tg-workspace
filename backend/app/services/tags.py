@@ -16,20 +16,22 @@ No function commits. The caller owns the transaction, matching `follows.py`.
 
 from __future__ import annotations
 
-import time
 import uuid
 from collections.abc import Iterable
-from typing import Any, cast
+from typing import Any, NamedTuple, cast
 
-from sqlalchemy import Select, Uuid, literal
+from sqlalchemy import BigInteger, Float, Select, Uuid, func, literal
+from sqlalchemy import cast as cast_
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import select as sa_select
 from sqlalchemy import update as sa_update
+from sqlalchemy.dialects.postgresql import aggregate_order_by
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import Session, col, select
 from sqlmodel.sql.expression import SelectOfScalar
 
-from app.models_tg import Tag
+from app.models_tg import Tag, TagUse
+from app.services.analysis_window import server_now_ms
 from app.services.channel_tags import (
     ChannelTag,
     TagSource,
@@ -108,14 +110,18 @@ def replace_channel_tags(
     case collapse to the first, which is "the name as first written".
     """
     key = normalize_handle(handle)
-    session.execute(
-        sa_delete(Tag).where(col(Tag.user_id) == user_id, col(Tag.handle) == key)
+    removed = session.execute(
+        sa_delete(Tag)
+        .where(col(Tag.user_id) == user_id, col(Tag.handle) == key)
+        .returning(col(Tag.tag_key))
     )
+    old_keys = set(removed.scalars().all())
     add_tags(
         session,
         user_id=user_id,
         rows=[{"handle": key, **tag} for tag in normalize_channel_tags(tags)],
     )
+    _end_uses(session, user_id=user_id, keys=old_keys)
 
 
 def add_tags(
@@ -243,7 +249,7 @@ def assign_tag(
     row is stamped now. `handles` may be a statement of handles (a Directory
     view's matches, ADR-031), written in one `INSERT … SELECT`.
     """
-    assigned_at = int(time.time() * 1000)
+    assigned_at = server_now_ms()
     if isinstance(handles, Select):
         found = handles.subquery()
         rows = sa_select(
@@ -298,6 +304,7 @@ def unassign_tag(
             col(Tag.handle).in_(keys),
         )
     )
+    _end_uses(session, user_id=user_id, keys={tag_key(name)})
     return int(cast(Any, removed).rowcount)
 
 
@@ -335,6 +342,8 @@ def rename_tag(
         .where(col(Tag.user_id) == user_id, col(Tag.tag_key).in_({old, new}))
         .values(tag_key=new, name=spelling)
     )
+    if old != new:
+        _move_uses(session, user_id=user_id, old=old, new=new)
     return spelling, len(handles_for_tag(session, user_id=user_id, name=spelling))
 
 
@@ -351,6 +360,7 @@ def delete_tag(session: Session, *, user_id: uuid.UUID, name: str) -> int | None
             col(Tag.user_id) == user_id, col(Tag.tag_key) == tag_key(name)
         )
     )
+    _end_uses(session, user_id=user_id, keys={tag_key(name)})
     return removed
 
 
@@ -364,3 +374,152 @@ def _carrying(
             _mine(user_id).where(col(Tag.tag_key) == key, col(Tag.handle).in_(handles))
         ).all()
     )
+
+
+# ---- Tag uses (TGU-02, ADR-042) ---------------------------------------------
+#
+# `tg_tag_uses` is this aggregate's companion table: each row is one use of a
+# Tag on a tab. A rename moves them and the Tag's end deletes them, both in the
+# same write as the Tag rows, so a later Tag of the same name starts with none.
+
+#: A use counts 1 now, 0.5 after 14 days, 0.25 after 28.
+HALF_LIFE_MS = 14 * 86_400_000
+#: The newest uses kept per Account, tab and Tag. Bounds the table without a
+#: retention job; older uses weigh under 0.1% by then.
+MAX_USES = 50
+
+
+def record_use(session: Session, *, user_id: uuid.UUID, tab: str, name: str) -> int:
+    """Record one use of `name` on `tab`; 0 for a Tag the Account lacks.
+
+    Keeps the `MAX_USES` newest per Account, tab and Tag. A `group:` name is
+    never a stored Tag, so it records nothing.
+    """
+    key = tag_key(name)
+    owned = _mine(user_id).where(col(Tag.tag_key) == key).exists()
+    inserted = session.execute(
+        pg_insert(TagUse)
+        .from_select(
+            ["user_id", "tab", "tag_key", "used_at"],
+            sa_select(
+                literal(user_id, Uuid()),
+                literal(tab),
+                literal(key),
+                literal(server_now_ms(), BigInteger()),
+            ).where(owned),
+        )
+        .on_conflict_do_nothing()
+        .returning(col(TagUse.used_at))
+    ).all()
+    mine = (
+        col(TagUse.user_id) == user_id,
+        col(TagUse.tab) == tab,
+        col(TagUse.tag_key) == key,
+    )
+    oldest_kept = (
+        sa_select(col(TagUse.used_at))
+        .where(*mine)
+        .order_by(col(TagUse.used_at).desc())
+        .offset(MAX_USES - 1)
+        .limit(1)
+        .scalar_subquery()
+    )
+    session.execute(sa_delete(TagUse).where(*mine, col(TagUse.used_at) < oldest_kept))
+    return len(inserted)
+
+
+def _move_uses(session: Session, *, user_id: uuid.UUID, old: str, new: str) -> None:
+    """A rename's uses, on every tab, become `new`'s; a merge adds them."""
+    moved = sa_select(
+        col(TagUse.user_id), col(TagUse.tab), literal(new), col(TagUse.used_at)
+    ).where(col(TagUse.user_id) == user_id, col(TagUse.tag_key) == old)
+    session.execute(
+        pg_insert(TagUse)
+        .from_select(["user_id", "tab", "tag_key", "used_at"], moved)
+        .on_conflict_do_nothing()
+    )
+    _end_uses(session, user_id=user_id, keys={old})
+
+
+def _end_uses(session: Session, *, user_id: uuid.UUID, keys: set[str]) -> None:
+    """Delete the uses of each of `keys` no Channel carries any more."""
+    if not keys:
+        return
+    carried = _mine(user_id).where(col(Tag.tag_key) == col(TagUse.tag_key)).exists()
+    session.execute(
+        sa_delete(TagUse).where(
+            col(TagUse.user_id) == user_id,
+            col(TagUse.tag_key).in_(keys),
+            ~carried,
+        )
+    )
+
+
+class TagOrderRow(NamedTuple):
+    name: str
+    #: Its channels in the scope.
+    channels: int
+    #: How many of those are selected.
+    selected: int
+    #: Its Tag use score on the tab.
+    score: float
+    #: Its last use on the tab (ms), if any.
+    last_used_at: int | None
+
+
+def tag_order(
+    session: Session,
+    *,
+    user_id: uuid.UUID,
+    tab: str,
+    scope: list[str] | None,
+    selected: list[str],
+) -> list[TagOrderRow]:
+    """Each of `user_id`'s Tags, by name: its channels in `scope` (`None` is
+    every Channel), how many of those are in `selected`, its Tag use score on
+    `tab` and its last use there. One statement; Setting groups are not Tags.
+    """
+    in_scope = (
+        literal(True)
+        if scope is None
+        else col(Tag.handle).in_({normalize_handle(h) for h in scope})
+    )
+    picked = col(Tag.handle).in_({normalize_handle(h) for h in selected})
+    age = cast_(literal(server_now_ms(), BigInteger()) - col(TagUse.used_at), Float)
+    uses = (
+        subject_select(
+            sa_select(
+                col(TagUse.tag_key),
+                func.sum(func.power(0.5, age / HALF_LIFE_MS)).label("score"),
+                func.max(col(TagUse.used_at)).label("last"),
+            ).where(col(TagUse.tab) == tab),
+            TagUse,
+            user_id,
+        )
+        .group_by(col(TagUse.tag_key))
+        .subquery()
+    )
+    first_name = func.array_agg(
+        aggregate_order_by(col(Tag.name), col(Tag.assigned_at), col(Tag.handle))
+    )[1]
+    statement = (
+        subject_select(
+            sa_select(
+                first_name,
+                func.count().filter(in_scope),
+                func.count().filter(in_scope & picked),
+                func.coalesce(func.max(uses.c.score), 0.0),
+                func.max(uses.c.last),
+            )
+            .select_from(Tag)
+            .outerjoin(uses, uses.c.tag_key == col(Tag.tag_key)),
+            Tag,
+            user_id,
+        )
+        .group_by(col(Tag.tag_key))
+        .order_by(func.lower(first_name))
+    )
+    return [
+        TagOrderRow(name, int(count), int(chosen), float(score), last)
+        for name, count, chosen, score, last in session.execute(statement).all()
+    ]

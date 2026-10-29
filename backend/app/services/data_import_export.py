@@ -1440,6 +1440,11 @@ EXPORT_OMISSIONS: dict[str, str] = {
         "credential that leaves through the backup door is spending nobody "
         "can attribute. A Key comes back by pasting it again."
     ),
+    "TagUse": (
+        "Tag uses only order the Tag lists (ADR-042, TGU-02), and they fade "
+        "by half every 14 days. Losing them in a restore puts the lists in "
+        "channel-count order until the Account uses its Tags again."
+    ),
     "Dismissal": (
         "A dismissal is a judgement about a candidate, not an artifact "
         "(ticket 30). Restoring one would re-hide handles on a deployment "

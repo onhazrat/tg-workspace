@@ -33,7 +33,11 @@ const sets = {
   follows: ["f1", "f2", "f3"],
 }
 const tags: TagChoices = {
-  tags: [{ name: "News", channels: 4 }],
+  // The Tag list route still answers a Setting group as a `group:` Tag.
+  tags: [
+    { name: "News", channels: 4 },
+    { name: "group:Morning", channels: 1 },
+  ],
   groups: ["Morning"],
   loaded: true,
 }
@@ -42,6 +46,8 @@ const choice = (name: RegExp) =>
   screen.getByRole("radio", { name }) as HTMLInputElement
 const tagPicker = () =>
   screen.getByRole("combobox", { name: "Tag" }) as HTMLSelectElement
+const groupPicker = () =>
+  screen.getByRole("combobox", { name: "Setting group" }) as HTMLSelectElement
 
 const submit = () => screen.getByRole("button", { name: /^(Add|Update)/ })
 
@@ -119,7 +125,7 @@ describe("Cited by @x and Cites @x", () => {
     )
     fireEvent.click(screen.getByRole("button", { name: "Every follow (3)" }))
     expect(handlesBox().value).toBe("@f1 @f2 @f3")
-    fireEvent.click(screen.getByRole("button", { name: "Ticked here (2)" }))
+    fireEvent.click(screen.getByRole("button", { name: "Selected here (2)" }))
     fireEvent.click(submit())
     expect(got).toEqual([
       { type: "citedby", seeds: { kind: "handles", handles: ["t1", "t2"] } },
@@ -158,14 +164,32 @@ describe("Cited by @x and Cites @x", () => {
       />,
     )
     fireEvent.click(choice(/A Tag/))
-    expect([...tagPicker().options].map((o) => o.value)).toEqual([
-      "News",
-      "group:Morning",
-    ])
-    fireEvent.change(tagPicker(), { target: { value: "group:Morning" } })
+    expect([...tagPicker().options].map((o) => o.value)).toEqual(["News"])
     fireEvent.click(submit())
     expect(got).toEqual([
-      { type: "cites", seeds: { kind: "tag", name: "group:Morning" } },
+      { type: "cites", seeds: { kind: "tag", name: "News" } },
+    ])
+  })
+
+  test("a Setting group is a live source of its own, sent by name (TGU-04)", () => {
+    const got: DirectoryCond[] = []
+    render(
+      <HandlesEditor
+        type="citedby"
+        sets={sets}
+        tags={{ ...tags, groups: ["Morning", "Slow"] }}
+        onSubmit={(c) => got.push(c)}
+      />,
+    )
+    fireEvent.click(choice(/A Setting group/))
+    expect([...groupPicker().options].map((o) => o.value)).toEqual([
+      "Morning",
+      "Slow",
+    ])
+    fireEvent.change(groupPicker(), { target: { value: "Slow" } })
+    fireEvent.click(submit())
+    expect(got).toEqual([
+      { type: "citedby", seeds: { kind: "group", name: "Slow" } },
     ])
   })
 
@@ -280,8 +304,8 @@ describe("Shared parents and Shared children (DIR-07)", () => {
       />,
     )
     expect(screen.getByText("Compared with")).toBeTruthy()
-    expect(choice(/ticked in this list \(2\)/).checked).toBe(true)
-    expect(choice(/ticked in this list, saved now \(2\)/)).toBeTruthy()
+    expect(choice(/selected in this list \(2\)/).checked).toBe(true)
+    expect(choice(/selected in this list, saved now \(2\)/)).toBeTruthy()
     expect(choice(/Channels tab selection \(1\)/)).toBeTruthy()
     expect(choice(/Every channel you follow \(3\)/)).toBeTruthy()
     expect(choice(/These channels/)).toBeTruthy()
@@ -299,7 +323,7 @@ describe("Shared parents and Shared children (DIR-07)", () => {
         onSubmit={() => {}}
       />,
     )
-    expect(choice(/ticked in this list \(0\)/).disabled).toBe(true)
+    expect(choice(/selected in this list \(0\)/).disabled).toBe(true)
     expect(choice(/saved now/).disabled).toBe(true)
     expect(choice(/Channels tab selection/).checked).toBe(true)
     expect(choice(/A Tag/).disabled).toBe(true)
@@ -386,14 +410,37 @@ describe("Shared parents and Shared children (DIR-07)", () => {
         tags={tags}
         start={{
           type: "parents",
-          seeds: { kind: "tag", name: "group:Morning" },
+          seeds: { kind: "tag", name: "News" },
           min: 2,
         }}
         onSubmit={() => {}}
       />,
     )
     expect(choice(/A Tag/).checked).toBe(true)
-    expect(tagPicker().value).toBe("group:Morning")
+    expect(tagPicker().value).toBe("News")
+  })
+
+  test("a Setting group choice reopens on its group and sends it (TGU-04)", () => {
+    const got: DirectoryCond[] = []
+    render(
+      <SharedEditor
+        type="parents"
+        sets={sets}
+        tags={{ ...tags, groups: ["Morning", "Slow"] }}
+        start={{
+          type: "parents",
+          seeds: { kind: "group", name: "Slow" },
+          min: 2,
+        }}
+        onSubmit={(c) => got.push(c)}
+      />,
+    )
+    expect(choice(/A Setting group/).checked).toBe(true)
+    expect(groupPicker().value).toBe("Slow")
+    fireEvent.click(submit())
+    expect(got).toEqual([
+      { type: "parents", seeds: { kind: "group", name: "Slow" }, min: 2 },
+    ])
   })
 
   test("Shared children says Seeds nobody follows find little", () => {

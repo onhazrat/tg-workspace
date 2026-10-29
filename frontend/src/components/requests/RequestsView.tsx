@@ -276,7 +276,7 @@ export function RequestsView({
   )
 }
 
-/** The footer's "N Channels left out", and Pick all to bring them back. */
+/** The footer's "N Channels unselected", and Select all to bring them back. */
 function LeftOut({
   count,
   onPickAll,
@@ -286,13 +286,13 @@ function LeftOut({
 }) {
   return (
     <span data-testid="requests-left-out" className="text-app-ink/50">
-      {fmt(count)} Channel{count === 1 ? "" : "s"} left out{" "}
+      {fmt(count)} Channel{count === 1 ? "" : "s"} unselected{" "}
       <button
         type="button"
         className="underline hover:text-app-ink"
         onClick={onPickAll}
       >
-        Pick all
+        Select all
       </button>
     </span>
   )

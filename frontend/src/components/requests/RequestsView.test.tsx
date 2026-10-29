@@ -3,6 +3,7 @@
  * the tab-wide filter the way `RequestsTab` does.
  */
 import { afterEach, describe, expect, mock, test } from "bun:test"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import {
   cleanup,
   fireEvent,
@@ -63,21 +64,28 @@ function Harness(
 ) {
   const [filter, setFilter] = useState(initialRequestsFilter)
   return (
-    <RequestsView
-      filter={filter}
-      onFilter={(update) => {
-        const next = updated(filter, update)
-        props.seen?.push(next)
-        setFilter(next)
-      }}
-      range={RANGE}
-      unfiltered={BREAKDOWN}
-      breakdown={BREAKDOWN}
-      onOpenRow={() => {}}
-      {...props}
-    />
+    <QueryClientProvider client={TAGS_OFFLINE}>
+      <RequestsView
+        filter={filter}
+        onFilter={(update) => {
+          const next = updated(filter, update)
+          props.seen?.push(next)
+          setFilter(next)
+        }}
+        range={RANGE}
+        unfiltered={BREAKDOWN}
+        breakdown={BREAKDOWN}
+        onOpenRow={() => {}}
+        {...props}
+      />
+    </QueryClientProvider>
   )
 }
+
+/** The Tags dropdown's reads, which these tests leave unanswered. */
+const TAGS_OFFLINE = new QueryClient({
+  defaultOptions: { queries: { retry: false } },
+})
 
 const kindRow = (label: string) =>
   screen
@@ -264,16 +272,16 @@ describe("RequestsView", () => {
     expect(channels()).toHaveLength(3)
   })
 
-  test("a Channel left out leaves the tab; the footer counts it and Pick all brings it back", () => {
+  test("an unselected Channel leaves the tab; the footer counts it and Select all brings it back", () => {
     const seen: RequestsFilter[] = []
     render(<Harness seen={seen} />)
     expect(screen.queryByTestId("requests-left-out")).toBeNull()
-    fireEvent.click(screen.getByRole("checkbox", { name: "Pick @news" }))
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select @news" }))
     expect([...(seen.at(-1)?.leftOut ?? [])]).toEqual(["news"])
     expect(screen.getByTestId("requests-left-out").textContent).toBe(
-      "1 Channel left out Pick all",
+      "1 Channel unselected Select all",
     )
-    fireEvent.click(screen.getByRole("button", { name: "Pick all" }))
+    fireEvent.click(screen.getByRole("button", { name: "Select all" }))
     expect(seen.at(-1)?.leftOut.size).toBe(0)
     expect(screen.queryByTestId("requests-left-out")).toBeNull()
   })
@@ -284,7 +292,7 @@ describe("RequestsView", () => {
       byChannel: BREAKDOWN.byChannel.filter((c) => c.channel !== "tech"),
     }
     render(<Harness breakdown={narrowed} listed={BREAKDOWN} />)
-    expect(screen.getByRole("checkbox", { name: "Pick @tech" })).toBeTruthy()
+    expect(screen.getByRole("checkbox", { name: "Select @tech" })).toBeTruthy()
   })
 
   test("a failed read says so", () => {

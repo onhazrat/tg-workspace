@@ -32,6 +32,10 @@ export type ChannelCond =
   | { type: "uncharged" }
   /** A number on the whole row, or with `kind` on that kind of work alone. */
   | { type: "measure"; measure: Measure; kind?: string; bound: MetricBound }
+  /** A Channel in the reader's Tag of this name (TGU-03). */
+  | { type: "tag"; value: string }
+  /** A Channel the reader follows in their Setting group of this id (TGU-04). */
+  | { type: "group"; value: string }
 export type ChannelFilter = FilterTree<ChannelCond>
 export type MeasureCond = Extract<ChannelCond, { type: "measure" }>
 
@@ -92,6 +96,9 @@ export function criteria(
   }))
 }
 
+/** A Tag's or a Setting group's handles by its value. */
+type Members = (value: string) => ReadonlySet<string> | undefined
+
 /**
  * The rows the filter keeps. A Condition on a hidden kind or a hidden
  * outcome stands aside rather than failing, so unticking one above never
@@ -102,11 +109,19 @@ export const keepRow =
     filter: ChannelFilter,
     hiddenKinds: ReadonlySet<string>,
     hiddenOutcomes: ReadonlySet<Outcome>,
+    /** A Tag's handles, lowercased; undefined while they load, which stands aside. */
+    tagHandles: Members = () => undefined,
+    /** A Setting group's followed handles, lowercased; undefined stands aside. */
+    groupHandles: Members = () => undefined,
   ) =>
   (r: ChannelRow) =>
     evalTree(filter, (c) => {
       if (c.type === "kind") return r.kinds.has(c.value)
       if (c.type === "uncharged") return r.aggregate
+      if (c.type === "tag" || c.type === "group") {
+        const handles = (c.type === "tag" ? tagHandles : groupHandles)(c.value)
+        return handles === undefined || handles.has(r.key.toLowerCase())
+      }
       return (
         outcomeHidden(c.measure, hiddenOutcomes) ||
         (c.kind !== undefined && hiddenKinds.has(c.kind)) ||
@@ -114,13 +129,20 @@ export const keepRow =
       )
     })
 
-/** A Condition's chip. */
-export const condLabel = (c: ChannelCond) =>
-  c.type === "kind"
-    ? kindMeta(c.value).label
-    : c.type === "uncharged"
-      ? "Uncharged rows"
-      : `${measureLabel(c.measure, c.kind)} ${boundText(c.bound)}${measureMeta(c.measure).unit ?? ""}`
+/** A Condition's chip; a Setting group by name. */
+export const condLabel = (
+  c: ChannelCond,
+  groupName: (id: string) => string = (id) => id,
+) =>
+  c.type === "group"
+    ? `Setting group ${groupName(c.value)}`
+    : c.type === "tag"
+      ? `Tag ${c.value}`
+      : c.type === "kind"
+        ? kindMeta(c.value).label
+        : c.type === "uncharged"
+          ? "Uncharged rows"
+          : `${measureLabel(c.measure, c.kind)} ${boundText(c.bound)}${measureMeta(c.measure).unit ?? ""}`
 
 /** Why a Condition stands aside, for its chip; undefined while it applies. */
 export function staleReason(
@@ -130,7 +152,7 @@ export function staleReason(
 ): string | undefined {
   const kind = c.type === "kind" ? c.value : c.type === "measure" ? c.kind : ""
   if (kind && hiddenKinds.has(kind))
-    return `${kindMeta(kind).label} is unticked above, so this stands aside`
+    return `${kindMeta(kind).label} is hidden above, so this stands aside`
   if (c.type === "measure" && outcomeHidden(c.measure, hiddenOutcomes))
     return `${measureMeta(c.measure).label} is hidden above, so this stands aside`
   return undefined

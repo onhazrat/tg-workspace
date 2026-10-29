@@ -236,7 +236,7 @@
       "comment": "A Live end's reach either way: a century, in ms.",
       "expression": "100 * 366 * 86400000",
       "file": "backend/app/schemas/directory.py",
-      "line": 191,
+      "line": 192,
       "name": "_MAX_OFFSET_MS",
       "value": 3162240000000
     },
@@ -244,7 +244,7 @@
       "comment": "A Fixed end's reach either way, inside what a `datetime` holds (years 1 to 9999), so an absurd instant is a 422 and never an overflow.",
       "expression": "62000000000000",
       "file": "backend/app/schemas/directory.py",
-      "line": 194,
+      "line": 195,
       "name": "_MAX_INSTANT_MS",
       "value": 62000000000000
     },
@@ -252,7 +252,7 @@
       "comment": "How many fixed handles one \"cited by\" or \"cites\" Condition names: 500 keeps a shared link under the 8 KB request line common proxies accept, and anything larger is a Tag (DFP-05).",
       "expression": "500",
       "file": "backend/app/schemas/directory.py",
-      "line": 244,
+      "line": 245,
       "name": "MAX_CONDITION_HANDLES",
       "value": 500
     },
@@ -260,7 +260,7 @@
       "comment": "How many Seeds one Shared parents / children Condition sends: every follow, or a Channels tab selection, which can be the whole account.",
       "expression": "10000",
       "file": "backend/app/schemas/directory.py",
-      "line": 247,
+      "line": 248,
       "name": "MAX_SEEDS",
       "value": 10000
     },
@@ -268,7 +268,7 @@
       "comment": "A Channels tab selection can be the whole account; past this, use \"every follow\".",
       "expression": "10000",
       "file": "backend/app/schemas/directory.py",
-      "line": 397,
+      "line": 425,
       "name": "MAX_YOUR_CHANNELS",
       "value": 10000
     },
@@ -276,7 +276,7 @@
       "comment": "The most handles one paste may add (DADD).",
       "expression": "100000",
       "file": "backend/app/schemas/directory.py",
-      "line": 691,
+      "line": 719,
       "name": "MAX_ADDED_HANDLES",
       "value": 100000
     },
@@ -311,6 +311,14 @@
       "line": 214,
       "name": "MAX_SELECTION_RULES",
       "value": 50
+    },
+    {
+      "comment": "The most handles a Tag order read takes in its scope or its selection. The Directory selection stays under it (its list read takes no more ticks), and the Requests tab's Channel rows are the Channels synced in its range.",
+      "expression": "10000",
+      "file": "backend/app/schemas/tags.py",
+      "line": 72,
+      "name": "MAX_ORDER_HANDLES",
+      "value": 10000
     },
     {
       "comment": "A generous fetch-safety bound, so a pathological Scope never materialises a giant result. The token budget is the real user-facing limit.",
@@ -532,7 +540,7 @@
       "comment": "How long a claim stays valid without a heartbeat. This bounds one thing only: how long a **dead** holder blocks its Channel. A live sync renews well inside it (`CHANNEL_CLAIM_HEARTBEAT_SECONDS`), so a deep backfill running for an hour is never at risk of having its claim stolen mid-walk -- which would put a second backward walk into the cursors the first is still writing, the precise interleaving this exists to prevent. Five minutes rather than the visibility timeout's ~2.4 hours, and the difference is the point. The VT decides when a crashed worker's *message* comes back; the lease decides when its *Channel* does. Sizing the lease off the VT would mean a Channel that crashed at 12:00 refusing every sync until 14:24 -- including the ones a person is sitting in front of.",
       "expression": "300",
       "file": "backend/app/services/channels.py",
-      "line": 903,
+      "line": 906,
       "name": "CHANNEL_CLAIM_LEASE_SECONDS",
       "value": 300
     },
@@ -1097,6 +1105,22 @@
       "value": 1000
     },
     {
+      "comment": "A use counts 1 now, 0.5 after 14 days, 0.25 after 28.",
+      "expression": "14 * 86400000",
+      "file": "backend/app/services/tags.py",
+      "line": 386,
+      "name": "HALF_LIFE_MS",
+      "value": 1209600000
+    },
+    {
+      "comment": "The newest uses kept per Account, tab and Tag. Bounds the table without a retention job; older uses weigh under 0.1% by then.",
+      "expression": "50",
+      "file": "backend/app/services/tags.py",
+      "line": 389,
+      "name": "MAX_USES",
+      "value": 50
+    },
+    {
       "comment": "How long after publication a Post's sightings are kept.",
       "expression": "14 * 24 * 60 * 60 * 1000",
       "file": "backend/app/services/view_observations.py",
@@ -1396,7 +1420,7 @@
       "comment": "The Settling curve is refitted daily and the reach settings change by hand, so an hour-old copy is as good as a fresh one (PFB-03).",
       "expression": "60 * 60 * 1000",
       "file": "frontend/src/hooks/queryKeys.ts",
-      "line": 186,
+      "line": 190,
       "name": "VIEW_ESTIMATE_STALE_TIME",
       "value": 3600000
     },
@@ -1468,7 +1492,7 @@
       "comment": "The most handles one Tag request carries: the server's cap on a bulk write's handles, a trust boundary it keeps. A Tag is not capped, so a longer list goes in batches of this size.",
       "expression": "10_000",
       "file": "frontend/src/hooks/useTags.ts",
-      "line": 32,
+      "line": 40,
       "name": "TAG_BATCH",
       "value": 10000
     },
@@ -1628,7 +1652,7 @@
       "comment": "The default minimum shared count.",
       "expression": "2",
       "file": "frontend/src/lib/directory/directory-filter.ts",
-      "line": 446,
+      "line": 464,
       "name": "SHARED_MIN",
       "value": 2
     },
@@ -1756,7 +1780,7 @@
       "comment": "Rows the Requests tab's Channel table shows first.",
       "expression": "25",
       "file": "frontend/src/lib/requests/breakdown.ts",
-      "line": 333,
+      "line": 366,
       "name": "FIRST_CHANNELS",
       "value": 25
     },
@@ -1764,7 +1788,7 @@
       "comment": "Rows each \"Show more\" adds to the Requests tab's Channel table.",
       "expression": "50",
       "file": "frontend/src/lib/requests/breakdown.ts",
-      "line": 335,
+      "line": 368,
       "name": "MORE_CHANNELS",
       "value": 50
     },
@@ -1772,7 +1796,7 @@
       "comment": "Steps on the violet Account ramp, `--account-1` to `--account-4`.",
       "expression": "4",
       "file": "frontend/src/lib/requests/breakdown.ts",
-      "line": 483,
+      "line": 516,
       "name": "ACCOUNT_STEPS",
       "value": 4
     },

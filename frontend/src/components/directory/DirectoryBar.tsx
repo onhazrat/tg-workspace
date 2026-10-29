@@ -15,7 +15,7 @@ import {
   RotateCcw,
   Search,
 } from "lucide-react"
-import { useState } from "react"
+import { type ReactNode, useState } from "react"
 import type {
   DirectoryColumnResponse,
   DirectoryLanguageCountResponse,
@@ -451,7 +451,7 @@ const EMPTY_YOURS: Record<YoursSource, string> = {
   follows: "You follow no channels yet, so every Yours count is 0",
   selection:
     "Nothing is selected on the Channels tab, so every Yours count is 0",
-  ticked: "No channels are ticked here yet, so every Yours count is 0",
+  ticked: "No channels are selected here yet, so every Yours count is 0",
 }
 
 export type DirectoryBarProps = {
@@ -495,6 +495,10 @@ export type DirectoryBarProps = {
   phone?: boolean
   /** Add to Directory (DADD), shown to a reader who sees the internals. */
   onAdd?: DirectoryAddBoxProps["onAdd"]
+  /** The Tags dropdown (TGU-03), after Language. */
+  tagsMenu?: ReactNode
+  /** The Groups dropdown (TGU-04), after Tags. */
+  groupsMenu?: ReactNode
 }
 
 export function DirectoryBar(p: DirectoryBarProps) {
@@ -545,6 +549,8 @@ export function DirectoryBar(p: DirectoryBarProps) {
         }
         onClearFunnels={() => p.onFilter(clearFunnels(p.filter, "language"))}
       />
+      {p.tagsMenu}
+      {p.groupsMenu}
       <ConditionPicker
         vocabulary={p.vocabulary}
         onPick={(cond) => p.onFilter(appendAnd(p.filter, cond))}
@@ -589,7 +595,7 @@ export function DirectoryBar(p: DirectoryBarProps) {
       <BarToggle
         on={p.selectedFirst}
         label="Selected first"
-        title="Ticked channels first, each part in the list's order"
+        title="Selected channels first, each part in the list's order"
         testId="directory-switch-selected-first"
         onClick={() => p.onSelectedFirst(!p.selectedFirst)}
       />

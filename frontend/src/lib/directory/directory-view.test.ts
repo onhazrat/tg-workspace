@@ -185,7 +185,7 @@ describe("the sort picker", () => {
     expect(labels.slice(0, 3)).toEqual([
       "Cited by channels you follow",
       "Cited by your Channels tab selection",
-      "Cited by channels ticked here",
+      "Cited by channels selected here",
     ])
     expect(labels).toContain("Days since your channels last cited it")
     expect(labels).toContain("Subscribers")

@@ -83,6 +83,7 @@ TG_TABLES: tuple[str, ...] = (
     # DFP-03's Tags. They outlive the Follow by design, so a Tag one test left
     # is a Tag the next test's Channel shows the moment it is followed.
     "tg_tags",
+    "tg_tag_uses",
     # Ticket 02's samples before the entry they hang off, so the order reads
     # child-then-parent like the rest of this list even though the TRUNCATE
     # cascades anyway.
