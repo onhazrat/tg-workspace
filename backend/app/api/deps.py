@@ -280,10 +280,11 @@ VIEW_AS_NON_SPENDING_PATHS: dict[str, str] = {
     ),
     # The three routes that reach Telegram without a ledger charge. They open
     # uncharged Accounted work (ADR-041), which names the caller and pays
-    # nothing, so no Request lands on the target's Budget. What they do consume is proxy capacity, and that is the
-    # deployment's, i.e. the Owner's own. Written out per route rather than as
-    # one note, because "reaches Telegram" and "spends the target's Budget" look
-    # identical from the outside and this is the distinction that decides it.
+    # nothing, so no Request lands on the target's Budget. What they do consume
+    # is proxy capacity, and that is the deployment's, i.e. the Owner's own.
+    # Written out per route rather than as one note, because "reaches Telegram"
+    # and "spends the target's Budget" look identical from the outside and this
+    # is the distinction that decides it.
     f"{settings.API_V1_STR}/telegram/scrape": (
         "walks a channel's web view as uncharged Accounted work, so the "
         "Requests are charged to nobody; it spends the deployment's proxies"

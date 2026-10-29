@@ -440,21 +440,53 @@ def test_opening_accounted_work_inside_accounted_work_raises(
 #: The attribution only Accounted work may set (ADR-041).
 PAYER_FIELDS = frozenset({"kind", "account_id", "budget", "job_id"})
 ACCOUNTED_WORK_MODULE = "app/services/request_accounting.py"
+#: The mechanism itself: it defines the attribution and refines it by copy.
+RECORDING_MODULE = "app/core/request_recording.py"
+
+
+def _reaches_attribution(tree: ast.AST) -> bool:
+    """Whether a module imports the recording module, the one way to an Attribution."""
+    return any(
+        (
+            isinstance(node, ast.ImportFrom)
+            and node.module == "app.core.request_recording"
+        )
+        or (
+            isinstance(node, ast.Import)
+            and any(a.name == "app.core.request_recording" for a in node.names)
+        )
+        for node in ast.walk(tree)
+    )
 
 
 def _payer_settings(tree: ast.AST) -> Iterator[tuple[int, str]]:
+    # `replace` copies any dataclass; it sets a payer only on an Attribution.
+    copies = ("attributed", "Attribution") + (
+        ("replace",) if _reaches_attribution(tree) else ()
+    )
     for node in ast.walk(tree):
+        if isinstance(node, (ast.Name, ast.Attribute, ast.alias)):
+            name = (
+                node.id
+                if isinstance(node, ast.Name)
+                else node.attr
+                if isinstance(node, ast.Attribute)
+                else node.name
+            )
+            if name == "_attribution":
+                yield node.lineno, "the attribution's ContextVar"
         if not isinstance(node, ast.Call):
             continue
         name = getattr(node.func, "id", None) or getattr(node.func, "attr", None)
-        if name in ("attributed", "Attribution"):
+        if name in copies:
             for keyword in node.keywords:
                 if keyword.arg in PAYER_FIELDS:
                     yield node.lineno, keyword.arg
 
 
 def test_only_accounted_work_sets_kind_account_budget_or_job() -> None:
-    """The guard. Mutation: pass `kind=` to `attributed` in any other module.
+    """The guard. Mutations: pass `kind=` to `attributed`, or to `replace` on
+    an Attribution, in any other module; set the attribution's ContextVar.
 
     A second place naming the payer is a second place that can name a
     different one: the record and the ledger drift apart again, which is
@@ -462,7 +494,7 @@ def test_only_accounted_work_sets_kind_account_budget_or_job() -> None:
     """
     offenders = []
     for path in sorted(pathlib.Path("app").rglob("*.py")):
-        if path.as_posix() == ACCOUNTED_WORK_MODULE:
+        if path.as_posix() in (ACCOUNTED_WORK_MODULE, RECORDING_MODULE):
             continue
         for line, field in _payer_settings(ast.parse(path.read_text())):
             offenders.append(f"{path}:{line} sets {field}")

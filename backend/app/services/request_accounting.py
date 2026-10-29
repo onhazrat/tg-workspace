@@ -37,9 +37,10 @@ from __future__ import annotations
 import contextvars
 import logging
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from functools import partial
 from typing import Literal
 
 from sqlmodel import Session
@@ -50,8 +51,9 @@ from app.services.async_db import run_db
 from app.services.channel_setting_groups import SyncOperationMode
 from app.services.directory_probe_usage import charge_probe_requests
 from app.services.quota import (
+    Budget,
     budget_for_sync_mode,
-    charge_sync_job,
+    charge_budget,
     resolve_charge_owner,
 )
 from app.services.request_kinds import kind_for_sync_mode
@@ -119,42 +121,30 @@ async def accounted_work(work: Work) -> AsyncIterator[None]:
                 kind=work.kind, account_id=work.account_id, channel=work.channel
             ):
                 yield
-        elif isinstance(work, Probe):
-            with (
-                attributed(
-                    kind=RequestKind.PROBE, channel=normalize_handle(work.handle)
-                ),
-                tallied() as tally,
-            ):
-                try:
-                    yield
-                finally:
-                    await run_db(charge_probe_requests, tally.requests)
-                    await run_db(flush_recorded_requests)
+            return
+        charge: Callable[[int], None]
+        if isinstance(work, Probe):
+            who = attributed(
+                kind=RequestKind.PROBE, channel=normalize_handle(work.handle)
+            )
+            charge = charge_probe_requests
         else:
-            mode: SyncOperationMode = (
-                work.sync_mode if isinstance(work, Sync) else "bulk"
-            )
-            kind = (
-                kind_for_sync_mode(mode)
-                if isinstance(work, Sync)
-                else RequestKind.FOLLOW
-            )
+            if isinstance(work, Sync):
+                kind = kind_for_sync_mode(work.sync_mode)
+                budget = budget_for_sync_mode(work.sync_mode)
+            else:
+                kind, budget = RequestKind.FOLLOW, Budget.MANUAL_BULK
             payer = await _resolve_payer(work.account_id)
-            with (
-                attributed(
-                    kind=kind,
-                    account_id=payer,
-                    budget=budget_for_sync_mode(mode).value,
-                    job_id=work.job_id,
-                ),
-                tallied() as tally,
-            ):
-                try:
-                    yield
-                finally:
-                    await run_db(charge_sync_job, payer, mode, tally.requests)
-                    await run_db(flush_recorded_requests)
+            who = attributed(
+                kind=kind, account_id=payer, budget=budget.value, job_id=work.job_id
+            )
+            charge = partial(charge_budget, payer, budget)
+        with who, tallied() as tally:
+            try:
+                yield
+            finally:
+                await run_db(charge, tally.requests)
+                await run_db(flush_recorded_requests)
     finally:
         _open.reset(token)
 

@@ -16,15 +16,15 @@
   {
     "name": "drop the exit flush",
     "file": "backend/app/services/request_accounting.py",
-    "old": "                    await run_db(charge_sync_job, payer, mode, tally.requests)\n                    await run_db(flush_recorded_requests)\n",
-    "new": "                    await run_db(charge_sync_job, payer, mode, tally.requests)\n",
+    "old": "                await run_db(charge, tally.requests)\n                await run_db(flush_recorded_requests)\n",
+    "new": "                await run_db(charge, tally.requests)\n",
     "test": "backend/tests/services/test_request_accounting.py::test_a_sync_charges_its_modes_budget_and_records_the_same"
   },
   {
     "name": "pay a Follow from another Budget",
     "file": "backend/app/services/request_accounting.py",
-    "old": "work.sync_mode if isinstance(work, Sync) else \"bulk\"",
-    "new": "work.sync_mode if isinstance(work, Sync) else \"auto\"",
+    "old": "kind, budget = RequestKind.FOLLOW, Budget.MANUAL_BULK",
+    "new": "kind, budget = RequestKind.FOLLOW, Budget.AUTO_SYNC",
     "test": "backend/tests/services/test_request_accounting.py::test_a_follow_charges_manual_bulk_as_one_batch"
   },
   {
@@ -51,8 +51,8 @@
   {
     "name": "keep the raw Account on the records",
     "file": "backend/app/services/request_accounting.py",
-    "old": "                    account_id=payer,\n",
-    "new": "                    account_id=work.account_id,\n",
+    "old": "kind=kind, account_id=payer, budget=budget.value",
+    "new": "kind=kind, account_id=work.account_id, budget=budget.value",
     "test": "backend/tests/services/test_request_accounting.py::test_a_deleted_account_is_charged_to_the_operator_on_both_sides"
   },
   {
@@ -65,15 +65,15 @@
   {
     "name": "pay only when the work completes",
     "file": "backend/app/services/request_accounting.py",
-    "old": "                finally:\n                    await run_db(charge_sync_job, payer, mode, tally.requests)",
-    "new": "                except BaseException:\n                    raise\n                else:\n                    await run_db(charge_sync_job, payer, mode, tally.requests)",
+    "old": "            finally:\n                await run_db(charge, tally.requests)",
+    "new": "            except BaseException:\n                raise\n            else:\n                await run_db(charge, tally.requests)",
     "test": "backend/tests/services/test_request_accounting.py::test_work_that_stops_still_pays_for_what_it_made"
   },
   {
     "name": "charge at least one Request whatever the count",
     "file": "backend/app/services/request_accounting.py",
-    "old": "charge_sync_job, payer, mode, tally.requests)",
-    "new": "charge_sync_job, payer, mode, tally.requests or 1)",
+    "old": "await run_db(charge, tally.requests)",
+    "new": "await run_db(charge, tally.requests or 1)",
     "test": "backend/tests/services/test_request_accounting.py::test_work_with_no_charged_request_writes_no_ledger_row"
   },
   {
@@ -145,5 +145,19 @@
     "old": "    if (!hiddenKinds.has(row.kind))\n      addTo(t, { ...row, total: row.requests }, hiddenOutcomes)",
     "new": "    if (!hiddenKinds.has(row.kind) && row.charged > 0)\n      addTo(t, { ...row, total: row.requests }, hiddenOutcomes)",
     "test": "frontend/src/lib/requests/breakdown.test.ts"
+  },
+  {
+    "name": "copy an Attribution with a new kind outside Accounted work (the guard)",
+    "file": "backend/app/jobs/sync_queue.py",
+    "old": "from app.core.request_recording import RequestKindDisabled, attributed\n",
+    "new": "from app.core.request_recording import RequestKindDisabled, attributed\nfrom dataclasses import replace\n_X = lambda a: replace(a, kind=None)  # noqa: E731\n",
+    "test": "backend/tests/services/test_request_accounting.py::test_only_accounted_work_sets_kind_account_budget_or_job"
+  },
+  {
+    "name": "set the attribution's ContextVar outside Accounted work (the guard)",
+    "file": "backend/app/jobs/sync_queue.py",
+    "old": "from app.core.request_recording import RequestKindDisabled, attributed\n",
+    "new": "from app.core.request_recording import RequestKindDisabled, _attribution, attributed\n",
+    "test": "backend/tests/services/test_request_accounting.py::test_only_accounted_work_sets_kind_account_budget_or_job"
   }
 ]

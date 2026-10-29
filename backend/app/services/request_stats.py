@@ -80,7 +80,7 @@ _flush_lock = threading.Lock()
 def flush_recorded_requests() -> int:
     """Write every buffered Request. Blocking: callers on the loop use a thread.
 
-    Swallows its own failure, as `quota.charge_sync_job` does: a stats write
+    Swallows its own failure, as `quota.charge_budget` does: a stats write
     must not fail the sync it measures. The records it held are lost, which is
     the gap ADR-035 accepts for a crash.
     """

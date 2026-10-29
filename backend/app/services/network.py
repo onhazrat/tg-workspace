@@ -572,7 +572,7 @@ async def fetch_with_retry(
 
     **One Request for quota purposes is one attempt Telegram answered** (ticket
     08), charged by the page record (`Page.record`, the one charge rule) to the
-    Accounted work open around the call. Work that pays nothing pays nothing.
+    Accounted work open around the call, when that work pays.
 
     Per *answered attempt*, not per call. An attempt that dies in transport —
     dead proxy, connect timeout — is charged nothing and retried for free, which

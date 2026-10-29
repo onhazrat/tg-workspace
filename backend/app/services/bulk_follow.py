@@ -747,10 +747,10 @@ async def run_follow_job_by_id(follow_job_id: str) -> None:
 async def run_follow_job(job: FollowJobState) -> None:
     """Probe every handle in the batch, then chain a sync for the ones added.
 
-    One `Follow` Accounted work, charged to `manual_bulk` (ticket 08). The probe phase is one
-    `t.me` fetch per handle and a batch runs to hundreds, so leaving it out
-    would hide the largest single manual source of Requests from the very view
-    that reports what each account consumed.
+    One `Follow` Accounted work, charged to `manual_bulk` (ticket 08). The
+    probe phase is one `t.me` fetch per handle and a batch runs to hundreds, so
+    leaving it out would hide the largest single manual source of Requests from
+    the very view that reports what each account consumed.
 
     The sync this chains is charged **separately and not twice**, but no longer
     for the reason this used to give. It said the sync runs under `run_sync_job`,
