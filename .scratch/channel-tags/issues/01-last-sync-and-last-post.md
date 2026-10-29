@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Creating a Channel on its first Follow no longer sets its Last sync; its first regular sync is scheduled from the Follow's moment, so it still syncs on time. Channels created before this keep the value they have.
 - [x] A Channel with no Last sync sorts last by Last sync and fails every Time bound on it, as the Condition entry says; its card still reads "Never synced".
@@ -16,3 +16,8 @@
 - [x] The Directory's last-Post moment and column are labelled "Last post".
 - [x] Tests at the API seam: a first Follow leaves the new Channel with no Last sync and a scheduled first sync; `lastPostAt` is the newest stored Post and `null` with none. Pure-module cases: the Last post Sort, the Last post moment, and the preset's filter printing and parsing. Each mutation-checked, named in the commit body.
 - [x] Lint, typecheck, the route guards and the full backend and frontend suites pass.
+
+## Comments
+
+- 2026-10-29: implemented on `claude/tgu-01` and merged into the integration branch in adb9e2d7 (fast-forward).
+  Both the server (`create_followed_channel`) and the browser (`newChannelRecord`, `forwardedChannelRecord`) stamped Last sync on a first Follow; both stopped. PUT still accepts `lastUpdated` (import, e2e seeds). Open: `refresh-metadata.ts` still writes `lastUpdated`, for the code review.
