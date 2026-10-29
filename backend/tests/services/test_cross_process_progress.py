@@ -17,7 +17,9 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from typing import Any
 
+import pytest
 from sqlmodel import Session
 
 from app.core import pg_notify
@@ -349,3 +351,46 @@ def test_a_notification_for_an_unwatched_job_is_dropped() -> None:
         return len(scraper_jobs._mirrored_jobs)
 
     assert asyncio.run(run()) == 0
+
+
+def test_a_mirror_refresh_never_overwrites_a_job_claimed_during_its_row_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Mutation: drop `get_job`'s re-check of `_active_jobs` after the row read.
+
+    The status route runs `get_job` on a threadpool thread. With the mirror
+    quiet it read the row; the consumer claimed the job and took its Channel;
+    the refresh then wrote the row's `pending` over the claimed job and swapped
+    in fresh Channel objects. The walk finished its own, now detached, Channel
+    and the job never became terminal: test_request_stats's first sync stalled
+    about one run in eight. Only one process holds both sides in the test
+    suite, but the registry must not depend on that.
+    """
+
+    async def create() -> scraper_jobs.SyncJobState:
+        clear_jobs_for_tests()
+        return await create_job(
+            channel_entries=[("chan-1", "chan-1")],
+            source="Test",
+            user_id=str(ANY_READER),
+            sync_mode="individual",
+        )
+
+    job = asyncio.run(create())
+    # Quiet, so the next read refreshes the mirror from its row.
+    job._mirror_synced_at_ms = job._mirror_notified_at_ms = 0
+    taken = job.channels["chan-1"]
+
+    class ClaimedDuringTheRead(Session):
+        def get(self, *args: Any, **kwargs: Any) -> Any:
+            row = super().get(*args, **kwargs)
+            # The consumer, between this thread's row read and its refresh.
+            scraper_jobs.claim_job(job)
+            job.status = "running"
+            return row
+
+    monkeypatch.setattr(scraper_jobs, "Session", ClaimedDuringTheRead)
+
+    assert get_job(job.job_id) is job
+    assert job.status == "running"
+    assert job.channels["chan-1"] is taken
