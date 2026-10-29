@@ -19,6 +19,7 @@ from app.services.channel_directory import (
     PROBE_STATUSES,
     BoostMode,
 )
+from app.services.channel_tags import group_tag_name
 from app.services.directory_reads import (
     SEARCH_FIELDS,
     CitedByCond,
@@ -253,70 +254,79 @@ def _normalised(handles: list[str]) -> tuple[str, ...]:
     return tuple(sorted({normalize_handle(h) for h in handles}))
 
 
-def _one_source(handles: list[str], tag: str | None, *, required: bool) -> None:
-    if handles and tag is not None:
-        raise ValueError("Seeds are handles or a tag, never both")
-    if required and not handles and tag is None:
-        raise ValueError("Seeds need handles or a tag")
+class _NamedSeeds(_Cond):
+    """A Seed source the server resolves on every read: one of the reader's
+    Tags, or one of their Setting groups (TGU-04). Send one, or handles."""
+
+    tag: str | None = Field(None, min_length=1)
+    group: str | None = Field(None, min_length=1)
+
+    def _one_source(self, handles: list[str], *, required: bool) -> None:
+        given = sum(map(bool, (handles, self.tag is not None, self.group)))
+        if given > 1:
+            raise ValueError("Seeds are handles, a tag or a group, only one")
+        if required and given == 0:
+            raise ValueError("Seeds need handles, a tag or a group")
+
+    def _seed_tag(self) -> str | None:
+        # A Setting group resolves as its derived `group:` Tag: the reader's
+        # Follows filed in it, never a stored Tag (DFP-04).
+        return group_tag_name(self.group) if self.group else self.tag
 
 
-class DirectoryCitedByCondition(_Cond):
+class DirectoryCitedByCondition(_NamedSeeds):
     """Cited by any of the Seeds, in the view's Reference kinds."""
 
     type: Literal["citedby"]
-    #: Fixed Seeds; send these or `tag`.
+    #: Fixed Seeds; send these, `tag` or `group`.
     handles: list[_SeedHandle] = Field(
         default_factory=list, max_length=MAX_CONDITION_HANDLES
     )
-    #: One of the reader's Tags, resolved by the server on every read.
-    tag: str | None = Field(None, min_length=1)
 
     @model_validator(mode="after")
     def _seeds(self) -> DirectoryCitedByCondition:
-        _one_source(self.handles, self.tag, required=True)
+        self._one_source(self.handles, required=True)
         return self
 
     def to_cond(self) -> DirectoryCond:
-        return CitedByCond(_normalised(self.handles), self.tag)
+        return CitedByCond(_normalised(self.handles), self._seed_tag())
 
 
-class DirectoryCitesCondition(_Cond):
+class DirectoryCitesCondition(_NamedSeeds):
     """Cites any of the Seeds, in the view's Reference kinds."""
 
     type: Literal["cites"]
-    #: Fixed Seeds; send these or `tag`.
+    #: Fixed Seeds; send these, `tag` or `group`.
     handles: list[_SeedHandle] = Field(
         default_factory=list, max_length=MAX_CONDITION_HANDLES
     )
-    #: One of the reader's Tags, resolved by the server on every read.
-    tag: str | None = Field(None, min_length=1)
 
     @model_validator(mode="after")
     def _seeds(self) -> DirectoryCitesCondition:
-        _one_source(self.handles, self.tag, required=True)
+        self._one_source(self.handles, required=True)
         return self
 
     def to_cond(self) -> DirectoryCond:
-        return CitesCond(_normalised(self.handles), self.tag)
+        return CitesCond(_normalised(self.handles), self._seed_tag())
 
 
-class DirectorySharedCondition(_Cond):
+class DirectorySharedCondition(_NamedSeeds):
     """Shared parents or Shared children with the Seeds, at least `min` shared."""
 
     type: SharedRelation
-    #: Resolved by the browser; none matches nothing. Send these or `tag`.
+    #: Resolved by the browser; none matches nothing. Send these, `tag` or `group`.
     handles: list[_SeedHandle] = Field(default_factory=list, max_length=MAX_SEEDS)
-    #: One of the reader's Tags, resolved by the server on every read.
-    tag: str | None = Field(None, min_length=1)
     min: int = Field(2, ge=1, le=10_000)
 
     @model_validator(mode="after")
     def _seeds(self) -> DirectorySharedCondition:
-        _one_source(self.handles, self.tag, required=False)
+        self._one_source(self.handles, required=False)
         return self
 
     def to_cond(self) -> DirectoryCond:
-        return SharedCond(self.type, _normalised(self.handles), self.min, self.tag)
+        return SharedCond(
+            self.type, _normalised(self.handles), self.min, self._seed_tag()
+        )
 
 
 class DirectoryTagCondition(_Cond):
@@ -327,6 +337,17 @@ class DirectoryTagCondition(_Cond):
 
     def to_cond(self) -> DirectoryCond:
         return TagCond(self.name)
+
+
+class DirectoryGroupCondition(_Cond):
+    """In one of the reader's Setting groups, by name: the Channels they follow
+    filed in it (TGU-04). A group they do not have matches nothing."""
+
+    type: Literal["group"]
+    name: str = Field(min_length=1)
+
+    def to_cond(self) -> DirectoryCond:
+        return TagCond(group_tag_name(self.name))
 
 
 DirectoryCondition = Annotated[
@@ -341,7 +362,8 @@ DirectoryCondition = Annotated[
     | DirectoryCitedByCondition
     | DirectoryCitesCondition
     | DirectorySharedCondition
-    | DirectoryTagCondition,
+    | DirectoryTagCondition
+    | DirectoryGroupCondition,
     Field(discriminator="type"),
 ]
 
@@ -729,8 +751,20 @@ class DirectoryTagSeeds(BaseModel):
     tag: str = Field(min_length=1)
 
 
-#: A Shared Condition's Seeds: handles the browser resolved, or a Tag.
-Seeds = Annotated[list[Handle], Field(max_length=MAX_SEEDS)] | DirectoryTagSeeds
+class DirectoryGroupSeeds(BaseModel):
+    """Seeds from one of the reader's Setting groups, resolved by the server."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    group: str = Field(min_length=1)
+
+
+#: A Shared Condition's Seeds: handles the browser resolved, a Tag or a group.
+Seeds = (
+    Annotated[list[Handle], Field(max_length=MAX_SEEDS)]
+    | DirectoryTagSeeds
+    | DirectoryGroupSeeds
+)
 
 
 class DirectoryWhyRequest(DirectoryYoursRequest, _TimeBound):
@@ -757,6 +791,8 @@ class DirectoryWhyRequest(DirectoryYoursRequest, _TimeBound):
                 TreeAtom(
                     cond=SharedCond(relation, (), tag=seeds.tag)
                     if isinstance(seeds, DirectoryTagSeeds)
+                    else SharedCond(relation, (), tag=group_tag_name(seeds.group))
+                    if isinstance(seeds, DirectoryGroupSeeds)
                     else SharedCond(relation, _normalised(seeds))
                 )
                 for relation, seeds in sides

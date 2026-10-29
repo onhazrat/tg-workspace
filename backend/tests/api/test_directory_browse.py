@@ -1756,6 +1756,81 @@ def test_a_group_tag_is_the_followed_channels_in_that_setting_group(
     assert deleted.status_code == 404
 
 
+def _file_in_group(
+    client: TestClient, headers: dict[str, str], group: str, *handles: str
+) -> None:
+    """Put `headers`' Follows of `handles` in their new Setting group `group`."""
+    data = f"{settings.API_V1_STR}/data"
+    created = client.post(
+        f"{data}/setting-groups", json={"name": group}, headers=headers
+    )
+    assert created.status_code == 200, created.text
+    moved = client.patch(
+        f"{data}/channels/bulk-setting-group",
+        json={"channelIds": list(handles), "settingGroupId": created.json()["id"]},
+        headers=headers,
+    )
+    assert moved.status_code == 200, moved.text
+
+
+def test_a_setting_group_is_a_condition_and_a_seed_source(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    """TGU-04: each Account's "Slow" holds its own Follows; the Condition and
+    the Seeds read the reader's, and an old `group:` Tag link reads the same."""
+    operator, other = accounts
+    _file_in_group(client, operator, "Slow", "dt_followed_a", "src_a1")
+    _file_in_group(client, other, "slow", "src_b1")
+
+    in_group = root(atom({"type": "group", "name": "SLOW"}))
+    assert _handles(client, operator, filter=in_group) == ["dt_followed_a"]
+    assert _handles(client, other, filter=in_group) == []
+    old_link = root(atom(tag("group:slow")))
+    assert _handles(client, operator, filter=old_link) == ["dt_followed_a"]
+    unknown = root(atom({"type": "group", "name": "Fast"}))
+    assert _handles(client, operator, filter=unknown) == []
+
+    # src_a1 cites dt_fa_big and dt_en_news; src_b1 cites dt_ru and dt_fa_small.
+    by = root(atom({"type": "citedby", "group": "Slow"}))
+    assert set(_handles(client, operator, filter=by)) == {"dt_fa_big", "dt_en_news"}
+    assert set(_handles(client, other, filter=by)) == {"dt_ru", "dt_fa_small"}
+    # dt_fa_big and dt_ru cite dt_en_news.
+    with Session(engine) as session:
+        follow_channels(session, "dt_en_news")
+        session.commit()
+    _file_in_group(client, operator, "Read", "dt_en_news")
+    of = root(atom({"type": "cites", "group": "Read"}))
+    assert set(_handles(client, operator, filter=of)) == {"dt_fa_big", "dt_ru"}
+    for relation in ("parents", "children"):
+        seeded = root(atom({"type": relation, "group": "Slow", "min": 1}))
+        typed = root(atom({"type": relation, "handles": ["src_a1"], "min": 1}))
+        assert _handles(client, operator, filter=seeded) == _handles(
+            client, operator, filter=typed
+        )
+    children = root(atom({"type": "children", "group": "Slow", "min": 1}))
+    assert _handles(client, operator, filter=children) != []
+    # Why it's here takes the group as the Shared Seeds too.
+    why = [
+        client.post(
+            f"{DIRECTORY}/why",
+            json={"handle": "dt_fa_big", "children": seeds},
+            headers=operator,
+        )
+        for seeds in ({"group": "slow"}, ["dt_followed_a", "src_a1"])
+    ]
+    assert why[0].status_code == 200, why[0].text
+    assert why[0].json()["children"] == why[1].json()["children"]
+    assert why[0].json()["children"]["total"] > 0
+
+    both = {"type": "citedby", "group": "Slow", "tag": "x"}
+    refused = client.post(
+        f"{DIRECTORY}/list",
+        json={"filter": root(atom(both)), "columns": []},
+        headers=operator,
+    )
+    assert refused.status_code == 422
+
+
 # ---- A Tag as Seeds (DFP-05) ----------------------------------------------------
 
 

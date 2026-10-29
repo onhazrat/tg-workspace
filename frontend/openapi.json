@@ -8975,16 +8975,20 @@
       },
       "DirectoryCitedByCondition": {
         "properties": {
+          "tag": {
+            "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }],
+            "title": "Tag"
+          },
+          "group": {
+            "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }],
+            "title": "Group"
+          },
           "type": { "type": "string", "const": "citedby", "title": "Type" },
           "handles": {
             "items": { "type": "string", "maxLength": 256, "minLength": 1 },
             "type": "array",
             "maxItems": 500,
             "title": "Handles"
-          },
-          "tag": {
-            "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }],
-            "title": "Tag"
           }
         },
         "additionalProperties": false,
@@ -8995,16 +8999,20 @@
       },
       "DirectoryCitesCondition": {
         "properties": {
+          "tag": {
+            "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }],
+            "title": "Tag"
+          },
+          "group": {
+            "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }],
+            "title": "Group"
+          },
           "type": { "type": "string", "const": "cites", "title": "Type" },
           "handles": {
             "items": { "type": "string", "maxLength": 256, "minLength": 1 },
             "type": "array",
             "maxItems": 500,
             "title": "Handles"
-          },
-          "tag": {
-            "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }],
-            "title": "Tag"
           }
         },
         "additionalProperties": false,
@@ -9451,7 +9459,8 @@
               { "$ref": "#/components/schemas/DirectoryCitedByCondition" },
               { "$ref": "#/components/schemas/DirectoryCitesCondition" },
               { "$ref": "#/components/schemas/DirectorySharedCondition" },
-              { "$ref": "#/components/schemas/DirectoryTagCondition" }
+              { "$ref": "#/components/schemas/DirectoryTagCondition" },
+              { "$ref": "#/components/schemas/DirectoryGroupCondition" }
             ],
             "title": "Cond",
             "discriminator": {
@@ -9462,6 +9471,7 @@
                 "cites": "#/components/schemas/DirectoryCitesCondition",
                 "contains": "#/components/schemas/DirectoryContainsCondition",
                 "flag": "#/components/schemas/DirectoryFlagCondition",
+                "group": "#/components/schemas/DirectoryGroupCondition",
                 "is": "#/components/schemas/DirectoryIsCondition",
                 "language": "#/components/schemas/DirectoryLanguageCondition",
                 "measure": "#/components/schemas/DirectoryMeasureCondition",
@@ -9545,6 +9555,27 @@
         "type": "object",
         "title": "DirectoryFollowSource",
         "description": "The Directory view's \"your channels\" and Reference kinds, for discovered-via."
+      },
+      "DirectoryGroupCondition": {
+        "properties": {
+          "type": { "type": "string", "const": "group", "title": "Type" },
+          "name": { "type": "string", "minLength": 1, "title": "Name" }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["type", "name"],
+        "title": "DirectoryGroupCondition",
+        "description": "In one of the reader's Setting groups, by name: the Channels they follow\nfiled in it (TGU-04). A group they do not have matches nothing."
+      },
+      "DirectoryGroupSeeds": {
+        "properties": {
+          "group": { "type": "string", "minLength": 1, "title": "Group" }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["group"],
+        "title": "DirectoryGroupSeeds",
+        "description": "Seeds from one of the reader's Setting groups, resolved by the server."
       },
       "DirectoryHandlesRequest": {
         "properties": {
@@ -10281,6 +10312,14 @@
       },
       "DirectorySharedCondition": {
         "properties": {
+          "tag": {
+            "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }],
+            "title": "Tag"
+          },
+          "group": {
+            "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }],
+            "title": "Group"
+          },
           "type": {
             "type": "string",
             "enum": ["parents", "children"],
@@ -10291,10 +10330,6 @@
             "type": "array",
             "maxItems": 10000,
             "title": "Handles"
-          },
-          "tag": {
-            "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }],
-            "title": "Tag"
           },
           "min": {
             "type": "integer",
@@ -10498,6 +10533,7 @@
                 "maxItems": 10000
               },
               { "$ref": "#/components/schemas/DirectoryTagSeeds" },
+              { "$ref": "#/components/schemas/DirectoryGroupSeeds" },
               { "type": "null" }
             ],
             "title": "Parents"
@@ -10510,6 +10546,7 @@
                 "maxItems": 10000
               },
               { "$ref": "#/components/schemas/DirectoryTagSeeds" },
+              { "$ref": "#/components/schemas/DirectoryGroupSeeds" },
               { "type": "null" }
             ],
             "title": "Children"

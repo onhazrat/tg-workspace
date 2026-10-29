@@ -1736,6 +1736,14 @@ export type DirectoryBoostResponse = {
  */
 export type DirectoryCitedByCondition = {
     /**
+     * Tag
+     */
+    tag?: string | null;
+    /**
+     * Group
+     */
+    group?: string | null;
+    /**
      * Type
      */
     type: 'citedby';
@@ -1743,10 +1751,6 @@ export type DirectoryCitedByCondition = {
      * Handles
      */
     handles?: Array<string>;
-    /**
-     * Tag
-     */
-    tag?: string | null;
 };
 
 /**
@@ -1756,6 +1760,14 @@ export type DirectoryCitedByCondition = {
  */
 export type DirectoryCitesCondition = {
     /**
+     * Tag
+     */
+    tag?: string | null;
+    /**
+     * Group
+     */
+    group?: string | null;
+    /**
      * Type
      */
     type: 'cites';
@@ -1763,10 +1775,6 @@ export type DirectoryCitesCondition = {
      * Handles
      */
     handles?: Array<string>;
-    /**
-     * Tag
-     */
-    tag?: string | null;
 };
 
 /**
@@ -2096,7 +2104,9 @@ export type DirectoryFilterAtom = {
         type: 'children' | 'parents';
     } & DirectorySharedCondition) | ({
         type: 'tag';
-    } & DirectoryTagCondition);
+    } & DirectoryTagCondition) | ({
+        type: 'group';
+    } & DirectoryGroupCondition);
 };
 
 /**
@@ -2155,6 +2165,35 @@ export type DirectoryFollowSource = {
      * Referencekinds
      */
     referenceKinds?: Array<'forward' | 'mention' | 'link' | 'reply'>;
+};
+
+/**
+ * DirectoryGroupCondition
+ *
+ * In one of the reader's Setting groups, by name: the Channels they follow
+ * filed in it (TGU-04). A group they do not have matches nothing.
+ */
+export type DirectoryGroupCondition = {
+    /**
+     * Type
+     */
+    type: 'group';
+    /**
+     * Name
+     */
+    name: string;
+};
+
+/**
+ * DirectoryGroupSeeds
+ *
+ * Seeds from one of the reader's Setting groups, resolved by the server.
+ */
+export type DirectoryGroupSeeds = {
+    /**
+     * Group
+     */
+    group: string;
 };
 
 /**
@@ -2719,6 +2758,14 @@ export type DirectorySharedChannelResponse = {
  */
 export type DirectorySharedCondition = {
     /**
+     * Tag
+     */
+    tag?: string | null;
+    /**
+     * Group
+     */
+    group?: string | null;
+    /**
      * Type
      */
     type: 'parents' | 'children';
@@ -2726,10 +2773,6 @@ export type DirectorySharedCondition = {
      * Handles
      */
     handles?: Array<string>;
-    /**
-     * Tag
-     */
-    tag?: string | null;
     /**
      * Min
      */
@@ -2886,11 +2929,11 @@ export type DirectoryWhyRequest = {
     /**
      * Parents
      */
-    parents?: Array<string> | DirectoryTagSeeds | null;
+    parents?: Array<string> | DirectoryTagSeeds | DirectoryGroupSeeds | null;
     /**
      * Children
      */
-    children?: Array<string> | DirectoryTagSeeds | null;
+    children?: Array<string> | DirectoryTagSeeds | DirectoryGroupSeeds | null;
 };
 
 /**
