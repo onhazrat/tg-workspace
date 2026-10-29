@@ -20,9 +20,9 @@ not the summary.** Open the file for the full list of what it checks and why.
 | `frontend/src/lib/posts/posts-view.test.ts` | every Posts read's key moves exactly when its body does, but for the three departures it lists (ADR-036) | test |
 | `backend/tests/api/test_route_module_hygiene.py` | no models in route modules; handlers annotate returns | test |
 | `backend/tests/api/test_posts_view_guard.py` | no Posts or Discover route resolves part of a Posts view by hand (`view_of`, `resolve_posts_view`, ADR-036); no Action-path module (derived) builds its own Post read (ADR-038) | test |
-| `backend/tests/api/test_openapi_has_no_ticket_ids.py` | no ticket id in any OpenAPI `description` or `summary`, which ships as JSDoc in the generated client | test |
+| `backend/tests/api/test_openapi_has_no_ticket_ids.py`, `scripts/check_client_ticket_ids.py` | no ticket id in OpenAPI `description`/`summary`; its hook reads the client | test, hook |
 | `scripts/check_code_refs.py` | every backticked path.py::name reference outside dated records names something defined, and no path names only a file the commit removes; at commit | hook |
-| `scripts/check_test_ids.py` | every literal test id a Playwright spec names is rendered by `frontend/src`, checked at commit | hook |
+| `scripts/check_test_ids.py` | every literal test id a Playwright spec names is rendered by `frontend/src` | hook |
 | `scripts/generate_constants_catalog.py` | a module with a constant has a `CONSTANT_TOPICS` entry and no entry outlives its constant, at commit | pre-commit hook |
 | `backend/tests/services/test_service_kinds.py` | every service module declares one of the five kinds | test |
 | `backend/tests/api/test_route_inventory.py` | declared routes are actually mounted | test |

@@ -75,6 +75,13 @@ repos:
         language: unsupported
         files: ^backend/.*$|^scripts/generate-client\.sh$
 
+      - id: check-client-ticket-ids
+        name: No ticket id in the generated client
+        entry: python3 scripts/check_client_ticket_ids.py
+        pass_filenames: false
+        language: system
+        files: ^backend/.*$|^frontend/src/client/.*$|^scripts/check_client_ticket_ids\.py$
+
       - id: generate-env-example
         name: Generate environment catalog
         entry: python3 scripts/generate_env_example.py
