@@ -274,7 +274,8 @@ describe("ChannelFilterRow", () => {
         .map((b) => b.textContent),
     ).toEqual([
       "Followed",
-      "Last update",
+      "Last sync",
+      "Last post",
       "Sync start",
       "Oldest stored post",
       "Next regular sync",

@@ -84,7 +84,8 @@ describe("ChannelMetricMenu", () => {
       "Files",
       "Links",
       "Followed",
-      "Last update",
+      "Last sync",
+      "Last post",
       "Sync start",
       "Oldest stored post",
       "Next regular sync",
@@ -108,7 +109,12 @@ describe("ChannelMetricMenu", () => {
     })
     expect(
       screen.getAllByTestId(/^channel-filters-/).map((b) => b.textContent),
-    ).toEqual(["Sync start", "Next regular sync", "Next dynamic sync"])
+    ).toEqual([
+      "Last sync",
+      "Sync start",
+      "Next regular sync",
+      "Next dynamic sync",
+    ])
   })
 
   test("a number row carries #, a moment row a clock", () => {
