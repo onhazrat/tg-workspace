@@ -6,11 +6,11 @@
  */
 import { afterEach, expect, test } from "bun:test"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, renderHook } from "@testing-library/react"
+import { cleanup, renderHook, waitFor } from "@testing-library/react"
 import type { ReactNode } from "react"
-
+import { configureGeneratedClient } from "@/api/generated-client"
 import { client } from "@/client/client.gen"
-import { useTags } from "@/hooks/useTags"
+import { useDirectoryTags, useTags } from "@/hooks/useTags"
 
 const realConfig = client.getConfig()
 
@@ -74,4 +74,46 @@ test("a Tag past the server's cap is sent in batches of at most 10,000", async (
     expect(batches.map((b) => b.length)).toEqual([10_000, 10_000, 5_000])
     expect(batches.flat()).toEqual(handles)
   }
+})
+
+test("the Directory lists its Tags by its Tag use, and tagging records one once saved (TGU-03)", async () => {
+  configureGeneratedClient()
+  const calls = serve((call) =>
+    call.path.endsWith("/tags")
+      ? json([
+          { name: "Big", channels: 900 },
+          { name: "Bank", channels: 2 },
+        ])
+      : call.path.endsWith("/tags/order")
+        ? json([{ name: "Bank", channels: 2, selected: 0, score: 2 }])
+        : call.path.endsWith("/tags/channels")
+          ? json({ changed: 1 })
+          : json([]),
+  )
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const result = renderHook(() => useDirectoryTags(), {
+    wrapper: ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    ),
+  }).result
+  await waitFor(() =>
+    expect(result.current.tagging.tags.map((t) => t.name)).toEqual([
+      "Bank",
+      "Big",
+    ]),
+  )
+  expect(result.current.choices.tags.map((t) => t.name)).toEqual([
+    "Bank",
+    "Big",
+  ])
+  result.current.tagging.onTag("Big", ["a1"])
+  const writes = () =>
+    calls.filter((c) => c.method === "POST" && !c.path.endsWith("/order"))
+  await waitFor(() =>
+    expect(writes().map((c) => c.path.replace("/api/v1/data", ""))).toEqual([
+      "/tags/channels",
+      "/tags/uses",
+    ]),
+  )
+  expect(writes()[1].body).toEqual({ tab: "directory", name: "Big" })
 })

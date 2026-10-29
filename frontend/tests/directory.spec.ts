@@ -395,7 +395,7 @@ test.describe("TG Workspace directory", () => {
     for (const h of ["a2", "a3", "a4", "a5"]) {
       await page.getByRole("checkbox", { name: `Tick @${h}` }).check()
     }
-    await expect(page.getByText("5 ticked")).toBeVisible()
+    await expect(page.getByText("5 selected")).toBeVisible()
     await page.getByRole("button", { name: "Follow 5" }).click()
     expect(follows.getPostCount()).toBe(0)
     await page.getByTestId("directory-bulk-confirm").click()
@@ -670,7 +670,7 @@ test.describe("TG Workspace directory", () => {
     // A followed row ticks; Follow and Dismiss count only the unfollowed.
     await page.getByRole("checkbox", { name: "Tick @a1" }).check()
     await page.getByRole("checkbox", { name: "Tick @a2" }).check()
-    await expect(page.getByText("2 ticked")).toBeVisible()
+    await expect(page.getByText("2 selected")).toBeVisible()
     await expect(
       page.getByRole("button", { name: "Follow 1 of 2" }),
     ).toBeVisible()
@@ -744,6 +744,36 @@ test.describe("TG Workspace directory", () => {
       tagged.set(body.name, body.handles)
       await route.fulfill({ json: { changed: body.handles.length } })
     })
+    // TGU-03: the Tags dropdown's read, one Tag's handles and its uses.
+    const uses: unknown[] = []
+    await page.route("**/api/v1/data/tags/order", (route) => {
+      const { selected = [] } = route.request().postDataJSON() as {
+        selected?: string[]
+      }
+      return route.fulfill({
+        json: [...tagged].map(([name, handles]) => ({
+          name,
+          channels: handles.length,
+          selected: handles.filter((h) => selected.includes(h)).length,
+          score: 0,
+          lastUsedAt: null,
+        })),
+      })
+    })
+    await page.route("**/api/v1/data/tags/channels?**", (route) =>
+      route.fulfill({
+        json: {
+          handles:
+            tagged.get(
+              new URL(route.request().url()).searchParams.get("name") ?? "",
+            ) ?? [],
+        },
+      }),
+    )
+    await page.route("**/api/v1/data/tags/uses", async (route) => {
+      uses.push(route.request().postDataJSON())
+      await route.fulfill({ json: { changed: 1 } })
+    })
     // Registered after `mockDirectory`, so it answers the list instead.
     await page.route("**/api/v1/data/directory/list", async (route) => {
       filters.push((route.request().postDataJSON() as ListBody).filter)
@@ -811,6 +841,22 @@ test.describe("TG Workspace directory", () => {
       )
       .toBe(true)
     expect(param(page, "dirFilter")).toContain('parents:"tag:World news"')
+
+    // TGU-03: the Tags dropdown selects the Tag's Channels; its funnel reads
+    // the top-level Tag Condition and takes it off.
+    await page
+      .getByTestId("directory-bulk-bar")
+      .getByRole("button", { name: "Clear" })
+      .click()
+    await page.getByTestId("directory-tags-facet").click()
+    await expect(
+      page.getByTestId("directory-tags-facet-count-World news"),
+    ).toHaveText("0/2")
+    await page.getByTestId("directory-tags-facet-row-World news").click()
+    await expect(page.getByText("2 selected")).toBeVisible()
+    await page.getByTestId("directory-tags-facet-funnel-World news").click()
+    await expect(chip(page, "tag-World news")).toHaveCount(0)
+    expect(uses).toContainEqual({ tab: "directory", name: "World news" })
   })
 
   test("tick all that match, then act on all matching (ADR-031)", async ({
@@ -852,8 +898,8 @@ test.describe("TG Workspace directory", () => {
       .check()
     await page.getByRole("button", { name: "Tick all 250 that match" }).click()
     const bar = page.getByTestId("directory-bulk-bar")
-    await expect(bar).toContainText("All 250 matching are ticked.")
-    await expect(bar).toContainText("256 ticked")
+    await expect(bar).toContainText("All 250 matching are selected.")
+    await expect(bar).toContainText("256 selected")
     await page.getByTestId("directory-bulk-tag").click()
     await page.getByTestId("directory-tag-search").fill("Wide")
     await page.getByText('Create the Tag "Wide"').click()
@@ -883,7 +929,7 @@ test.describe("TG Workspace directory", () => {
 
     // A hand-made tick ends it, and leaves the page ticked minus that row.
     await page.getByRole("checkbox", { name: "Tick @a1" }).uncheck()
-    await expect(bar).toContainText("5 ticked")
+    await expect(bar).toContainText("5 selected")
     await expect(bar).not.toContainText("matching.")
   })
 
