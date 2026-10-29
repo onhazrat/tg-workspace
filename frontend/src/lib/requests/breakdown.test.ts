@@ -389,14 +389,25 @@ describe("the Accounts (RQS-05)", () => {
     })
   })
 
+  test("a picked Account's total keeps its Uncharged Requests, its facet count only its spend", () => {
+    // The tab with Account a picked: its sync, and a handle check it asked
+    // for. The facet reads `byAccount`, which carries spend alone (ACW-01).
+    const picked = [totals("auto", 10, 5, 1, 16), totals("handle", 0, 3, 0)]
+    expect(statTotals(picked, none, none).total).toBe(19)
+    const [a] = accountRows([onAccount("a", "auto", 10, 5, 1)], none, none)
+    expect([a.total, a.byKind]).toEqual([16, { auto: 16 }])
+  })
+
   test("an Account keeps its colour whichever are picked", () => {
     const every = ["a", "b", "c", "d", "e"]
     expect(accountColor("b", every)).toBe("var(--account-2)")
     expect(accountColor("e", every)).toBe("var(--account-1)")
   })
 
-  // The ramp is violet, and so is Bot API (dataviz slot 7). Picking Accounts
-  // hides every Uncharged Request, so Bot API never sits beside an Account.
+  // The ramp is violet, and so is Bot API (dataviz slot 7), which fails beside
+  // --account-2. Picking Accounts shows their Bot API calls in the kind table,
+  // which nothing paints in Account colours; the comparison, which is, keeps
+  // its columns to charged kinds, so the two never share a chart (ACW-01).
   test("the comparison shows only charged kinds, never Bot API", () => {
     expect(COMPARE_KINDS.map((k) => k.id)).toEqual([
       "auto",

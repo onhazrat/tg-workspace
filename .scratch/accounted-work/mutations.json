@@ -103,5 +103,47 @@
     "old": "attributed(channel=result.name)",
     "new": "attributed(channel=result.name, kind=RequestKind.FOLLOW)",
     "test": "backend/tests/services/test_request_accounting.py::test_only_accounted_work_sets_kind_account_budget_or_job"
+  },
+  {
+    "name": "ignore accounts",
+    "file": "backend/app/services/request_stats.py",
+    "old": "    if picked.accounts:\n        asker",
+    "new": "    if False:\n        asker",
+    "test": "backend/tests/api/test_request_stats.py::test_picking_accounts_keeps_their_charged_and_the_uncharged_they_asked_for"
+  },
+  {
+    "name": "drop a picked Account's Uncharged Requests",
+    "file": "backend/app/services/request_stats.py",
+    "old": "else_=col(model.account_id))",
+    "new": "else_=None)",
+    "test": "backend/tests/api/test_request_stats.py::test_picking_accounts_keeps_their_charged_and_the_uncharged_they_asked_for"
+  },
+  {
+    "name": "keep Uncharged Requests that name no Account",
+    "file": "backend/app/services/request_stats.py",
+    "old": "else_=col(model.account_id))",
+    "new": "else_=_owner(model))",
+    "test": "backend/tests/api/test_request_stats.py::test_picking_accounts_keeps_their_charged_and_the_uncharged_they_asked_for"
+  },
+  {
+    "name": "count Uncharged Requests in byAccount",
+    "file": "backend/app/services/request_stats.py",
+    "old": "        if is_charged and account is not None:\n",
+    "new": "        if account is not None:\n",
+    "test": "backend/tests/api/test_request_stats.py::test_picking_accounts_keeps_their_charged_and_the_uncharged_they_asked_for"
+  },
+  {
+    "name": "say picking hides Uncharged again",
+    "file": "frontend/src/components/requests/RequestsView.tsx",
+    "old": "What they spent, and the Uncharged Requests they asked for",
+    "new": "Uncharged hidden, because no Account pays for it",
+    "test": "frontend/src/components/requests/RequestsView.test.tsx"
+  },
+  {
+    "name": "drop Uncharged rows from the picked totals",
+    "file": "frontend/src/lib/requests/breakdown.ts",
+    "old": "    if (!hiddenKinds.has(row.kind))\n      addTo(t, { ...row, total: row.requests }, hiddenOutcomes)",
+    "new": "    if (!hiddenKinds.has(row.kind) && row.charged > 0)\n      addTo(t, { ...row, total: row.requests }, hiddenOutcomes)",
+    "test": "frontend/src/lib/requests/breakdown.test.ts"
   }
 ]

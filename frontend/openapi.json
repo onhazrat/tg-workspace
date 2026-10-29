@@ -6744,7 +6744,7 @@
       "get": {
         "tags": ["requests"],
         "summary": "Read Request Breakdown",
-        "description": "Requests in `[start, end)` by kind of work, by Channel and by Account.\n\nTimes are cut to the minute and read as UTC when they carry no zone.\n`charged` keeps only Charged or only Uncharged Requests. `accounts` keeps\nonly the Requests charged to those Accounts. `leftOut` drops those\nChannels, by handle, and `leftOutKinds` the rows of those kinds' work with\nno Channel. `byAccount` counts each Account's charged Requests alone.",
+        "description": "Requests in `[start, end)` by kind of work, by Channel and by Account.\n\nTimes are cut to the minute and read as UTC when they carry no zone.\n`charged` keeps only Charged or only Uncharged Requests. `accounts` keeps\nthe Requests charged to those Accounts and the Uncharged ones they asked\nfor; Uncharged Requests that name no Account stay out. `leftOut` drops\nthose Channels, by handle, and `leftOutKinds` the rows of those kinds'\nwork with no Channel. `byAccount` counts each Account's charged Requests\nalone.",
         "operationId": "requests-read_request_breakdown",
         "security": [{ "OAuth2PasswordBearer": [] }],
         "parameters": [

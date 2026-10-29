@@ -231,15 +231,15 @@ describe("RequestsView", () => {
   test("the Accounts facet counts each one's charged Requests, and picking two compares them", () => {
     const seen: RequestsFilter[] = []
     render(<Harness seen={seen} />)
-    expect(screen.queryByTestId("requests-uncharged-hidden")).toBeNull()
+    expect(screen.queryByTestId("requests-accounts-kept")).toBeNull()
     fireEvent.click(screen.getByTestId("requests-accounts"))
     expect(screen.getByTestId("requests-accounts-count-b").textContent).toBe(
       "40",
     )
     fireEvent.click(screen.getByTestId("requests-accounts-funnel-a"))
     expect(seen.at(-1)?.accounts).toEqual(["a"])
-    expect(screen.getByTestId("requests-uncharged-hidden").textContent).toBe(
-      "Uncharged hidden, because no Account pays for it",
+    expect(screen.getByTestId("requests-accounts-kept").textContent).toBe(
+      "What they spent, and the Uncharged Requests they asked for",
     )
     // One Account narrows the tab; there is nothing to compare it with.
     expect(screen.queryByRole("region", { name: /Comparing/ })).toBeNull()

@@ -54,9 +54,10 @@ def _picked(
     left_out_kinds: Annotated[list[str] | None, Query(alias="leftOutKinds")] = None,
 ) -> Picked:
     """`charged` keeps only Charged or only Uncharged Requests. `accounts`
-    keeps only the Requests charged to those Accounts. `leftOut` drops those
-    Channels' rows, by handle, and `leftOutKinds` the rows of those kinds'
-    work with no Channel."""
+    keeps the Requests charged to those Accounts and the Uncharged ones they
+    asked for; Uncharged Requests that name no Account stay out. `leftOut`
+    drops those Channels' rows, by handle, and `leftOutKinds` the rows of
+    those kinds' work with no Channel."""
     return Picked(charged, accounts or (), left_out or (), left_out_kinds or ())
 
 
@@ -85,9 +86,11 @@ def read_request_breakdown(
 
     Times are cut to the minute and read as UTC when they carry no zone.
     `charged` keeps only Charged or only Uncharged Requests. `accounts` keeps
-    only the Requests charged to those Accounts. `leftOut` drops those
-    Channels, by handle, and `leftOutKinds` the rows of those kinds' work with
-    no Channel. `byAccount` counts each Account's charged Requests alone.
+    the Requests charged to those Accounts and the Uncharged ones they asked
+    for; Uncharged Requests that name no Account stay out. `leftOut` drops
+    those Channels, by handle, and `leftOutKinds` the rows of those kinds'
+    work with no Channel. `byAccount` counts each Account's charged Requests
+    alone.
     """
     lo, hi = _range(start, end)
     breakdown = request_breakdown(session, lo, hi, picked)

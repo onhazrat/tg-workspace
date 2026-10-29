@@ -543,17 +543,19 @@ def _owner(model: Tier) -> Any:
 def _filtered(query: Any, model: Tier, picked: Picked) -> Any:
     """The tab's filters, the same on every tier and on every endpoint.
 
-    Picking Accounts keeps their charged Requests alone: no Account pays for
-    an Uncharged one, even one made for its sync (RQS-05). A Channel left out
+    Picking Accounts keeps their Charged Requests and the Uncharged ones they
+    asked for, a handle check or a refused attempt of their sync (RQS-05 as
+    ADR-041 amends it). A Charged row reads its Account as the ledger bills
+    it; an Uncharged one as recorded, so a probe or a check that names nobody
+    stays out. The Accounts facet still counts spend alone. A Channel left out
     takes its own row with it, never an aggregate row's Requests that name its
     handle: a Handle check of it stays a Handle check (RQS-04).
     """
     if picked.charged != "all":
         query = query.where(col(model.charged).is_(picked.charged == "charged"))
     if picked.accounts:
-        query = query.where(
-            col(model.charged).is_(True), _owner(model).in_(picked.accounts)
-        )
+        asker = case((col(model.charged), _owner(model)), else_=col(model.account_id))
+        query = query.where(asker.in_(picked.accounts))
     channel = _totals_channel(model)
     if picked.left_out:
         query = query.where(channel.is_(None) | channel.not_in(picked.left_out))

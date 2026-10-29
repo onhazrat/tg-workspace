@@ -1676,20 +1676,47 @@ def test_a_range_is_cut_to_the_minute(
     assert answer["byChannel"] == []
 
 
-def test_picking_accounts_keeps_only_their_charged_requests(
+def test_picking_accounts_keeps_their_charged_and_the_uncharged_they_asked_for(
     client: TestClient,
     superuser_token_headers: dict[str, str],
     normal_user_token_headers: dict[str, str],
     telegram: FakeTelegram,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Mutations: ignore `accounts`, keep a picked Account's Uncharged
-    Requests, or count Uncharged Requests in `byAccount` (RQS-05)."""
+    """Mutations: ignore `accounts`; drop a picked Account's Uncharged
+    Requests; keep Uncharged Requests that name no Account; count Uncharged
+    Requests in `byAccount` (RQS-05 as ADR-041 amends it).
+
+    Picking an Account keeps what it spent and what it asked for that nobody
+    pays: its sync's refused attempt and its handle check. Another Account's
+    check, a probe and a check that names no Account stay out. The Charged
+    filter still narrows to spend, and the facet counts spend alone.
+    """
     other_channel = "rqsother"
     _refused_then_answered(client, superuser_token_headers, telegram, monkeypatch)
     _follow(client, normal_user_token_headers, other_channel)
     telegram.script(_first_page(other_channel), _page_html(other_channel, [7]))
     _sync(client, normal_user_token_headers, other_channel)
+    for handle, headers in (
+        ("rqsmine", superuser_token_headers),
+        ("rqstheirs", normal_user_token_headers),
+    ):
+        telegram.script(_first_page(handle), _page_html(handle, [5]))
+        _check_handle(client, headers, handle)
+    telegram.script(_first_page(HANDLE), _probe_page([7]))
+    _probe(client)
+    # A handle check from before Accounted work named who asked.
+    with attributed(kind=RequestKind.HANDLE, channel="rqsnobody"):
+        page_for_fetch(media=False).record(
+            at=datetime.now(UTC),
+            latency_ms=1,
+            lane="direct",
+            web_view=True,
+            cause=None,
+            error_code=None,
+            answered=True,
+        )
+    flush_recorded_requests()
     me = client.get(f"{API}/users/me", headers=superuser_token_headers).json()
     them = client.get(f"{API}/users/me", headers=normal_user_token_headers).json()
 
@@ -1697,20 +1724,35 @@ def test_picking_accounts_keeps_only_their_charged_requests(
     mine = _row(everything["byAccount"], accountId=me["id"], kind="single")
     theirs = _row(everything["byAccount"], accountId=them["id"], kind="single")
     assert (mine["email"], theirs["email"]) == (me["email"], them["email"])
-    # Only charged Requests are an Account's: the refused first attempt is not.
+    # The facet is spend: the refused first attempt is not the Account's.
     assert mine["requests"] == mine["charged"] == mine["useful"] + mine["idle"]
     assert theirs["requests"] == theirs["charged"] > 0
+    assert {r["kind"] for r in everything["byAccount"]} == {"single"}
 
     picked = _breakdown(
         client, superuser_token_headers, accounts=[me["id"]], charged="all"
     )
     single = _row(picked["byKind"], kind="single")
-    assert (single["requests"], single["wasted"]) == (mine["requests"], 0)
-    assert {r["channel"] for r in picked["byChannel"]} == {CHANNEL}
+    assert (single["requests"], single["charged"], single["wasted"]) == (
+        mine["requests"] + 1,
+        mine["requests"],
+        1,
+    )
+    assert set(_breakdown_by_kind(picked)) == {"single", "handle"}
+    assert _row(picked["byKind"], kind="handle")["requests"] == 1
+    assert {(r["channel"], r["kind"]) for r in picked["byChannel"]} == {
+        (CHANNEL, "single"),
+        (None, "handle"),
+    }
     assert {r["accountId"] for r in picked["byAccount"]} == {me["id"]}
-
     trend = _trend(client, superuser_token_headers, accounts=[me["id"]])["buckets"]
     assert _by_kind(trend) == _breakdown_by_kind(picked)
+
+    spent = _breakdown(
+        client, superuser_token_headers, accounts=[me["id"]], charged="charged"
+    )
+    assert set(_breakdown_by_kind(spent)) == {"single"}
+    assert _row(spent["byKind"], kind="single")["requests"] == mine["requests"]
 
 
 def test_a_charge_with_no_account_is_the_operators(

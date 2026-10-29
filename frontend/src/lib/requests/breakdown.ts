@@ -472,9 +472,10 @@ export function accountRows(
 }
 
 /**
- * The comparison's kind columns: only charged work is an Account's. Picking
- * Accounts hides every Uncharged Request, so Bot API, violet like the
- * Account ramp, never sits beside an Account.
+ * The comparison's kind columns: only charged work is an Account's spend.
+ * Picking Accounts shows their Uncharged Requests in the kind table, but
+ * never here, so Bot API, violet like the Account ramp, never sits beside an
+ * Account (index.css says why it stays violet).
  */
 export const COMPARE_KINDS = KINDS.filter((k) => k.charged)
 

@@ -46,6 +46,8 @@ const ACCOUNTS = [
   { ...part("auto", 500, 100, 0, true), accountId: "a", email: "ann@x.org" },
   { ...part("auto", 265, 50, 5, true), accountId: "b", email: "bob@x.org" },
 ]
+/** Ann's handle checks: Uncharged, so in her picked tab, never in her spend. */
+const ASKED = { a: { ...part("handle", 0, 12, 0, false), channel: null } }
 
 /** Each kind's totals, summed from the Channel rows the API answers. */
 const byKindOf = (rows: ReturnType<typeof part>[]) => {
@@ -67,14 +69,23 @@ const breakdown = (url: URL) => {
   const byAccount = ACCOUNTS.filter(
     (a) => !accounts.length || accounts.includes(a.accountId),
   )
-  if (accounts.length)
+  if (accounts.length) {
+    // Picking keeps what the Accounts spent and what they asked for (ACW-01).
+    const asked =
+      charged === "charged"
+        ? []
+        : accounts.flatMap((a) => (a in ASKED ? [ASKED[a as "a"]] : []))
     return {
       start: "2026-10-01T00:00:00",
       end: "2026-10-02T00:00:00",
-      byKind: byAccount.map(({ accountId, email, ...rest }) => rest),
-      byChannel: CHANNELS,
+      byKind: [
+        ...byAccount.map(({ accountId, email, ...rest }) => rest),
+        ...asked.map(({ channel, ...rest }) => rest),
+      ],
+      byChannel: [...asked, ...CHANNELS],
       byAccount,
     }
+  }
   const byChannel = (
     charged === "charged" ? CHANNELS : [PROBES, ...CHANNELS]
   ).filter((c) =>
@@ -375,15 +386,22 @@ test("Accounts narrow the totals, and two compare side by side", async ({
   await expect(page.getByTestId("requests-accounts-count-b")).toHaveText("320")
 
   await page.getByTestId("requests-accounts-funnel-a").click()
-  await expect(total(page)).toHaveText("600 Requests")
+  // Ann's spend, and the handle checks she asked for, which nobody pays.
+  await expect(total(page)).toHaveText("612 Requests")
   expect(seen.at(-1)?.searchParams.getAll("accounts")).toEqual(["a"])
-  await expect(page.getByTestId("requests-uncharged-hidden")).toBeVisible()
+  await expect(page.getByTestId("requests-accounts-kept")).toHaveText(
+    "What they spent, and the Uncharged Requests they asked for",
+  )
+  await expect(
+    kinds(page).getByRole("row", { name: /Handle check/ }),
+  ).toContainText("12")
+  await expect(page.getByTestId("requests-accounts-count-a")).toHaveText("600")
   const compare = page.getByRole("region", { name: /Comparing/ })
   await expect(compare).toHaveCount(0)
 
   await page.getByTestId("requests-accounts-funnel-b").click()
   await page.keyboard.press("Escape")
-  await expect(total(page)).toHaveText("920 Requests")
+  await expect(total(page)).toHaveText("932 Requests")
   await expect(compare).toHaveAccessibleName("Comparing 2 Accounts")
   await expect(compare.getByRole("row", { name: /ann@x.org/ })).toContainText(
     "65%",
