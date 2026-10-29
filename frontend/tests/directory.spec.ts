@@ -1,7 +1,11 @@
 import type { Page } from "@playwright/test"
 import { expect, test } from "./fixtures.ts"
 import { clearScopedStorage } from "./utils/scoped-storage"
-import { gotoWorkspace, mockBulkFollowJob } from "./utils/summarizer-helpers.ts"
+import {
+  fetchThrough,
+  gotoWorkspace,
+  mockBulkFollowJob,
+} from "./utils/summarizer-helpers.ts"
 
 /**
  * The Directory tab's journey (DIR-02) over a mocked Directory API: the
@@ -857,6 +861,63 @@ test.describe("TG Workspace directory", () => {
     await page.getByTestId("directory-tags-facet-funnel-World news").click()
     await expect(chip(page, "tag-World news")).toHaveCount(0)
     expect(uses).toContainEqual({ tab: "directory", name: "World news" })
+  })
+
+  test("the Groups dropdown selects a Setting group, funnels by it and opens it (TGU-04)", async ({
+    page,
+  }) => {
+    await mockDirectory(page)
+    const filters: unknown[] = []
+    await page.route("**/api/v1/data/directory/list", async (route) => {
+      filters.push((route.request().postDataJSON() as ListBody).filter)
+      await route.fulfill({
+        json: { rows: ROWS, total: 6, languages: [], yoursSize: 0 },
+      })
+    })
+    await page.route("**/api/v1/data/tags", (route) =>
+      route.fulfill({ json: [] }),
+    )
+    await page.route("**/api/v1/data/setting-groups", async (route) => {
+      if (route.request().method() !== "GET") return route.fallback()
+      const groups = await (await fetchThrough(route)).json()
+      await route.fulfill({
+        json: [
+          ...groups,
+          { ...groups[0], id: "e2e-slow", name: "Slow", isDefault: false },
+        ],
+      })
+    })
+    await gotoWorkspace(page, "channels")
+    await clearScopedStorage(page, [
+      "directory.view",
+      "directory.ticks",
+      "directory.open",
+    ])
+    // Registered once the Channels tab is gone: a1 is the one follow in Slow.
+    await page.route("**/api/v1/data/channels", (route) =>
+      route.fulfill({
+        json: [{ id: "a1", name: "a1", settingGroupId: "e2e-slow", tags: [] }],
+      }),
+    )
+    await page.goto("/?tab=directory")
+
+    await page.getByTestId("directory-groups-facet").click()
+    await expect(
+      page.getByTestId("directory-groups-facet-count-e2e-slow"),
+    ).toHaveText("0/1")
+    await page.getByTestId("directory-groups-facet-row-e2e-slow").click()
+    await expect(page.getByText("1 selected")).toBeVisible()
+    await page.getByTestId("directory-groups-facet-funnel-e2e-slow").click()
+    await expect
+      .poll(() =>
+        JSON.stringify(filters.at(-1) ?? null).includes(
+          '{"type":"group","name":"Slow"}',
+        ),
+      )
+      .toBe(true)
+    expect(param(page, "dirFilter")).toContain("group:Slow")
+    await page.getByRole("button", { name: "Open Slow's settings" }).click()
+    await expect(page).toHaveURL(/settingGroup=e2e-slow/)
   })
 
   test("tick all that match, then act on all matching (ADR-031)", async ({

@@ -28,4 +28,11 @@ test("the Groups search creates a group no row has, and lists it", async ({
   await expect(
     page.locator('[data-testid^="channel-groups-row-"]', { hasText: name }),
   ).toBeVisible()
+
+  // TGU-04: its gear opens that group in Settings.
+  await page.getByRole("button", { name: `Open ${name}'s settings` }).click()
+  await expect(page).toHaveURL(/tab=settings/)
+  await expect(
+    page.getByRole("button", { name, expanded: true, exact: true }),
+  ).toBeVisible()
 })
