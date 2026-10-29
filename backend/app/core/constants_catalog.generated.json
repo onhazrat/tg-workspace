@@ -1780,7 +1780,7 @@
       "comment": "Rows the Requests tab's Channel table shows first.",
       "expression": "25",
       "file": "frontend/src/lib/requests/breakdown.ts",
-      "line": 351,
+      "line": 366,
       "name": "FIRST_CHANNELS",
       "value": 25
     },
@@ -1788,7 +1788,7 @@
       "comment": "Rows each \"Show more\" adds to the Requests tab's Channel table.",
       "expression": "50",
       "file": "frontend/src/lib/requests/breakdown.ts",
-      "line": 353,
+      "line": 368,
       "name": "MORE_CHANNELS",
       "value": 50
     },
@@ -1796,7 +1796,7 @@
       "comment": "Steps on the violet Account ramp, `--account-1` to `--account-4`.",
       "expression": "4",
       "file": "frontend/src/lib/requests/breakdown.ts",
-      "line": 501,
+      "line": 516,
       "name": "ACCOUNT_STEPS",
       "value": 4
     },

@@ -35,6 +35,7 @@ import {
   type Measure,
   measureOf,
   type Outcome,
+  requestsSelection,
   type SortDirection,
   selectHandles,
 } from "@/lib/requests/breakdown"
@@ -88,14 +89,18 @@ export function ChannelBar(p: ChannelBarProps) {
   const groups = criteria(kinds, p.hiddenOutcomes)
   const values = useMeasureValues(p.rows)
   const tagNames = useRequestsTagNames()
-  const groupRows = useGroupRows(null)
+  const selection = useMemo(
+    () => requestsSelection(p.rows, p.leftOut),
+    [p.rows, p.leftOut],
+  )
+  const groupRows = useGroupRows(selection.scope)
   return (
     <>
       <div className="flex flex-wrap items-center gap-2 px-3 pt-2">
         <SearchBox value={p.search} onChange={p.onSearch} />
         <KindsFacet {...p} kinds={kinds} />
-        <RequestsTags {...p} />
-        <RequestsGroups {...p} />
+        <RequestsTags {...p} selection={selection} />
+        <RequestsGroups {...p} selection={selection} groups={groupRows} />
         <BarToggle
           on={switchOn(p.filter, isUncharged, true)}
           label="Hide uncharged"
@@ -219,15 +224,14 @@ function KindsFacet({
 
 /** The Tags dropdown (TGU-03): selecting a Tag puts its rows back in the
  * Requests selection, unselecting takes them out of every total. */
-function RequestsTags(p: ChannelBarProps) {
-  const channels = p.rows.filter((r) => !r.aggregate)
+function RequestsTags(p: ChannelBarProps & { selection: RequestsSelection }) {
   return (
     <TagsDropdown
       tab="requests"
       testId="requests-tags"
       tickHint="Unselecting takes out, the funnel shows only"
-      scope={channels.map((r) => r.key)}
-      selected={channels.filter((r) => !p.leftOut.has(r.id)).map((r) => r.key)}
+      scope={p.selection.scope}
+      selected={p.selection.selected}
       onSelect={(handles, on) =>
         p.onLeftOut(selectHandles(p.leftOut, p.rows, handles, on))
       }
@@ -246,22 +250,16 @@ function RequestsTags(p: ChannelBarProps) {
 
 /** The Groups dropdown (TGU-04): selecting a Setting group puts its rows back
  * in the Requests selection; its funnel is the Setting group Condition. */
-function RequestsGroups(p: ChannelBarProps) {
+function RequestsGroups(
+  p: ChannelBarProps & { selection: RequestsSelection; groups: GroupRow[] },
+) {
   const openSettingGroup = useOpenSettingGroup()
-  const channels = p.rows.filter((r) => !r.aggregate)
-  const scoped = useGroupRows(channels.map((r) => r.key))
   return (
     <GroupsDropdown
       testId="requests-groups"
       tickHint="Unselecting takes out, the funnel shows only"
-      groups={scoped}
-      selected={
-        new Set(
-          channels
-            .filter((r) => !p.leftOut.has(r.id))
-            .map((r) => r.key.toLowerCase()),
-        )
-      }
+      groups={p.groups}
+      selected={new Set(p.selection.selected.map((h) => h.toLowerCase()))}
       onSelect={(handles, on) =>
         p.onLeftOut(selectHandles(p.leftOut, p.rows, handles, on))
       }
@@ -278,6 +276,8 @@ function RequestsGroups(p: ChannelBarProps) {
     />
   )
 }
+
+type RequestsSelection = ReturnType<typeof requestsSelection>
 
 /** The Tag names "In the Tag" offers, in the Requests tab's Tag use order. */
 function useRequestsTagNames() {

@@ -105,6 +105,21 @@ export function selectHandles(
   return next
 }
 
+/**
+ * The Requests selection as the Tags and Groups dropdowns read it: every
+ * Channel row's handle (`scope`), and those not left out (`selected`).
+ */
+export function requestsSelection(
+  rows: readonly ChannelRow[],
+  leftOut: ReadonlySet<string>,
+): { scope: string[]; selected: string[] } {
+  const channels = rows.filter((r) => !r.aggregate)
+  return {
+    scope: channels.map((r) => r.key),
+    selected: channels.filter((r) => !leftOut.has(r.id)).map((r) => r.key),
+  }
+}
+
 /** What narrows every Requests read besides the range. */
 export type Picked = Pick<RequestsFilter, "charged" | "accounts" | "leftOut">
 
