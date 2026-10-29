@@ -1,10 +1,11 @@
 /** The Channel table's filter (RQS-04): kinds, Hide uncharged and measures. */
 import { describe, expect, test } from "bun:test"
 import type { ChannelRequestTotals } from "@/client"
-import { setSwitch } from "@/lib/filter-tree"
+import { addFunnel, setSwitch } from "@/lib/filter-tree"
 import { channelRows, type Outcome } from "./breakdown"
 import {
   addCond,
+  condLabel,
   type ChannelCond,
   criteria,
   emptyChannelFilter,
@@ -131,5 +132,39 @@ describe("the Channel table's filter", () => {
     const [shown] = criteria([], new Set<Outcome>(["wasted"]))
     expect(shown.measures).not.toContain("wasted")
     expect(shown.measures).not.toContain("wasteShare")
+  })
+})
+
+describe("the Channel table's Tag Condition (TGU-03)", () => {
+  const handles: Record<string, ReadonlySet<string>> = {
+    Bank: new Set(["news"]),
+    Art: new Set(["tech"]),
+  }
+  const keptWith = (filter: ReturnType<typeof emptyChannelFilter>) =>
+    rows
+      .filter(keepRow(filter, none, none, (tag) => handles[tag]))
+      .map((r) => r.key)
+      .sort()
+  const tag = (value: string): ChannelCond => ({ type: "tag", value })
+
+  test("keeps the rows whose handle the Tag carries; two Tags mean either", () => {
+    const bank = addFunnel(emptyChannelFilter(), { type: "tag", value: "Bank" })
+    expect(keptWith(bank)).toEqual(["news"])
+    expect(keptWith(addFunnel(bank, { type: "tag", value: "Art" }))).toEqual([
+      "news",
+      "tech",
+    ])
+  })
+
+  test("stands aside while its handles load", () => {
+    const loading = addFunnel(emptyChannelFilter(), {
+      type: "tag",
+      value: "Loading",
+    })
+    expect(keptWith(loading)).toEqual(["news", "probe", "quiet", "tech"])
+  })
+
+  test("its chip names the Tag", () => {
+    expect(condLabel(tag("Bank"))).toBe("Tag Bank")
   })
 })
