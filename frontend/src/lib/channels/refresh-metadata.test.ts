@@ -124,6 +124,19 @@ describe("refreshChannelMetadata", () => {
     expect(success).toHaveBeenCalledWith("Refreshed metadata for @alpha")
   })
 
+  test("keeps the Channel's Last sync: a never-synced Channel stays without one", async () => {
+    const { calls, deps, ctx } = harness({ channelName: "alpha" })
+    spy("success")
+    await refreshChannelMetadata({ id: "c1", name: "alpha" }, ctx, deps)
+    await refreshChannelMetadata(
+      { id: "c2", name: "alpha", lastUpdated: 777 },
+      ctx,
+      deps,
+    )
+    expect(calls.upserts[0]?.lastUpdated).toBeUndefined()
+    expect(calls.upserts[1]?.lastUpdated).toBe(777)
+  })
+
   test("falls back to the handle when neither side has a display name", async () => {
     const { calls, deps, ctx } = harness({ channelName: "alpha" })
     spy("success")

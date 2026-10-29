@@ -14,7 +14,6 @@ import {
 export function refreshedChannel(
   channel: Channel,
   data: ChannelInfoResponse,
-  now: number,
 ): Channel {
   const base = { ...channel, displayName: channel.displayName || channel.name }
   const wasUnavailable = channel.isUnavailableOnWebView === true
@@ -26,7 +25,6 @@ export function refreshedChannel(
       : wasUnavailable
         ? false
         : channel.isUnavailableOnWebView,
-    lastUpdated: now,
   }
 }
 
@@ -66,7 +64,7 @@ export async function refreshChannelMetadata(
     return
   }
 
-  const updated = refreshedChannel(channel, info.data, Date.now())
+  const updated = refreshedChannel(channel, info.data)
   await deps.upsertChannel(updated)
   ctx.setChannels((prev) =>
     prev.map((entry) => (entry.id === channel.id ? updated : entry)),
