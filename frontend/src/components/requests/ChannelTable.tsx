@@ -222,8 +222,8 @@ function PickEvery({
   return (
     <input
       type="checkbox"
-      aria-label="Pick every listed row"
-      title="Pick or leave out every row listed"
+      aria-label="Select every listed row"
+      title="Select or unselect every row listed"
       checked={listed.length > 0 && out === 0}
       ref={(el) => {
         if (el) el.indeterminate = out > 0 && out < listed.length
@@ -267,7 +267,7 @@ function ChannelTr({
       <td className="pl-3 max-sm:pl-1.5">
         <input
           type="checkbox"
-          aria-label={`Pick ${r.label}`}
+          aria-label={`Select ${r.label}`}
           checked={picked}
           onClick={(e) => e.stopPropagation()}
           onChange={onPick}

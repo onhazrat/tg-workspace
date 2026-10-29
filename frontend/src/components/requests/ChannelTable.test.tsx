@@ -219,13 +219,13 @@ describe("ChannelTable's filters, yield and picking (RQS-04)", () => {
   test("a pick box leaves its row out, faded but listed; the header box picks every listed row", () => {
     const seen: Set<string>[] = []
     render(<Table rows={rows} onLeftOut={(next) => seen.push(next)} />)
-    fireEvent.click(screen.getByRole("checkbox", { name: "Pick @news" }))
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select @news" }))
     expect([...(seen.at(-1) ?? [])]).toEqual(["news"])
     expect(names()).toContain("@news")
-    const news = screen.getByRole("checkbox", { name: "Pick @news" })
+    const news = screen.getByRole("checkbox", { name: "Select @news" })
     expect(news.closest("tr")?.className).toContain("opacity-40")
     const every = screen.getByRole("checkbox", {
-      name: "Pick every listed row",
+      name: "Select every listed row",
     }) as HTMLInputElement
     expect(every.indeterminate).toBe(true)
     fireEvent.click(every)
@@ -244,7 +244,7 @@ describe("ChannelTable's filters, yield and picking (RQS-04)", () => {
     const [probes, news] = screen.getAllByTestId("requests-channel-row")
     fireEvent.click(news.querySelectorAll("td")[2])
     fireEvent.click(probes)
-    fireEvent.click(screen.getByLabelText("Pick @tech"))
+    fireEvent.click(screen.getByLabelText("Select @tech"))
     expect(opened).toEqual(["news", "kind:probe"])
   })
 })

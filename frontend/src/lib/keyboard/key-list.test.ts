@@ -14,8 +14,8 @@ describe("the key list", () => {
     expect(new Set(keys).size).toBe(keys.length)
   })
 
-  test("x says Tick in the Directory, select on Channels, Pick in Posts", () => {
-    expect(actionLabel("directory", "tick")).toBe("tick or untick")
+  test("x says select on Channels and in the Directory, Pick in Posts", () => {
+    expect(actionLabel("directory", "tick")).toBe("select or deselect")
     expect(actionLabel("channels", "tick")).toBe("select or deselect")
     expect(actionLabel("posts", "tick")).toBe("pick or unpick")
   })

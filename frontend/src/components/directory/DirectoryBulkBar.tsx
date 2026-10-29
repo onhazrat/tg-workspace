@@ -103,7 +103,7 @@ export function DirectoryBulkBar({
         >
           {whole.total > MAX_TICK_ALL
             ? `Act on all ${total} matching`
-            : `Tick all ${total} that match`}
+            : `Select all ${total} that match`}
         </button>
       )}
       <div className="ml-auto flex items-center gap-1.5">

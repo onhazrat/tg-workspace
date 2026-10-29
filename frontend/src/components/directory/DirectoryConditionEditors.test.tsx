@@ -125,7 +125,7 @@ describe("Cited by @x and Cites @x", () => {
     )
     fireEvent.click(screen.getByRole("button", { name: "Every follow (3)" }))
     expect(handlesBox().value).toBe("@f1 @f2 @f3")
-    fireEvent.click(screen.getByRole("button", { name: "Ticked here (2)" }))
+    fireEvent.click(screen.getByRole("button", { name: "Selected here (2)" }))
     fireEvent.click(submit())
     expect(got).toEqual([
       { type: "citedby", seeds: { kind: "handles", handles: ["t1", "t2"] } },
@@ -304,8 +304,8 @@ describe("Shared parents and Shared children (DIR-07)", () => {
       />,
     )
     expect(screen.getByText("Compared with")).toBeTruthy()
-    expect(choice(/ticked in this list \(2\)/).checked).toBe(true)
-    expect(choice(/ticked in this list, saved now \(2\)/)).toBeTruthy()
+    expect(choice(/selected in this list \(2\)/).checked).toBe(true)
+    expect(choice(/selected in this list, saved now \(2\)/)).toBeTruthy()
     expect(choice(/Channels tab selection \(1\)/)).toBeTruthy()
     expect(choice(/Every channel you follow \(3\)/)).toBeTruthy()
     expect(choice(/These channels/)).toBeTruthy()
@@ -323,7 +323,7 @@ describe("Shared parents and Shared children (DIR-07)", () => {
         onSubmit={() => {}}
       />,
     )
-    expect(choice(/ticked in this list \(0\)/).disabled).toBe(true)
+    expect(choice(/selected in this list \(0\)/).disabled).toBe(true)
     expect(choice(/saved now/).disabled).toBe(true)
     expect(choice(/Channels tab selection/).checked).toBe(true)
     expect(choice(/A Tag/).disabled).toBe(true)

@@ -289,7 +289,7 @@ function HeaderTick({
   return (
     <input
       type="checkbox"
-      aria-label="Tick every channel on this page"
+      aria-label="Select every channel on this page"
       checked={state === "checked"}
       ref={(el) => {
         if (el) el.indeterminate = state === "indeterminate"
@@ -623,9 +623,9 @@ export function DirectoryTable({
             <td className="pl-3" onClick={(e) => e.stopPropagation()}>
               <input
                 type="checkbox"
-                aria-label={`Tick @${r.handle}`}
+                aria-label={`Select @${r.handle}`}
                 data-shortcut={ACTIONS.tick.key}
-                title={keyTitle(`Tick @${r.handle}`, "tick", keyboard)}
+                title={keyTitle(`Select @${r.handle}`, "tick", keyboard)}
                 checked={ticks.has(r.handle)}
                 onChange={() =>
                   onTicks(toggleUnfollowedSelection(r.handle, false, ticks))
@@ -727,7 +727,7 @@ function DirectoryCards({
           >
             <input
               type="checkbox"
-              aria-label={`Tick @${r.handle}`}
+              aria-label={`Select @${r.handle}`}
               checked={ticks.has(r.handle)}
               onChange={() =>
                 onTicks(toggleUnfollowedSelection(r.handle, false, ticks))

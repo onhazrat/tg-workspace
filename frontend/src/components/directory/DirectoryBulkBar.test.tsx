@@ -188,7 +188,7 @@ describe("tick all that match (ADR-031)", () => {
   test("offers the whole view once the page is ticked", () => {
     const calls = mount(page, false, [], { total: 4213, state: "offer" })
     fireEvent.click(
-      screen.getByRole("button", { name: "Tick all 4,213 that match" }),
+      screen.getByRole("button", { name: "Select all 4,213 that match" }),
     )
     expect(calls.tickAll).toBe(1)
   })
@@ -203,7 +203,7 @@ describe("tick all that match (ADR-031)", () => {
   test("says when every match became a Tick", () => {
     mount(page, false, [], { total: 4213, state: "ticked" })
     expect(screen.getByText("All 4,213 matching are selected.")).toBeTruthy()
-    expect(screen.queryByRole("button", { name: /Tick all/ })).toBeNull()
+    expect(screen.queryByRole("button", { name: /Select all/ })).toBeNull()
   })
 
   test("All matching says why, and turns Follow off", () => {
@@ -322,11 +322,11 @@ describe("F and D in keyboard mode press the bar's own buttons", () => {
   test("with nothing ticked, or only follows, a toast says so", async () => {
     keyed([])
     type("F")
-    expect(await screen.findByText("Nothing ticked to follow")).toBeTruthy()
+    expect(await screen.findByText("Nothing selected to follow")).toBeTruthy()
     cleanup()
     const calls = keyed(["a"], ["a"])
     type("D")
-    expect(await screen.findByText("Nothing ticked to dismiss")).toBeTruthy()
+    expect(await screen.findByText("Nothing selected to dismiss")).toBeTruthy()
     expect(calls.dismiss).toEqual([])
   })
 

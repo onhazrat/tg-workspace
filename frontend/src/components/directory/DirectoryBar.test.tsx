@@ -281,10 +281,10 @@ describe("the dropdowns", () => {
     const calls = mount()
     fireEvent.click(screen.getByTestId("directory-sort"))
     fireEvent.change(screen.getByPlaceholderText("Search sort options..."), {
-      target: { value: "ticked" },
+      target: { value: "selected here" },
     })
     fireEvent.click(
-      screen.getByRole("radio", { name: /Cited by channels ticked here/ }),
+      screen.getByRole("radio", { name: /Cited by channels selected here/ }),
     )
     expect(calls.sorts).toEqual(["mine:ticked"])
   })
@@ -308,7 +308,7 @@ describe("the filter row and the footer", () => {
 
   test("the footer says when your channels are empty", () => {
     mount({ emptyYours: "ticked" })
-    expect(screen.getByText(/No channels are ticked here yet/)).toBeTruthy()
+    expect(screen.getByText(/No channels are selected here yet/)).toBeTruthy()
   })
 })
 

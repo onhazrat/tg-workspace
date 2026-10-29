@@ -143,7 +143,7 @@ export function FacetMenu({
   onFunnel,
   onClearFunnels,
   search,
-  tickHint = "Tick selects, the funnel shows only",
+  tickHint = "Select adds its channels, the funnel shows only",
   countLabel = "in the window",
   onOpenChange,
   onCreate,

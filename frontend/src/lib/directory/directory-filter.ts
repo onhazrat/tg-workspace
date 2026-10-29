@@ -380,7 +380,7 @@ export const SHARED_LABEL: Record<DirectorySharedCond["type"], string> = {
 }
 
 const LIVE_LABEL: Record<LiveSource, string> = {
-  ticked: "the channels ticked here",
+  ticked: "the channels selected here",
   selection: "your selected channels",
   follows: "your follows",
 }

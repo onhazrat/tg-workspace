@@ -276,7 +276,7 @@ describe("RequestsView", () => {
     const seen: RequestsFilter[] = []
     render(<Harness seen={seen} />)
     expect(screen.queryByTestId("requests-left-out")).toBeNull()
-    fireEvent.click(screen.getByRole("checkbox", { name: "Pick @news" }))
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select @news" }))
     expect([...(seen.at(-1)?.leftOut ?? [])]).toEqual(["news"])
     expect(screen.getByTestId("requests-left-out").textContent).toBe(
       "1 Channel unselected Select all",
@@ -292,7 +292,7 @@ describe("RequestsView", () => {
       byChannel: BREAKDOWN.byChannel.filter((c) => c.channel !== "tech"),
     }
     render(<Harness breakdown={narrowed} listed={BREAKDOWN} />)
-    expect(screen.getByRole("checkbox", { name: "Pick @tech" })).toBeTruthy()
+    expect(screen.getByRole("checkbox", { name: "Select @tech" })).toBeTruthy()
   })
 
   test("a failed read says so", () => {

@@ -852,7 +852,7 @@ test("an unselected Channel leaves the whole tab, stays listed, and Select all b
   await expect(total(page)).toHaveText("1,720 Requests")
 
   // chan00 made 50 Requests.
-  await page.getByRole("checkbox", { name: "Pick @chan00" }).uncheck()
+  await page.getByRole("checkbox", { name: "Select @chan00" }).uncheck()
   await expect(total(page)).toHaveText("1,670 Requests")
   await expect(page.getByTestId("requests-left-out")).toHaveText(
     "1 Channel unselected Select all",
@@ -862,7 +862,9 @@ test("an unselected Channel leaves the whole tab, stays listed, and Select all b
   await expect(row(page, "@chan00")).toHaveCSS("opacity", "0.4")
 
   // The probes row leaves by its kind.
-  await page.getByRole("checkbox", { name: "Pick Directory probes" }).uncheck()
+  await page
+    .getByRole("checkbox", { name: "Select Directory probes" })
+    .uncheck()
   await expect(total(page)).toHaveText("870 Requests")
   expect(seen.at(-1)?.searchParams.getAll("leftOutKinds")).toEqual(["probe"])
 
@@ -872,7 +874,9 @@ test("an unselected Channel leaves the whole tab, stays listed, and Select all b
 
   // The header box leaves out every listed row: the search keeps ten.
   await channels(page).getByLabel("Search Channels").fill("@chan2")
-  await page.getByRole("checkbox", { name: "Pick every listed row" }).uncheck()
+  await page
+    .getByRole("checkbox", { name: "Select every listed row" })
+    .uncheck()
   await expect(page.getByTestId("requests-left-out")).toHaveText(
     "10 Channels unselected Select all",
   )
@@ -1040,7 +1044,7 @@ test("the sheet reads the hidden kinds and outcomes and the Channels left out", 
   await openRequests(page)
   await page.getByRole("checkbox", { name: "Show Directory probe" }).uncheck()
   await kinds(page).getByRole("button", { name: "Wasted", exact: true }).click()
-  await page.getByRole("checkbox", { name: "Pick @chan01" }).uncheck()
+  await page.getByRole("checkbox", { name: "Select @chan01" }).uncheck()
   await row(page, "@chan00").getByText("@chan00").click()
 
   const counts = page

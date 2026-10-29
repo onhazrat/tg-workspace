@@ -152,7 +152,7 @@ export function staleReason(
 ): string | undefined {
   const kind = c.type === "kind" ? c.value : c.type === "measure" ? c.kind : ""
   if (kind && hiddenKinds.has(kind))
-    return `${kindMeta(kind).label} is unticked above, so this stands aside`
+    return `${kindMeta(kind).label} is hidden above, so this stands aside`
   if (c.type === "measure" && outcomeHidden(c.measure, hiddenOutcomes))
     return `${measureMeta(c.measure).label} is hidden above, so this stands aside`
   return undefined

@@ -468,7 +468,7 @@ describe("Shared parents and Shared children (DIR-07)", () => {
   test.each<[DirectoryCond, string]>([
     [
       { type: "parents", seeds: { kind: "ticked" }, min: 2 },
-      "2+ shared parents with the channels ticked here",
+      "2+ shared parents with the channels selected here",
     ],
     [
       { type: "children", seeds: { kind: "selection" }, min: 3 },

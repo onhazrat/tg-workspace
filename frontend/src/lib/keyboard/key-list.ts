@@ -10,7 +10,7 @@ import type { TabType } from "@/constants"
 export type ListId = "posts" | "channels" | "directory" | "discover" | "history"
 
 export const ACTIONS = {
-  tick: { key: "x", label: "tick or untick" },
+  tick: { key: "x", label: "select or deselect" },
   follow: { key: "f", label: "follow" },
   dismiss: { key: "d", label: "dismiss or take back" },
   tag: { key: "t", label: "tag" },
@@ -61,9 +61,8 @@ export const withKey = (label: string, action: Action, on: boolean) =>
 export const keyTitle = (label: string, action: Action, on: boolean) =>
   on ? withKey(label, action, true) : undefined
 
-/** `x` in each list's own word (GLOSSARY.md): Tick, select, Pick. */
+/** `x` in each list's own word (GLOSSARY.md): select, or Pick in Posts. */
 const TICK_LABEL: Partial<Record<ListId, string>> = {
-  channels: "select or deselect",
   posts: "pick or unpick",
 }
 
@@ -71,7 +70,7 @@ type Row = readonly [keys: string, what: string]
 
 /** J / K, and F / D where a bulk bar acts on the Ticks. */
 const SWEEP = (word: string): Row => ["J / K", `${word} while moving`]
-const BULK: Row = ["F / D", "follow / dismiss everything ticked"]
+const BULK: Row = ["F / D", "follow / dismiss everything selected"]
 
 /** Each list's moves and own keys, then its actions in the list's order. */
 const LISTS: Record<ListId, { moves: Row[]; actions: Action[] }> = {
@@ -120,7 +119,7 @@ const LISTS: Record<ListId, { moves: Row[]; actions: Action[] }> = {
       ["gg / G", "first / last on the page"],
       ["] / [", "next / previous page"],
       ["Enter", "open or close the panel"],
-      SWEEP("tick or untick"),
+      SWEEP("select or deselect"),
       BULK,
       ["Esc", "drop the highlight and close the panel"],
     ],
@@ -131,7 +130,7 @@ const LISTS: Record<ListId, { moves: Row[]; actions: Action[] }> = {
       ["j / k", "next / previous candidate"],
       ["gg / G", "first / last candidate"],
       ["Enter", "open the details (Esc closes them)"],
-      SWEEP("tick or untick"),
+      SWEEP("select or deselect"),
       BULK,
       ["Esc", "drop the highlight"],
     ],

@@ -451,7 +451,7 @@ const EMPTY_YOURS: Record<YoursSource, string> = {
   follows: "You follow no channels yet, so every Yours count is 0",
   selection:
     "Nothing is selected on the Channels tab, so every Yours count is 0",
-  ticked: "No channels are ticked here yet, so every Yours count is 0",
+  ticked: "No channels are selected here yet, so every Yours count is 0",
 }
 
 export type DirectoryBarProps = {
@@ -595,7 +595,7 @@ export function DirectoryBar(p: DirectoryBarProps) {
       <BarToggle
         on={p.selectedFirst}
         label="Selected first"
-        title="Ticked channels first, each part in the list's order"
+        title="Selected channels first, each part in the list's order"
         testId="directory-switch-selected-first"
         onClick={() => p.onSelectedFirst(!p.selectedFirst)}
       />

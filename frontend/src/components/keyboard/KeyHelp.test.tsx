@@ -206,7 +206,7 @@ describe("the full list", () => {
     expect(screen.getByText("Command palette")).toBeTruthy()
     expect(screen.getByText("Cmd+Shift+P")).toBeTruthy()
     // The Directory's x in its own word, keys as typed.
-    expect(screen.getByText("Tick or untick")).toBeTruthy()
+    expect(screen.getByText("Select or deselect")).toBeTruthy()
     expect(screen.getByText("gT")).toBeTruthy()
     expect(screen.getByText("Next / previous page")).toBeTruthy()
   })

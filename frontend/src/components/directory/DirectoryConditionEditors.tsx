@@ -250,7 +250,7 @@ function useNamedSeeds(seeds: SeedSource | undefined, tags: TagChoices) {
 
 /** Where "Fill from" copies handles, as they are now; the copy stays fixed. */
 const FILL_FROM: [LiveSource, string][] = [
-  ["ticked", "Ticked here"],
+  ["ticked", "Selected here"],
   ["selection", "Channels tab selection"],
   ["follows", "Every follow"],
 ]
@@ -402,14 +402,14 @@ export function SharedEditor({
   const options: [SeedChoice, string, string, boolean][] = [
     [
       "ticked",
-      `Channels ticked in this list (${sets.ticked.length})`,
-      "Live: follows your ticks. A channel you tick while this is on leaves the results, since it is now a Seed.",
+      `Channels selected in this list (${sets.ticked.length})`,
+      "Live: follows your selection. A channel you select while this is on leaves the results, since it is now a Seed.",
       !ticked && seeds?.kind !== "ticked",
     ],
     [
       "saved",
-      `Channels ticked in this list, saved now (${sets.ticked.length})`,
-      "Fixed: keeps these handles; ticking later leaves it alone.",
+      `Channels selected in this list, saved now (${sets.ticked.length})`,
+      "Fixed: keeps these handles; selecting later leaves it alone.",
       !ticked,
     ],
     [

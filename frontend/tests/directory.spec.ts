@@ -340,15 +340,15 @@ test.describe("TG Workspace directory", () => {
     expect(param(page, "dirSort")).toBeNull()
     await expect.poll(() => api.lastList().search ?? null).toBeNull()
 
-    // Search the Sort and choose the channels ticked here.
+    // Search the Sort and choose the channels selected here.
     await page.getByTestId("directory-sort").click()
-    await page.getByPlaceholder("Search sort options...").fill("ticked")
+    await page.getByPlaceholder("Search sort options...").fill("selected here")
     await page
-      .getByRole("radio", { name: /Cited by channels ticked here/ })
+      .getByRole("radio", { name: /Cited by channels selected here/ })
       .click()
     await expect.poll(() => param(page, "dirYours")).toBe("ticked")
     await expect(
-      page.getByText(/No channels are ticked here yet/),
+      page.getByText(/No channels are selected here yet/),
     ).toBeVisible()
 
     // Search the Reference kinds and keep forwards only.
@@ -381,7 +381,7 @@ test.describe("TG Workspace directory", () => {
     expect(api.lastList().columns).toContain("subscribers")
 
     // Ticking reaches "your channels" as the ticks change.
-    await page.getByRole("checkbox", { name: "Tick @a1" }).check()
+    await page.getByRole("checkbox", { name: "Select @a1" }).check()
     await expect.poll(() => api.lastList().yours?.handles).toEqual(["a1"])
 
     // A shared link opens exactly its view.
@@ -397,7 +397,7 @@ test.describe("TG Workspace directory", () => {
 
     // Tick five and confirm a bulk follow; discovered-via rides along.
     for (const h of ["a2", "a3", "a4", "a5"]) {
-      await page.getByRole("checkbox", { name: `Tick @${h}` }).check()
+      await page.getByRole("checkbox", { name: `Select @${h}` }).check()
     }
     await expect(page.getByText("5 selected")).toBeVisible()
     await page.getByRole("button", { name: "Follow 5" }).click()
@@ -560,7 +560,7 @@ test.describe("TG Workspace directory", () => {
   })
 
   // Its own short test, for the journey's time budget (DIR-07).
-  test("compare with the channels ticked here, live, and open it as a link", async ({
+  test("compare with the channels selected here, live, and open it as a link", async ({
     page,
   }) => {
     await mockDirectory(page)
@@ -593,16 +593,16 @@ test.describe("TG Workspace directory", () => {
     await page.goto("/?tab=directory")
 
     // With a tick, the editor starts on the live ticked choice.
-    await page.getByRole("checkbox", { name: "Tick @a1" }).check()
+    await page.getByRole("checkbox", { name: "Select @a1" }).check()
     await page.getByTestId("directory-filters").click()
     await page.getByPlaceholder("Search conditions...").fill("shared parents")
     await page.getByRole("button", { name: /Shared parents with/ }).click()
     await expect(
-      page.getByRole("radio", { name: /ticked in this list \(1\)/ }),
+      page.getByRole("radio", { name: /selected in this list \(1\)/ }),
     ).toBeChecked()
     await page.getByRole("button", { name: "Add", exact: true }).click()
     await expect(chip(page, "parents-ticked")).toContainText(
-      "2+ shared parents with the channels ticked here",
+      "2+ shared parents with the channels selected here",
     )
     expect(param(page, "dirFilter")).toContain("parents:ticked")
     await expect.poll(() => sent.at(-1)).toEqual(["a1"])
@@ -613,7 +613,7 @@ test.describe("TG Workspace directory", () => {
     // A Channel ticked while it is on is a Seed now, so it leaves the list.
     // A click, not `check()`: `check()` waits to see the box ticked, and the
     // row it sits in may already be gone, which timed the test out on CI.
-    await page.getByRole("checkbox", { name: "Tick @a2" }).click()
+    await page.getByRole("checkbox", { name: "Select @a2" }).click()
     await expect.poll(() => sent.at(-1)).toEqual(["a1", "a2"])
     await expect(page.getByTestId("directory-row-a2")).toHaveCount(0)
 
@@ -672,8 +672,8 @@ test.describe("TG Workspace directory", () => {
     await page.goto("/?tab=directory")
 
     // A followed row ticks; Follow and Dismiss count only the unfollowed.
-    await page.getByRole("checkbox", { name: "Tick @a1" }).check()
-    await page.getByRole("checkbox", { name: "Tick @a2" }).check()
+    await page.getByRole("checkbox", { name: "Select @a1" }).check()
+    await page.getByRole("checkbox", { name: "Select @a2" }).check()
     await expect(page.getByText("2 selected")).toBeVisible()
     await expect(
       page.getByRole("button", { name: "Follow 1 of 2" }),
@@ -681,12 +681,12 @@ test.describe("TG Workspace directory", () => {
     await expect(
       page.getByRole("button", { name: "Dismiss 1 of 2" }),
     ).toBeVisible()
-    // Both Ticks, the follow included, are "the channels ticked here".
+    // Both selected, the follow included, are "the channels selected here".
     await page.getByTestId("directory-filters").click()
     await page.getByPlaceholder("Search conditions...").fill("shared parents")
     await page.getByRole("button", { name: /Shared parents with/ }).click()
     await expect(
-      page.getByRole("radio", { name: /ticked in this list \(2\)/ }),
+      page.getByRole("radio", { name: /selected in this list \(2\)/ }),
     ).toBeChecked()
     await page.keyboard.press("Escape")
     await page.getByRole("button", { name: "Clear", exact: true }).click()
@@ -701,7 +701,9 @@ test.describe("TG Workspace directory", () => {
     const a1 = page.getByTestId("directory-row-a1")
     await expect(a1).toHaveAttribute("data-highlight", "true")
     await page.keyboard.press("x")
-    await expect(page.getByRole("checkbox", { name: "Tick @a1" })).toBeChecked()
+    await expect(
+      page.getByRole("checkbox", { name: "Select @a1" }),
+    ).toBeChecked()
     await page.keyboard.press("Enter")
     const aside = page.getByTestId("directory-panel")
     await expect(aside.getByText("The bio of a1")).toBeVisible()
@@ -801,8 +803,8 @@ test.describe("TG Workspace directory", () => {
     await page.goto("/?tab=directory")
 
     // A followed Tick is tagged too: a Tag sits on any Channel.
-    await page.getByRole("checkbox", { name: "Tick @a1" }).check()
-    await page.getByRole("checkbox", { name: "Tick @a2" }).check()
+    await page.getByRole("checkbox", { name: "Select @a1" }).check()
+    await page.getByRole("checkbox", { name: "Select @a2" }).check()
     await page.getByTestId("directory-bulk-tag").click()
     await page.getByTestId("directory-tag-search").fill("World news")
     await page.getByText('Create the Tag "World news"').click()
@@ -955,9 +957,11 @@ test.describe("TG Workspace directory", () => {
 
     // At most 10,000: every match becomes a Tick, and a Tag carries them all.
     await page
-      .getByRole("checkbox", { name: "Tick every channel on this page" })
+      .getByRole("checkbox", { name: "Select every channel on this page" })
       .check()
-    await page.getByRole("button", { name: "Tick all 250 that match" }).click()
+    await page
+      .getByRole("button", { name: "Select all 250 that match" })
+      .click()
     const bar = page.getByTestId("directory-bulk-bar")
     await expect(bar).toContainText("All 250 matching are selected.")
     await expect(bar).toContainText("256 selected")
@@ -974,7 +978,7 @@ test.describe("TG Workspace directory", () => {
     await page.getByRole("button", { name: "Next page" }).click()
     await page.getByRole("button", { name: "Previous page" }).click()
     await page
-      .getByRole("checkbox", { name: "Tick every channel on this page" })
+      .getByRole("checkbox", { name: "Select every channel on this page" })
       .check()
     await page
       .getByRole("button", { name: "Act on all 48,210 matching" })
@@ -989,7 +993,7 @@ test.describe("TG Workspace directory", () => {
     expect(sent.at(-1)).not.toHaveProperty("handles")
 
     // A hand-made tick ends it, and leaves the page ticked minus that row.
-    await page.getByRole("checkbox", { name: "Tick @a1" }).uncheck()
+    await page.getByRole("checkbox", { name: "Select @a1" }).uncheck()
     await expect(bar).toContainText("5 selected")
     await expect(bar).not.toContainText("matching.")
   })
@@ -1156,7 +1160,7 @@ test.describe("TG Workspace directory", () => {
     // and the bulk bar stays one line.
     await expect(page.getByTestId("directory-row-a1")).toHaveCount(0)
     await expect(page.getByTestId("directory-card-a1")).toBeVisible()
-    await page.getByRole("checkbox", { name: "Tick @a1" }).check()
+    await page.getByRole("checkbox", { name: "Select @a1" }).check()
     const aside = page.getByTestId("directory-panel")
     await expect(aside).toHaveCount(0)
     const bulk = page.getByTestId("directory-bulk-bar")

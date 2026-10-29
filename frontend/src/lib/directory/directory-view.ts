@@ -113,7 +113,7 @@ export const defaultDescending = (sort: DirectorySort): boolean =>
 const SORT_LABELS: Record<YoursSource, string> = {
   follows: "Cited by channels you follow",
   selection: "Cited by your Channels tab selection",
-  ticked: "Cited by channels ticked here",
+  ticked: "Cited by channels selected here",
 }
 
 type SortOption = { value: string; label: string; internal: boolean }
