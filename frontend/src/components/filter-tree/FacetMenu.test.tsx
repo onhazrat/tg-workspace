@@ -87,3 +87,146 @@ test("offers to create a searched name no row has, and clears the search once cr
   await waitFor(() => expect(search.value).toBe(""))
   expect(created).toEqual(["Delta"])
 })
+
+// ---- Rename, delete, the row action and the held order (TGU-02) ------------
+
+const tags: FacetMenuRow[] = [
+  { id: "news", label: "News", selected: 0, total: 3, tick: "false" },
+  { id: "world", label: "World", selected: 0, total: 5, tick: "false" },
+  {
+    id: "untagged",
+    label: "Untagged",
+    explanation: "Channels with no Tag",
+    selected: 0,
+    total: 2,
+    tick: "false",
+  },
+]
+
+type Calls = { renamed: string[]; deleted: string[] }
+
+function renderTags(
+  rows: FacetMenuRow[],
+  calls: Calls,
+  extra: Partial<React.ComponentProps<typeof FacetMenu>> = {},
+) {
+  const props = (next: FacetMenuRow[]) => (
+    <FacetMenu
+      label="Tags"
+      noun="Tag"
+      testId="tags"
+      rows={next}
+      funnelled={[]}
+      labelOf={(id) => id}
+      onToggleSelect={() => {}}
+      onFunnel={() => {}}
+      onClearFunnels={() => {}}
+      manage={{
+        onRename: (id, to) => calls.renamed.push(`${id}->${to}`),
+        onDelete: (id) => calls.deleted.push(id),
+        deleteText: (row) => `"${row.label}" is on ${row.total} channels.`,
+        mergeText: (_id, to) =>
+          to.toLowerCase() === "world" ? "World is already a Tag." : undefined,
+      }}
+      {...extra}
+    />
+  )
+  const view = render(props(rows))
+  return (next: FacetMenuRow[]) => view.rerender(props(next))
+}
+
+const shownIds = () =>
+  screen
+    .getAllByRole("checkbox")
+    .map((row) => row.getAttribute("data-testid")?.replace("tags-row-", ""))
+
+function rename(label: string, to: string) {
+  fireEvent.click(screen.getByLabelText(`Rename ${label}`))
+  const input = screen.getByLabelText(`New name for ${label}`)
+  fireEvent.change(input, { target: { value: to } })
+  fireEvent.submit(input)
+}
+
+test("holds the row order while open and shows the new order on reopen", () => {
+  const rerender = renderTags(
+    tags,
+    { renamed: [], deleted: [] },
+    {
+      freezeOrder: true,
+    },
+  )
+  const reversed = [tags[1], tags[0], tags[2]]
+  fireEvent.click(screen.getByTestId("tags"))
+  expect(shownIds()).toEqual(["news", "world", "untagged"])
+  rerender(reversed)
+  expect(shownIds()).toEqual(["news", "world", "untagged"])
+  fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" })
+  fireEvent.click(screen.getByTestId("tags"))
+  expect(shownIds()).toEqual(["world", "news", "untagged"])
+})
+
+test("a rename onto a new name renames at once, onto another Tag's asks first", async () => {
+  const calls: Calls = { renamed: [], deleted: [] }
+  renderTags(tags, calls)
+  fireEvent.click(screen.getByTestId("tags"))
+  rename("News", "Headlines")
+  expect(calls.renamed).toEqual(["news->Headlines"])
+  expect(screen.queryByTestId("tags-merge-confirm")).toBeNull()
+
+  rename("News", "world")
+  expect(calls.renamed).toEqual(["news->Headlines"])
+  expect(screen.getByText("World is already a Tag.")).toBeTruthy()
+  fireEvent.click(screen.getByTestId("tags-merge-confirm"))
+  await waitFor(() =>
+    expect(calls.renamed).toEqual(["news->Headlines", "news->world"]),
+  )
+})
+
+test("a delete asks first with the Tag's channel count", async () => {
+  const calls: Calls = { renamed: [], deleted: [] }
+  renderTags(tags, calls)
+  fireEvent.click(screen.getByTestId("tags"))
+  fireEvent.click(screen.getByLabelText("Delete World"))
+  expect(calls.deleted).toEqual([])
+  expect(screen.getByText('"World" is on 5 channels.')).toBeTruthy()
+  fireEvent.click(screen.getByTestId("tags-delete-confirm"))
+  await waitFor(() => expect(calls.deleted).toEqual(["world"]))
+})
+
+test("a derived row offers no rename or delete", () => {
+  renderTags(tags, { renamed: [], deleted: [] })
+  fireEvent.click(screen.getByTestId("tags"))
+  expect(screen.getByLabelText("Rename News")).toBeTruthy()
+  expect(screen.queryByLabelText("Rename Untagged")).toBeNull()
+  expect(screen.queryByLabelText("Delete Untagged")).toBeNull()
+})
+
+test("a row reads select, name, its actions, count, filter", () => {
+  renderTags(
+    tags.slice(0, 1),
+    { renamed: [], deleted: [] },
+    {
+      rowAction: {
+        icon: "*",
+        label: (row) => `Open ${row.label}`,
+        onClick: () => {},
+      },
+    },
+  )
+  fireEvent.click(screen.getByTestId("tags"))
+  const row = screen.getByTestId("tags-row-news").parentElement as HTMLElement
+  const parts = [...row.children].map(
+    (part) =>
+      part.getAttribute("aria-label") ??
+      part.getAttribute("role") ??
+      part.textContent,
+  )
+  expect(parts).toEqual([
+    "checkbox",
+    "Open News",
+    "Rename News",
+    "Delete News",
+    "0/3",
+    "Show only News",
+  ])
+})
