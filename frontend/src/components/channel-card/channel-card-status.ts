@@ -1,3 +1,4 @@
+import { useKindRefusal } from "@/hooks/useRequestKinds"
 import { findFrozenReservedGroup } from "@/lib/channels/setting-groups"
 import { channelAllows } from "@/lib/channels/sync-permissions"
 import { toVirtualGroupTagName } from "@/lib/channels/virtual-group-tags"
@@ -89,17 +90,21 @@ export function selectionHandlers(onToggleSelected: (shift: boolean) => void) {
 /**
  * What every size's Sync button shares: `s` presses it, a click stays off the
  * card under it, the Channel's own sync rule disables it, and an unavailable
- * Channel offers Recheck instead.
+ * Channel offers Recheck instead. A disabled `single` kind (RKD-02) disables
+ * it too, and `refusal` says why, to the tooltip and to the `s` key.
  */
-export function syncButtonProps(
+export function useSyncButtonProps(
   channel: Channel,
   busy: boolean,
   onSync: () => void,
 ) {
+  const refusal = useKindRefusal("single")
   return {
     ...shortcut("sync"),
+    "data-refusal": refusal ?? undefined,
+    refusal,
     label: channel.isUnavailableOnWebView ? "Recheck" : "Sync",
-    disabled: busy || !channelAllows(channel, "individual"),
+    disabled: busy || !!refusal || !channelAllows(channel, "individual"),
     onClick: (event: { stopPropagation: () => void }) => {
       event.stopPropagation()
       onSync()

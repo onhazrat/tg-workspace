@@ -8,6 +8,7 @@ import {
   Trash2,
 } from "lucide-react"
 import { motion } from "motion/react"
+import { useKindRefusal } from "@/hooks/useRequestKinds"
 import { channelAllows, disabledReason } from "@/lib/channels/sync-permissions"
 import { shortcut, withKey } from "@/lib/keyboard/key-list"
 import { useKeyboardMode, useKeyTitle } from "@/lib/keyboard/mode"
@@ -76,8 +77,11 @@ export function ChannelCardActions({
   const freezeLabel = channel.isFrozen
     ? "Unfreeze Channel"
     : "Freeze Channel (Stop Syncing)"
+  // One Channel's reset is recorded as `single` work, so the server refuses
+  // it while `single` is off (RKD-02), whatever `bulk` says.
+  const refusal = useKindRefusal("single")
   const resetLabel =
-    disabledReason(channel, "reset") ?? "Reset & Sync from beginning"
+    refusal ?? disabledReason(channel, "reset") ?? "Reset & Sync from beginning"
   const keyboard = useKeyboardMode()
   return (
     <div className="absolute top-3 right-3 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity z-20">
@@ -108,7 +112,7 @@ export function ChannelCardActions({
           e.stopPropagation()
           onResetAndSync()
         }}
-        disabled={busy || !channelAllows(channel, "reset")}
+        disabled={busy || !!refusal || !channelAllows(channel, "reset")}
       >
         <RotateCcw size={14} />
       </TgIconButton>

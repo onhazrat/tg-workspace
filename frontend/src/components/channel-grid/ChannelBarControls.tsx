@@ -15,6 +15,7 @@ import { pillClass } from "@/components/PostFilterParts"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
 import { TgIconButton } from "@/components/ui/tg-icon-button"
+import { useKindGate } from "@/hooks/useRequestKinds"
 import type { CardZoom } from "@/lib/channels/card-zoom"
 import { syncAllConfirmation } from "@/lib/channels/manual-sync"
 import type { ChannelGridSortOption } from "@/lib/channels/sort-channels-for-grid"
@@ -216,6 +217,7 @@ export function SyncAllButton({
   loading: boolean
 }) {
   const [asking, setAsking] = useState(false)
+  const gate = useKindGate("bulk", disabled)
   if (running) {
     return (
       <TgButton
@@ -237,7 +239,7 @@ export function SyncAllButton({
         type="button"
         size="sm"
         onClick={() => setAsking(true)}
-        disabled={disabled}
+        {...gate}
         loading={loading}
         className="h-9"
       >

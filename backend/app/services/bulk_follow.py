@@ -15,7 +15,13 @@ from sqlmodel import Session
 from app.core import pg_notify
 from app.core.config import settings
 from app.core.db import engine
-from app.core.request_recording import PageType, RequestKind, attributed, page
+from app.core.request_recording import (
+    PageType,
+    RequestKind,
+    attributed,
+    kind_refusal,
+    page,
+)
 from app.jobs.settings import (
     compute_effective_global_start_time_ms,
     load_retention_policy,
@@ -55,6 +61,7 @@ from app.services.quota import (
     charge_sync_job,
 )
 from app.services.request_accounting import metered_work
+from app.services.request_kinds import is_kind_enabled
 from app.services.scraper import get_channel_info
 from app.services.telegram_web import (
     TelegramWebViewUnavailable,
@@ -115,6 +122,8 @@ class FollowJobState:
     status: str = "pending"
     results: list[FollowChannelResult] = field(default_factory=list)
     sync_job_id: str | None = None
+    #: Why the follows got no first sync: manual bulk was disabled (RKD-01).
+    sync_skipped: str | None = None
     created_at: int = field(default_factory=lambda: int(time.time() * 1000))
     finished_at: int | None = None
     #: Process-local, and **not** the answer on its own since ticket 36. The
@@ -175,6 +184,7 @@ class FollowJobState:
             "failed": counts["failed"],
             "results": [r.to_camel() for r in self.results],
             "syncJobId": self.sync_job_id,
+            "syncSkipped": self.sync_skipped,
             "createdAt": self.created_at,
             "finishedAt": self.finished_at,
         }
@@ -213,6 +223,7 @@ def _snapshot(job: FollowJobState) -> dict[str, Any]:
         "results": [r.to_camel() for r in job.results],
         "sync_job_id": job.sync_job_id,
         "finished_at": job.finished_at,
+        "sync_skipped": job.sync_skipped,
     }
 
 
@@ -304,6 +315,7 @@ def _state_from_row(row: FollowJob) -> FollowJobState:
             for entry in (row.results or [])
         ],
         sync_job_id=row.sync_job_id,
+        sync_skipped=options.get("syncSkipped"),
         created_at=row.created_at,
         finished_at=row.finished_at,
         proxies=list(options.get("proxies") or []),
@@ -637,6 +649,10 @@ async def _chain_sync_job(
     job: FollowJobState, syncable_names: list[str], user_uuid: uuid.UUID | None
 ) -> None:
     if not syncable_names:
+        return
+    if not await run_db(is_kind_enabled, RequestKind.BULK):
+        # The follows stand; their first sync waits for auto sync (RKD-01).
+        job.sync_skipped = kind_refusal(RequestKind.BULK)
         return
     from app.jobs.sync_queue import enqueue_sync_job
     from app.services.scraper_jobs import create_job

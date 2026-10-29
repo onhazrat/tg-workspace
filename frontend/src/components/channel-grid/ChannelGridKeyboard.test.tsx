@@ -17,7 +17,9 @@ import {
   waitFor,
 } from "@testing-library/react"
 import { useState } from "react"
+import { Toaster } from "sonner"
 import { KeyboardMode } from "@/components/keyboard/KeyboardMode"
+import { queryKeys } from "@/hooks/queryKeys"
 import {
   type CardFieldSettings,
   type CardZoom,
@@ -30,6 +32,7 @@ import {
   lastHighlight,
   setKeyboardMode,
 } from "@/lib/keyboard/mode"
+import { queryClient } from "@/lib/queryClient"
 import type { Channel } from "@/types"
 import { ChannelCardFace } from "../channel-card/ChannelCardFace"
 import { ChannelCardTile } from "../channel-card/ChannelCardTile"
@@ -278,6 +281,27 @@ describe("a key presses the highlighted card's own control", () => {
     expect(s.select.mock.calls).toEqual([["b"]])
     expect(s.sync.mock.calls).toEqual([["b"]])
     expect(s.freeze.mock.calls).toEqual([["b"]])
+  })
+
+  test("with manual single off, s sends no sync and says why (RKD-02)", async () => {
+    const off = "Manual single is disabled on this deployment"
+    queryClient.setQueryData(queryKeys.runtimeConfig, {
+      requestKinds: [{ kind: "single", enabled: false, refusal: off }],
+    })
+    try {
+      const s = spies()
+      render(
+        <>
+          <Toaster />
+          <Grid spies={s} />
+        </>,
+      )
+      press("j", "s")
+      expect(s.sync).not.toHaveBeenCalled()
+      expect(await screen.findByText(off)).toBeTruthy()
+    } finally {
+      queryClient.removeQueries({ queryKey: queryKeys.runtimeConfig })
+    }
   })
 
   test("J selects while moving, from the Highlight on", () => {

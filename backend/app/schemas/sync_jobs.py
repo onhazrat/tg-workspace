@@ -51,6 +51,8 @@ class SyncJobStatusResponse(BaseModel):
     channels: list[ChannelSyncProgress]
     created_at: int = Field(..., alias="createdAt")
     finished_at: int | None = Field(None, alias="finishedAt")
+    #: Why the job is not moving, when its Request kind is disabled (RKD-01).
+    waiting_reason: str | None = Field(None, alias="waitingReason")
 
     model_config = {"populate_by_name": True}
 

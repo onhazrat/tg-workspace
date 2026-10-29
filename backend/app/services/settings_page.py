@@ -171,14 +171,14 @@ def resolve_default(decl: Declaration) -> Any:
 
 
 def is_visible(decl: Declaration, permissions: frozenset[Permission]) -> bool:
-    return decl.visible == "everyone" or Permission.SETTINGS_MANAGE in permissions
+    return decl.visible == "everyone" or decl.permission in permissions
 
 
 def lock_reason(decl: Declaration, permissions: frozenset[Permission]) -> str | None:
     """Why the caller cannot change `decl`, or `None` when they can."""
     if decl.lock is not None:
         return decl.lock
-    if decl.scope == "deployment" and Permission.SETTINGS_MANAGE not in permissions:
+    if decl.scope == "deployment" and decl.permission not in permissions:
         return SET_BY_OPERATOR
     return None
 

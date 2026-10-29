@@ -8,11 +8,13 @@ from dataclasses import dataclass, field
 
 from sqlmodel import Session, col, delete, func, select
 
+from app.core.request_recording import RequestKind
 from app.models_tg import Channel, Post, PostEmbedding, PostTranslation, utc_now
 from app.services.channel_setting_groups import channel_allows_reset, load_groups_by_id
 from app.services.follows import FollowedChannel, followed_channels_for
 from app.services.post_sync_state import clear_channel_sync_state
 from app.services.quota import QuotaCeilingReached
+from app.services.request_kinds import assert_kind_enabled
 from app.services.sync_meta import touch_sync
 
 logger = logging.getLogger(__name__)
@@ -147,6 +149,10 @@ async def bulk_reset_and_queue_sync(
     from app.jobs.sync_queue import enqueue_sync_job
     from app.services.scraper_jobs import create_job
 
+    is_bulk = channel_ids is None or len(channel_ids) != 1
+    # Before any Post is cleared: a reset whose sync is refused would leave the
+    # Channels emptied with nothing coming to refill them (RKD-01).
+    assert_kind_enabled(RequestKind.BULK if is_bulk else RequestKind.SINGLE)
     channels = select_bulk_channels(
         session,
         operator_id=operator_id,
@@ -156,7 +162,6 @@ async def bulk_reset_and_queue_sync(
     result = BulkResetSyncResult()
     entries: list[tuple[str, str]] = []
     groups_by_id = load_groups_by_id(session)
-    is_bulk = channel_ids is None or len(channel_ids) != 1
 
     for channel, follow in channels:
         # The follow names the group since ticket 22, so a reset is judged

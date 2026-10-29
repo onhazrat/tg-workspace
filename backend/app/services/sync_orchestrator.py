@@ -22,7 +22,7 @@ from app.core.config import settings
 from app.core.db import engine
 from app.core.request_recording import (
     PageType,
-    RequestKind,
+    RequestKindDisabled,
     attributed,
     page,
     sync_run,
@@ -87,17 +87,18 @@ from app.services.proxy_pool import (
     get_partition,
 )
 from app.services.quota import (
-    Budget,
     QuotaCeilingReached,
     assert_within_ceiling,
     budget_for_sync_mode,
     charge_sync_job,
 )
 from app.services.request_accounting import metered_work
+from app.services.request_kinds import REQUEST_KIND_BY_BUDGET
 from app.services.scraper import get_channel_info, scrape_channel_page
 from app.services.scraper_jobs import (
     ChannelSyncState,
     SyncJobState,
+    claim_job,
     deactivate_job,
     persist_job,
     touch_job,
@@ -240,16 +241,6 @@ def _existing_post_ids(
     return set(rows)
 
 
-#: The kind of work a sync's Requests are recorded under (RQS-01). From the
-#: Budget, which derives totally from the sync mode, so a new mode cannot reach
-#: the record without first being given a Budget.
-REQUEST_KIND_BY_BUDGET: dict[Budget, RequestKind] = {
-    Budget.AUTO_SYNC: RequestKind.AUTO,
-    Budget.MANUAL_BULK: RequestKind.BULK,
-    Budget.MANUAL_SINGLE: RequestKind.SINGLE,
-}
-
-
 async def _scrape_page_with_retry(
     channel_name: str,
     *,
@@ -288,6 +279,9 @@ async def _scrape_page_with_retry(
             )
             response["fullRequest"] = request_body
             return response
+        except RequestKindDisabled:
+            # Not Telegram failing: the walk is held, never retried (RKD-01).
+            raise
         except Exception as exc:  # noqa: BLE001
             is_rate_limit = (
                 isinstance(exc, httpx.HTTPStatusError)
@@ -2088,6 +2082,14 @@ async def _sync_claimed_channel(
         ch_state.new_latest_id = walk.final_latest_id or None
         await touch_job(job, ch_state)
 
+    except RequestKindDisabled:
+        # Held, not failed (RKD-01): no finaliser runs, so no backoff, no sync
+        # log and no cursor write. The Posts already fetched are stored, and
+        # the walk resumes from the cursors once the kind is enabled.
+        ch_state.status = "pending"
+        await touch_job(job, ch_state)
+        raise
+
     except SyncScrapeError as exc:
         await run_db(
             _finalize_channel_scrape_error,
@@ -2141,54 +2143,68 @@ async def run_sync_job(job: SyncJobState, user_id: uuid.UUID | None) -> None:
     `charge_sync_job` swallows and logs its own errors, because an accounting
     write nobody reads yet must not turn a completed sync into a failed one.
     """
-    async with metered_work(partial(charge_sync_job, user_id, job.sync_mode)):
-        job.status = "running"
-        await touch_job(job)
-        # **Slots out of the one Partition, not a semaphore of this job's own**
-        # (ADR-012). The semaphore that was here was sized to `syncConcurrency`
-        # and belonged to this call, so a job running beside a lane drain got a
-        # full second budget — the `2N` over-count ticket 36 was written for.
-        # Worse, it bounded *how many* walks ran and said nothing about which
-        # proxy each used, so an `auto_summary` sync hopped proxies page by
-        # page while every lane message stayed pinned. Taking a Slot answers
-        # both: the count comes from the fleet, and the binding follows.
-        partition = await get_partition()
+    # This process runs the job, so its own progress notifications coming back
+    # are echoes. Unclaimed, a late echo of "pending" could land between the
+    # terminal status below and its write, and the row would stay `pending`.
+    claim_job(job)
+    try:
+        async with metered_work(partial(charge_sync_job, user_id, job.sync_mode)):
+            job.status = "running"
+            await touch_job(job)
+            # **Slots out of the one Partition, not a semaphore of this job's own**
+            # (ADR-012). The semaphore that was here was sized to `syncConcurrency`
+            # and belonged to this call, so a job running beside a lane drain got a
+            # full second budget, the `2N` over-count ticket 36 was written for.
+            # Worse, it bounded *how many* walks ran and said nothing about which
+            # proxy each used, so an `auto_summary` sync hopped proxies page by
+            # page while every lane message stayed pinned. Taking a Slot answers
+            # both: the count comes from the fleet, and the binding follows.
+            partition = await get_partition()
 
-        async def _run_one(ch_state: ChannelSyncState) -> None:
-            slot = SyncSlot(partition)
-            if not await slot.acquire_within(SLOT_WAIT_SECONDS):
-                # Every proxy is parked. Failing the Channel is the honest
-                # answer: an unbounded wait here never returns, and this
-                # function's caller is a scheduled summary that would then
-                # suppress every later tick.
-                ch_state.status = "failed"
-                ch_state.error = "No healthy proxy was available"
-                await touch_job(job, ch_state)
-                return
-            try:
-                if job.cancel_event.is_set():
-                    ch_state.status = "cancelled"
+            async def _run_one(ch_state: ChannelSyncState) -> None:
+                slot = SyncSlot(partition)
+                if not await slot.acquire_within(SLOT_WAIT_SECONDS):
+                    # Every proxy is parked. Failing the Channel is the honest
+                    # answer: an unbounded wait here never returns, and this
+                    # function's caller is a scheduled summary that would then
+                    # suppress every later tick.
+                    ch_state.status = "failed"
+                    ch_state.error = "No healthy proxy was available"
+                    await touch_job(job, ch_state)
                     return
-                # Binds the **slot**, not the worker inside it: a coalesced
-                # waiter puts its worker down and may take a different one
-                # back, and `ProxyBinding` explains why reading it live is the
-                # difference between a pinned walk and a silently shared proxy.
-                with bound_to(slot):
-                    await sync_single_channel(job, ch_state, user_id=user_id, slot=slot)
-            finally:
-                slot.release()
+                try:
+                    if job.cancel_event.is_set():
+                        ch_state.status = "cancelled"
+                        return
+                    # Binds the **slot**, not the worker inside it: a coalesced
+                    # waiter puts its worker down and may take a different one
+                    # back, and `ProxyBinding` explains why reading it live is the
+                    # difference between a pinned walk and a silently shared proxy.
+                    with bound_to(slot):
+                        await sync_single_channel(
+                            job, ch_state, user_id=user_id, slot=slot
+                        )
+                except RequestKindDisabled as exc:
+                    # No lane to hold it on: this sync is skipped (RKD-01).
+                    ch_state.status = "skipped"
+                    ch_state.error = str(exc)
+                    await touch_job(job, ch_state)
+                finally:
+                    slot.release()
 
-        await asyncio.gather(*[_run_one(ch) for ch in job.channels.values()])
+            await asyncio.gather(*[_run_one(ch) for ch in job.channels.values()])
 
-        if job.cancel_event.is_set():
-            job.status = "cancelled"
-        elif all(c.status in ("success", "skipped") for c in job.channels.values()):
-            job.status = "completed"
-        elif any(c.status == "success" for c in job.channels.values()):
-            job.status = "completed"
-        else:
-            job.status = "failed"
+            if job.cancel_event.is_set():
+                job.status = "cancelled"
+            elif all(c.status in ("success", "skipped") for c in job.channels.values()):
+                job.status = "completed"
+            elif any(c.status == "success" for c in job.channels.values()):
+                job.status = "completed"
+            else:
+                job.status = "failed"
 
-        job.finished_at = int(time.time() * 1000)
-        await persist_job(job)
+            job.finished_at = int(time.time() * 1000)
+            await persist_job(job)
+    finally:
+        # On every exit, since a claimed job left behind reads as active for good.
         deactivate_job(job.job_id)

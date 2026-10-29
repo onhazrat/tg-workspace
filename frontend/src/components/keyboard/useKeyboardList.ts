@@ -94,10 +94,16 @@ const isOn = (control: HTMLElement) =>
     ? control.checked
     : control.getAttribute("aria-pressed") === "true"
 
-/** Presses a control: a field gets the cursor. */
+/**
+ * Presses a control: a field gets the cursor. A control the deployment
+ * refuses (`data-refusal`, RKD-02) is off, so its key says why instead.
+ */
 function press(control: HTMLElement | null): boolean {
   if (!control) return false
-  if (control instanceof HTMLInputElement && control.type !== "checkbox")
+  const refusal = control.dataset.refusal
+  if (refusal && control.matches(":disabled"))
+    toast(refusal, { id: "keyboard-refused" })
+  else if (control instanceof HTMLInputElement && control.type !== "checkbox")
     control.focus()
   else control.click()
   return true

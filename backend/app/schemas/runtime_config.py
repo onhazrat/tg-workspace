@@ -1,5 +1,7 @@
 from pydantic import BaseModel, Field
 
+from app.core.request_recording import RequestKind
+
 
 class GlobalStartTimeSnapshot(BaseModel):
     mode: str
@@ -137,6 +139,25 @@ class ActiveSyncJobSummary(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+# RKD-01.
+class RequestKindSwitch(BaseModel):
+    """One Request kind's switch: the UI greys out what it refuses."""
+
+    kind: RequestKind
+    label: str
+    #: The Setting that is this switch.
+    setting_id: str = Field(..., alias="settingId")
+    #: The Queue lanes this kind's queued work waits on; none for most kinds.
+    lanes: list[str]
+    enabled: bool
+    #: Epoch ms the kind was turned off, or None while it is on.
+    disabled_since: int | None = Field(..., alias="disabledSince")
+    #: The message a refused request of this kind answers with.
+    refusal: str
+
+    model_config = {"populate_by_name": True}
+
+
 class RuntimeConfigResponse(BaseModel):
     now_ms: int = Field(..., alias="nowMs")
     scrape_cutoff_ms: int = Field(..., alias="scrapeCutoffMs")
@@ -149,5 +170,6 @@ class RuntimeConfigResponse(BaseModel):
     retention: RetentionRuntimeSettings
     constants: RuntimeConstants
     active_sync_job: ActiveSyncJobSummary | None = Field(None, alias="activeSyncJob")
+    request_kinds: list[RequestKindSwitch] = Field(..., alias="requestKinds")
 
     model_config = {"populate_by_name": True}

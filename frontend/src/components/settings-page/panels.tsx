@@ -12,9 +12,11 @@ import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/api"
 import type { JobStatusEntry } from "@/api/jobs"
+import type { RequestKindSwitch } from "@/client"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
 import { useData } from "@/contexts/DataContext"
+import { useKindGate } from "@/hooks/useRequestKinds"
 import { APP_VERSION } from "@/lib/app-version"
 import { QUOTA_READ_ANY } from "@/lib/permissions"
 import {
@@ -29,6 +31,7 @@ import { Proxies, TorActions } from "./network-panels"
 import { Overrides, Usage, Users } from "./operator-panels"
 import { Bots, Destinations } from "./publishing-panels"
 import { SettingGroups } from "./setting-groups-panel"
+import { TelegramWork } from "./telegram-work-panel"
 
 export interface Panel {
   id: string
@@ -38,6 +41,8 @@ export interface Panel {
   keywords: string
   /** The Permission that shows it; none means every Account. */
   permission?: string
+  /** Setting ids it shows, so they are not rows of their own. */
+  absorbs?: (kinds: readonly RequestKindSwitch[]) => readonly string[]
   render: () => React.ReactNode
 }
 
@@ -61,6 +66,7 @@ export function BulkResync({
 }) {
   const [asking, setAsking] = useState(false)
   const [running, setRunning] = useState(false)
+  const gate = useKindGate("bulk")
   const run = async () => {
     setRunning(true)
     try {
@@ -79,7 +85,12 @@ export function BulkResync({
   }
   return (
     <>
-      <TgButton variant="secondary" size="sm" onClick={() => setAsking(true)}>
+      <TgButton
+        variant="secondary"
+        size="sm"
+        {...gate}
+        onClick={() => setAsking(true)}
+      >
         Reset and sync all channels
       </TgButton>
       <TgConfirmDialog
@@ -314,6 +325,17 @@ export const PANELS: Panel[] = [
     render: () => <JobRuns />,
   },
   {
+    id: "jobs.deployment.requestKinds",
+    topic: "jobs",
+    title: "Telegram work",
+    description:
+      "Disable a kind of Request on this deployment. New work of that kind is refused; queued work waits until it is on again.",
+    keywords: "request kind disable enable directory crawl probe sync bot",
+    permission: "jobs:manage",
+    absorbs: (kinds) => kinds.map((k) => k.settingId),
+    render: () => <TelegramWork />,
+  },
+  {
     id: "operator.deployment.users",
     topic: "operator",
     title: "Users",
@@ -348,6 +370,15 @@ export function visiblePanels(permissions: readonly string[]): Panel[] {
   return PANELS.filter(
     (p) => !p.permission || permissions.includes(p.permission),
   )
+}
+
+/** The panel showing Setting `id`, when one this Account sees does. */
+export function absorbingPanel(
+  id: string,
+  permissions: readonly string[],
+  kinds: readonly RequestKindSwitch[],
+): Panel | undefined {
+  return visiblePanels(permissions).find((p) => p.absorbs?.(kinds).includes(id))
 }
 
 /** Whether a panel matches the search: words only, operators exclude it. */

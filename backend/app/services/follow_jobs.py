@@ -76,6 +76,7 @@ def write_progress(
     results: list[dict[str, Any]],
     sync_job_id: str | None,
     finished_at: int | None,
+    sync_skipped: str | None = None,
 ) -> None:
     """Flush the runner's working copy back to the row.
 
@@ -109,6 +110,10 @@ def write_progress(
     row.results = results
     row.sync_job_id = sync_job_id
     row.finished_at = finished_at
+    if sync_skipped is not None:
+        # Why the follows got no first sync (RKD-01): kept beside the options,
+        # the one column a follow job carries for what is not a result.
+        row.options = {**(row.options or {}), "syncSkipped": sync_skipped}
     row.updated_at = utc_now()
     session.add(row)
     session.commit()

@@ -20,6 +20,7 @@ from app.core.db import engine
 from app.models_tg import SyncJob as SyncJobRow
 from app.models_tg import utc_now
 from app.services.channel_setting_groups import SyncOperationMode
+from app.services.request_kinds import is_kind_enabled, kind_for_sync_mode
 from app.services.tenancy import scoped_select, tenancy_enforced
 
 #: The one `LISTEN`/`NOTIFY` channel every sync job's progress travels on
@@ -693,7 +694,11 @@ def active_sync_job_owners() -> set[uuid.UUID]:
     """
     owners: set[uuid.UUID] = set()
     for job in _active_jobs.values():
-        if job.status in ("pending", "running") and job.user_id:
+        if (
+            job.status in ("pending", "running")
+            and job.user_id
+            and not _held(job.sync_mode)
+        ):
             with contextlib.suppress(ValueError):
                 owners.add(uuid.UUID(job.user_id))
 
@@ -705,13 +710,22 @@ def active_sync_job_owners() -> set[uuid.UUID]:
         return owners
     with Session(engine) as session:
         rows = session.exec(
-            select(SyncJobRow.user_id).where(
+            select(SyncJobRow.user_id, SyncJobRow.sync_mode).where(
                 col(SyncJobRow.status).in_(("pending", "running")),
                 col(SyncJobRow.id).in_(tuple(queued)),
             )
         ).all()
-    owners.update(row for row in rows if row is not None)
+    owners.update(owner for owner, mode in rows if owner and not _held(mode))
     return owners
+
+
+def _held(sync_mode: str) -> bool:
+    """A job of a disabled kind waits on held lanes, so it keeps nobody busy.
+
+    Otherwise one disabled kind would stop another (RKD-01). A held manual
+    sync would make the auto tick skip its owner for as long as it waits.
+    """
+    return not is_kind_enabled(kind_for_sync_mode(sync_mode))
 
 
 def has_active_sync_job() -> bool:

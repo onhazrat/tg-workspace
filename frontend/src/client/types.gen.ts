@@ -538,6 +538,10 @@ export type BulkFollowJobStatusResponse = {
      */
     syncJobId?: string | null;
     /**
+     * Syncskipped
+     */
+    syncSkipped?: string | null;
+    /**
      * Createdat
      */
     createdAt: number;
@@ -6155,6 +6159,46 @@ export type RequestBreakdownResponse = {
 };
 
 /**
+ * RequestKind
+ *
+ * The work a Request was made for. Stored, so the values are a format.
+ */
+export type RequestKind = 'auto' | 'bulk' | 'single' | 'follow' | 'probe' | 'handle' | 'botApi' | 'other';
+
+/**
+ * RequestKindSwitch
+ *
+ * One Request kind's switch: the UI greys out what it refuses.
+ */
+export type RequestKindSwitch = {
+    kind: RequestKind;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Settingid
+     */
+    settingId: string;
+    /**
+     * Lanes
+     */
+    lanes: Array<string>;
+    /**
+     * Enabled
+     */
+    enabled: boolean;
+    /**
+     * Disabledsince
+     */
+    disabledSince: number | null;
+    /**
+     * Refusal
+     */
+    refusal: string;
+};
+
+/**
  * RequestRecord
  *
  * One Request: one attempt that reached Telegram.
@@ -6525,6 +6569,10 @@ export type RuntimeConfigResponse = {
     retention: RetentionRuntimeSettings;
     constants: RuntimeConstants;
     activeSyncJob?: ActiveSyncJobSummary | null;
+    /**
+     * Requestkinds
+     */
+    requestKinds: Array<RequestKindSwitch>;
 };
 
 /**
@@ -7711,6 +7759,10 @@ export type SyncJobStatusResponse = {
      * Finishedat
      */
     finishedAt?: number | null;
+    /**
+     * Waitingreason
+     */
+    waitingReason?: string | null;
 };
 
 /**

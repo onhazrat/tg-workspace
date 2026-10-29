@@ -1,5 +1,5 @@
 import { toast } from "sonner"
-
+import { gatedBy } from "@/hooks/useRequestKinds"
 import {
   addChannelByName,
   normalizeChannelHandle,
@@ -55,7 +55,10 @@ const CHANNEL_OPS: ChannelOpDef[] = [
     keywords: ["channel", "add", "follow", "subscribe", "single", "one"],
     group: "Channels",
     closeOnApply: false,
-    disabled: offlineDisabled("Server offline — cannot fetch channel info"),
+    disabled: gatedBy(
+      "handle",
+      offlineDisabled("Server offline, cannot fetch channel info"),
+    ),
     editorField: {
       id: "channelHandle",
       label: "Channel handle",
@@ -107,7 +110,7 @@ const CHANNEL_OPS: ChannelOpDef[] = [
     keywords: ["channel", "sync", "scrape", "fetch", "single", "one"],
     group: "Sync",
     entityFlow: "sync-channel",
-    disabled: (ctx) => {
+    disabled: gatedBy("single", (ctx) => {
       if (ctx.isOffline) {
         return { disabled: true, reason: "Server offline" }
       }
@@ -115,7 +118,7 @@ const CHANNEL_OPS: ChannelOpDef[] = [
         return { disabled: true, reason: "No channels added" }
       }
       return { disabled: false }
-    },
+    }),
     run: () => {},
   },
   {

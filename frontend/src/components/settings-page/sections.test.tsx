@@ -11,9 +11,15 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react"
+import type { RequestKindSwitch } from "@/client"
 import type { Row } from "./model"
 import { Item, lastPassed } from "./SettingsPage"
-import { buildSections, landingFor, type SettingsPageState } from "./sections"
+import {
+  buildSections,
+  landingFor,
+  linkTarget,
+  type SettingsPageState,
+} from "./sections"
 
 afterEach(cleanup)
 
@@ -81,6 +87,64 @@ describe("buildSections", () => {
     )
     expect(sections.every((s) => s.panels.length === 0)).toBe(true)
     expect(sections.map((s) => s.id)).toEqual(["sync", "server"])
+  })
+})
+
+describe("a Setting a panel shows (RKD-02)", () => {
+  // The runtime config names each switch's Setting; the panel shows those.
+  const PROBE = {
+    kind: "probe",
+    settingId: "jobs.deployment.probeRequestsEnabled",
+  } as RequestKindSwitch
+  const jobs = {
+    topics: [{ id: "jobs", title: "Background jobs" }],
+    rows: [
+      row({
+        id: "jobs.deployment.probeRequestsEnabled",
+        title: "Telegram work: Directory probe",
+        topic: "jobs",
+        scope: "deployment",
+      }),
+      row({ id: "jobs.deployment.other", title: "Other", topic: "jobs" }),
+    ],
+    permissions: ["jobs:manage"],
+    kinds: [PROBE],
+  } as unknown as Parameters<typeof buildSections>[0]
+  const ids = (q: string, reg = jobs) =>
+    buildSections(reg, q, ALL, new Set()).flatMap((s) => [
+      ...s.panels.map((p) => p.id),
+      ...s.groups.flatMap((g) => g.rows.map((r) => r.id)),
+    ])
+
+  test("is not a row of its own; a search for it finds the panel", () => {
+    expect(ids("")).toEqual([
+      "jobs.deployment.runs",
+      "jobs.deployment.requestKinds",
+      "jobs.deployment.other",
+    ])
+    expect(ids("probeRequestsEnabled")).toEqual([
+      "jobs.deployment.requestKinds",
+    ])
+  })
+
+  test("without the panel's Permission it stays a row", () => {
+    expect(ids("probeRequestsEnabled", { ...jobs, permissions: [] })).toEqual([
+      "jobs.deployment.probeRequestsEnabled",
+    ])
+  })
+
+  test("a link to it lands on the panel", () => {
+    expect(
+      linkTarget(
+        "jobs.deployment.probeRequestsEnabled",
+        ["jobs:manage"],
+        [PROBE],
+      ),
+    ).toBe("jobs.deployment.requestKinds")
+    expect(linkTarget("jobs.deployment.other", ["jobs:manage"], [PROBE])).toBe(
+      "jobs.deployment.other",
+    )
+    expect(linkTarget(undefined, [], [])).toBeUndefined()
   })
 })
 

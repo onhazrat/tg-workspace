@@ -7836,6 +7836,10 @@
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Syncjobid"
           },
+          "syncSkipped": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Syncskipped"
+          },
           "createdAt": { "type": "integer", "title": "Createdat" },
           "finishedAt": {
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
@@ -13699,6 +13703,51 @@
         "title": "RequestBreakdownResponse",
         "description": "Totals by kind and by Channel for one range, in UTC."
       },
+      "RequestKind": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "bulk",
+          "single",
+          "follow",
+          "probe",
+          "handle",
+          "botApi",
+          "other"
+        ],
+        "title": "RequestKind",
+        "description": "The work a Request was made for. Stored, so the values are a format."
+      },
+      "RequestKindSwitch": {
+        "properties": {
+          "kind": { "$ref": "#/components/schemas/RequestKind" },
+          "label": { "type": "string", "title": "Label" },
+          "settingId": { "type": "string", "title": "Settingid" },
+          "lanes": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Lanes"
+          },
+          "enabled": { "type": "boolean", "title": "Enabled" },
+          "disabledSince": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Disabledsince"
+          },
+          "refusal": { "type": "string", "title": "Refusal" }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "label",
+          "settingId",
+          "lanes",
+          "enabled",
+          "disabledSince",
+          "refusal"
+        ],
+        "title": "RequestKindSwitch",
+        "description": "One Request kind's switch: the UI greys out what it refuses."
+      },
       "RequestRecord": {
         "properties": {
           "id": { "type": "string", "format": "uuid", "title": "Id" },
@@ -13992,6 +14041,11 @@
               { "$ref": "#/components/schemas/ActiveSyncJobSummary" },
               { "type": "null" }
             ]
+          },
+          "requestKinds": {
+            "items": { "$ref": "#/components/schemas/RequestKindSwitch" },
+            "type": "array",
+            "title": "Requestkinds"
           }
         },
         "type": "object",
@@ -14005,7 +14059,8 @@
           "network",
           "jobs",
           "retention",
-          "constants"
+          "constants",
+          "requestKinds"
         ],
         "title": "RuntimeConfigResponse"
       },
@@ -15112,6 +15167,10 @@
           "finishedAt": {
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Finishedat"
+          },
+          "waitingReason": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Waitingreason"
           }
         },
         "type": "object",

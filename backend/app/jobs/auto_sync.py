@@ -12,6 +12,7 @@ from sqlmodel import Session
 
 from app.core.config import settings
 from app.core.db import engine
+from app.core.request_recording import RequestKind, kind_refusal
 from app.jobs.settings import load_sync_settings, save_sync_settings
 from app.jobs.sync_queue import enqueue_sync_job
 from app.models_tg import Channel
@@ -26,6 +27,7 @@ from app.services.follows import (
     schedule_group_id,
 )
 from app.services.quota import Budget, QuotaCeilingReached, assert_within_ceiling
+from app.services.request_kinds import is_kind_enabled
 from app.services.scraper_jobs import (
     SyncJobState,
     active_sync_job_owners,
@@ -272,6 +274,9 @@ async def run_auto_sync() -> dict[str, Any]:
     session, then sync. Nothing below the `with` block may hold an ORM object —
     `entries` and `due_reason_by_id` are deliberately plain tuples and strings.
     """
+    if not await run_db(is_kind_enabled, RequestKind.AUTO):
+        # Before any job exists, so a disabled kind files nothing (RKD-01).
+        return {"skipped": True, "reason": kind_refusal(RequestKind.AUTO)}
     now = int(time.time() * 1000)
     plans: list[_OwnerPlan] = []
     checked = 0

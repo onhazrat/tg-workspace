@@ -70,7 +70,6 @@ def _quiet(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(sync_orchestrator, "touch_job", noop)
     monkeypatch.setattr(sync_orchestrator, "persist_job", noop)
-    monkeypatch.setattr(sync_orchestrator, "deactivate_job", lambda _id: None)
     monkeypatch.setattr(sync_orchestrator, "run_db", lambda *_a, **_k: _noop_sync())
 
 

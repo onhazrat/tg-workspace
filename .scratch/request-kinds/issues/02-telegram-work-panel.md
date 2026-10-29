@@ -4,14 +4,18 @@
 
 **Blocked by:** RKD-01
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] A "Telegram work" panel in the Background jobs topic, visible with the Jobs manage Permission: one row per switchable kind with swatch and label, "off since HH:MM" under a disabled one, last 24h Requests, share, queued and an enabled column.
-- [ ] The enabled column uses the Settings rows' On/Off pill (`BarToggle`), not the square switch.
-- [ ] Disabling opens the existing confirm dialog with the kind's last 24h Requests, what stops, how many queued messages will be held, and the refusal a person will read. Enabling applies at once.
-- [ ] Last 24h Requests come from the existing Requests Breakdown and queued counts from the existing lanes read, summed per kind; no new route.
-- [ ] The seven Settings are not rendered a second time as plain rows once the panel shows them; search and `?setting=` links to them land on the panel.
-- [ ] The Requests tab's "By kind of work" table has a Status column: "On", or "Off since HH:MM" linking to the panel; `other` shows a dash. A disabled kind with no Requests in the range appears as a zero row.
-- [ ] With a kind disabled in the runtime config, its actions are greyed out with the shared message as their tooltip: Sync on a Channel (`single`), Sync all and Reset and sync (`bulk`), bulk follow (`follow`), adding a Channel by handle (`handle`), Publish (`botApi`).
-- [ ] One Playwright spec over a mocked API covers the panel, the confirm, the Status column and its zero row, the greyed actions and an Account without Jobs manage seeing no panel. Render tests for each new branching component, as the CRAP ratchet requires. Each mutation-checked, named in the commit body.
-- [ ] Typecheck (build and tests), lint, the frontend unit tests and the frontend constants catalog pass.
+- [x] A "Telegram work" panel in the Background jobs topic, visible with the Jobs manage Permission: one row per switchable kind with swatch and label, "off since HH:MM" under a disabled one, last 24h Requests, share, queued and an enabled column.
+- [x] The enabled column uses the Settings rows' On/Off pill (`BarToggle`), not the square switch.
+- [x] Disabling opens the existing confirm dialog with the kind's last 24h Requests, what stops, how many queued messages will be held, and the refusal a person will read. Enabling applies at once.
+- [x] Last 24h Requests come from the existing Requests Breakdown and queued counts from the existing lanes read, summed per kind; no new route.
+- [x] The seven Settings are not rendered a second time as plain rows once the panel shows them; search and `?setting=` links to them land on the panel.
+- [x] The Requests tab's "By kind of work" table has a Status column: "On", or "Off since HH:MM" linking to the panel; `other` shows a dash. A disabled kind with no Requests in the range appears as a zero row.
+- [x] With a kind disabled in the runtime config, its actions are greyed out with the shared message as their tooltip: Sync on a Channel (`single`), Sync all and Reset and sync (`bulk`), bulk follow (`follow`), adding a Channel by handle (`handle`), Publish (`botApi`).
+- [x] One Playwright spec over a mocked API covers the panel, the confirm, the Status column and its zero row, the greyed actions and an Account without Jobs manage seeing no panel. Render tests for each new branching component, as the CRAP ratchet requires. Each mutation-checked, named in the commit body.
+- [x] Typecheck (build and tests), lint, the frontend unit tests and the frontend constants catalog pass.
+
+## Comments
+
+- 2026-10-28: done on `claude/rkd-02`, fast-forwarded into `claude/request-kinds` at 0635e1b3. Left open for the code review: the keyboard key and palette paths for sync are not greyed (only the server refuses them), and "off since" shows HH:MM only, so a disable from an earlier day reads as a bare time.

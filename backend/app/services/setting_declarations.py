@@ -28,10 +28,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+from app.core.permissions import Permission
+from app.core.request_recording import KIND_LABELS, SWITCHABLE_KINDS
 from app.jobs.translation_batch import TRANSLATION_LANGUAGE_CODES
 from app.schemas.settings_registry import SettingRowType
 from app.services.network_settings import PROXY_CONCURRENCY_MAX, PROXY_CONCURRENCY_MIN
 from app.services.publication_parts import CITATION_STYLES
+from app.services.request_kinds import KIND_ENV, disabled_at_field, setting_id
 from app.services.settings_registry import (
     AI_PREFS_KEY,
     DIRECTORY_COLUMNS_KEY,
@@ -41,6 +44,7 @@ from app.services.settings_registry import (
     QUOTA_KEY,
     REACH_KEY,
     REFERENCE_GRAPH_KEY,
+    REQUEST_KINDS_KEY,
     REQUEST_ROLLUP_KEY,
     RETENTION_KEY,
     RETENTION_PREFS_KEY,
@@ -110,6 +114,12 @@ NOT_SETTING_FIELDS: dict[tuple[str, str], str] = {
     ("network", "proxyConcurrencyOverrides"): (
         "Per-proxy slots are a map; the Proxies panel owns them."
     ),
+    **{
+        (REQUEST_KINDS_KEY, disabled_at_field(kind)): (
+            "When the switch was turned off, stamped by the app."
+        )
+        for kind in SWITCHABLE_KINDS
+    },
 }
 
 
@@ -138,6 +148,8 @@ class Declaration:
     lock: str | None = None
     #: Whether null is a value the Setting may hold.
     nullable: bool = False
+    #: Who may see a "manage" Setting and change a deployment one.
+    permission: Permission = Permission.SETTINGS_MANAGE
 
     @property
     def topic(self) -> str:
@@ -877,6 +889,26 @@ DECLARATIONS: tuple[Declaration, ...] = (
         )
         for job, (name, title, description) in _JOB_TITLES.items()
     ),
+    # One switch per Request kind (RKD-01, ADR-040), held by whoever runs the
+    # Jobs routes rather than by `settings:manage`.
+    *(
+        Declaration(
+            id=setting_id(kind),
+            title=f"Telegram work: {KIND_LABELS[kind]}",
+            description=(
+                f"Whether {KIND_LABELS[kind]} work may reach Telegram. Off, new "
+                "work of this kind is refused and queued work waits until it is "
+                "on again."
+            ),
+            type="boolean",
+            key=REQUEST_KINDS_KEY,
+            field=kind.value,
+            visible="manage",
+            env=KIND_ENV[kind],
+            permission=Permission.JOBS_MANAGE,
+        )
+        for kind in SWITCHABLE_KINDS
+    ),
     # --- Quota ---------------------------------------------------------------
     *_quota(),
 )
@@ -996,6 +1028,7 @@ CONSTANT_TOPICS: dict[str, str] = {
     "backend/app/services/publication_parts.py": "publishing",
     "backend/app/services/quota.py": "quota",
     "backend/app/services/reach.py": "reach",
+    "backend/app/services/request_kinds.py": "jobs",
     "backend/app/services/request_stats.py": "quota",
     "backend/app/services/scraper_jobs.py": "sync",
     "backend/app/services/search_text.py": "sync",

@@ -19,7 +19,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tg-tooltip"
 import {
   channelSyncStatus,
   parseStartId,
-  syncButtonProps,
+  useSyncButtonProps,
 } from "./channel-card-status"
 
 /** Green on schedule, amber due, red late or never, grey when nothing is expected. */
@@ -177,7 +177,7 @@ function SyncButton({
   busy: boolean
   onSync: () => void
 }) {
-  const { label, ...sync } = syncButtonProps(channel, busy, onSync)
+  const { label, refusal, ...sync } = useSyncButtonProps(channel, busy, onSync)
   const keyboard = useKeyboardMode()
   return (
     <Tooltip>
@@ -193,7 +193,8 @@ function SyncButton({
       </TooltipTrigger>
       <TooltipContent>
         <p>
-          {disabledReason(channel, "individual") ??
+          {refusal ??
+            disabledReason(channel, "individual") ??
             withKey("Manual sync resets auto-sync timers", "sync", keyboard)}
         </p>
       </TooltipContent>

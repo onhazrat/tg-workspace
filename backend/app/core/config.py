@@ -320,6 +320,15 @@ class Settings(BaseSettings):
     JOBS_TRANSLATION_BATCH_ENABLED_DEFAULT: bool = False
     JOBS_DISCOVER_PROBE_ENABLED_DEFAULT: bool = True
     JOBS_DIRECTORY_HARVEST_ENABLED_DEFAULT: bool = True
+    # Whether each Request kind may reach Telegram until an Operator says
+    # otherwise in Settings (RKD-01, ADR-040). A disabled kind is refused.
+    JOBS_AUTO_REQUESTS_ENABLED_DEFAULT: bool = True
+    JOBS_BULK_REQUESTS_ENABLED_DEFAULT: bool = True
+    JOBS_SINGLE_REQUESTS_ENABLED_DEFAULT: bool = True
+    JOBS_FOLLOW_REQUESTS_ENABLED_DEFAULT: bool = True
+    JOBS_PROBE_REQUESTS_ENABLED_DEFAULT: bool = True
+    JOBS_HANDLE_REQUESTS_ENABLED_DEFAULT: bool = True
+    JOBS_BOT_API_REQUESTS_ENABLED_DEFAULT: bool = True
 
     # Embeddings backfill
     EMBEDDINGS_CHUNK_SIZE: int = 20

@@ -1,8 +1,9 @@
 """A Summary's Publication: the plan the publish panel previews (SUMTAB-09)."""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
-from app.api.deps import CurrentUser, SessionDep
+from app.api.deps import CurrentUser, SessionDep, require_kind_enabled
+from app.core.request_recording import RequestKind
 from app.models_tg import Summary
 from app.schemas.publications import (
     MetadataRowResponse,
@@ -87,7 +88,10 @@ def plan_summary_publication(
 
 # Sends as the caller's bot, so View-as needs the spend tier for it. A Part
 # Telegram refuses is a 200 with `status: failed`: the publish log has the row.
-@router.post("/summaries/{summary_id}/publication")
+@router.post(
+    "/summaries/{summary_id}/publication",
+    dependencies=[Depends(require_kind_enabled(RequestKind.BOT_API))],
+)
 async def send_summary_publication(
     summary_id: str,
     body: PublicationSendRequest,

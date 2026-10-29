@@ -16,6 +16,7 @@ import {
   NO_CHANNELS_MESSAGE,
   OFFLINE_MESSAGE,
   PAUSED_MESSAGE,
+  pollSyncJob,
   type RunServerSyncArgs,
   type RunServerSyncIO,
   runServerSync,
@@ -365,5 +366,70 @@ describe("waitSyncJob", () => {
     )
     expect(calls.cancelled).toBe(1)
     expect(calls.polled).toBe(0)
+  })
+
+  /**
+   * Held work has no lifetime (RKD-01, stories 46 and 49). `first` opens the
+   * stream, then it stays quiet for 60 ms, four deadlines, unless the deadline
+   * aborts it first; then the job completes.
+   */
+  const quietAfter = (first: SyncJobStatus[]) => ({
+    subscribe: (_jobId: string, signal: AbortSignal) => ({
+      async *[Symbol.asyncIterator]() {
+        yield* first
+        await new Promise((resolve) => {
+          signal.addEventListener("abort", resolve)
+          setTimeout(resolve, 60)
+        })
+        if (signal.aborted) throw new Error("stream closed")
+        yield job([], "completed")
+      },
+    }),
+    timeoutMs: 15,
+  })
+  const held = {
+    ...job([], "pending"),
+    waitingReason: "Manual bulk is disabled on this deployment",
+  }
+
+  test("a held job is never cancelled while it waits, however long", async () => {
+    const { io, calls } = harness(quietAfter([held]))
+    expect((await waitSyncJob(io, "job-1")).status).toBe("completed")
+    expect(calls.cancelled).toBe(0)
+  })
+
+  /**
+   * Polls answering `first` four times, 80 ms, then completed. Each poll
+   * waits longer than the whole deadline, so one poll not held runs it out.
+   */
+  const polled = (first: SyncJobStatus) => {
+    let reads = 0
+    const { io, calls } = harness({
+      getStatus: async () => (++reads > 4 ? job([], "completed") : first),
+      timeoutMs: 15,
+    })
+    return { io: { ...io, pollMs: 20 }, calls }
+  }
+
+  test("polling, a held job is not cancelled either", async () => {
+    const { io, calls } = polled(held)
+    expect((await pollSyncJob(io, "job-1")).status).toBe("completed")
+    expect(calls.cancelled).toBe(0)
+  })
+
+  test("polling, a job that is not held is cancelled at the deadline", async () => {
+    const { io, calls } = polled(job([], "running"))
+    await expect(pollSyncJob(io, "job-1")).rejects.toThrow(
+      SYNC_TIMED_OUT_MESSAGE,
+    )
+    expect(calls.cancelled).toBe(1)
+  })
+
+  test("once the hold clears, the deadline counts again", async () => {
+    const { io, calls } = harness(quietAfter([held, job([], "running")]))
+    await expect(waitSyncJob(io, "job-1")).rejects.toThrow(
+      SYNC_TIMED_OUT_MESSAGE,
+    )
+    expect(calls.cancelled).toBe(1)
   })
 })

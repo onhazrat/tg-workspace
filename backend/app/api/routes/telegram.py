@@ -5,11 +5,11 @@ from contextlib import AbstractContextManager, contextmanager
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
 from sqlmodel import Session
 
-from app.api.deps import CurrentUser, SessionDep
+from app.api.deps import CurrentUser, SessionDep, require_kind_enabled
 from app.api.http_cache import etag_for, matches_if_none_match
 from app.core.config import settings
 from app.core.request_recording import (
@@ -55,6 +55,11 @@ from app.services.tenancy import may_act_on
 
 router = APIRouter(prefix="/telegram", tags=["telegram"])
 logger = logging.getLogger(__name__)
+
+#: Each route that starts Telegram work refuses its kind while it is disabled
+#: (RKD-01), before the handler can turn the refusal into a 500.
+HANDLE_CHECK = [Depends(require_kind_enabled(RequestKind.HANDLE))]
+BOT_API = [Depends(require_kind_enabled(RequestKind.BOT_API))]
 
 
 def _resolve_proxy_concurrency(
@@ -155,7 +160,7 @@ def _handle_check(handle: str) -> Iterator[None]:
         yield
 
 
-@router.post("/scrape")
+@router.post("/scrape", dependencies=HANDLE_CHECK)
 async def api_scrape(
     body: ScrapeRequest, _current_user: CurrentUser
 ) -> ScrapeChannelResponse:
@@ -194,7 +199,7 @@ async def api_scrape(
         raise HTTPException(status_code=500, detail="Failed to scrape channel") from exc
 
 
-@router.post("/channel-info")
+@router.post("/channel-info", dependencies=HANDLE_CHECK)
 async def api_channel_info(
     body: ChannelInfoRequest, _current_user: CurrentUser
 ) -> ChannelInfoResponse:
@@ -220,7 +225,7 @@ async def api_channel_info(
         ) from exc
 
 
-@router.post("/resolve-start-time")
+@router.post("/resolve-start-time", dependencies=HANDLE_CHECK)
 async def api_resolve_start_time(
     body: ResolveStartTimeRequest, _current_user: CurrentUser
 ) -> ResolveStartTimeResponse:
@@ -249,7 +254,7 @@ async def api_resolve_start_time(
         ) from exc
 
 
-@router.post("/bot-info")
+@router.post("/bot-info", dependencies=BOT_API)
 async def api_bot_info(
     body: BotInfoRequest,
     session: SessionDep,
@@ -288,7 +293,7 @@ async def api_bot_info(
         raise HTTPException(status_code=500, detail="Bot info request failed") from exc
 
 
-@router.post("/publish")
+@router.post("/publish", dependencies=BOT_API)
 async def api_publish(
     body: PublishRequest,
     session: SessionDep,
@@ -372,7 +377,7 @@ async def api_post_thumb(
     return _image_response(request, content, content_type)
 
 
-@router.get("/bot-file/{credential_id}")
+@router.get("/bot-file/{credential_id}", dependencies=BOT_API)
 async def api_bot_file(
     credential_id: str,
     session: SessionDep,

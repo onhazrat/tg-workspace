@@ -22,14 +22,10 @@ import { toast } from "sonner"
 import { api, type SyncJobStatus, subscribeSyncJobEvents } from "@/api"
 import { getChannelStats } from "@/lib/channels/store"
 import { env } from "@/lib/env"
+import { hasRateLimitError, mergeScrapingChannels } from "@/lib/sync/job-state"
 import {
-  hasRateLimitError,
-  isTerminalSyncStatus,
-  mergeScrapingChannels,
-} from "@/lib/sync/job-state"
-import {
+  pollSyncJob,
   runServerSync as runServerSyncWith,
-  SYNC_TIMED_OUT_MESSAGE,
   type SyncMode,
   waitSyncJob as waitSyncJobWith,
 } from "@/lib/sync/run-server-sync"
@@ -90,6 +86,17 @@ export interface SyncJob {
   stopSync: (kind: StoppableSync) => Promise<void>
 }
 
+/**
+ * Why a held job waits (RKD-01), its kind being disabled. Shown while the
+ * server sets it, so the sync does not look hung, and gone once it clears.
+ */
+function sayWhyItWaits(status: SyncJobStatus) {
+  const id = `sync-waiting-${status.jobId}`
+  if (status.waitingReason)
+    toast.info(status.waitingReason, { id, duration: Number.POSITIVE_INFINITY })
+  else toast.dismiss(id)
+}
+
 export function useSyncJob(deps: SyncJobDeps): SyncJob {
   const {
     isOffline,
@@ -119,26 +126,23 @@ export function useSyncJob(deps: SyncJobDeps): SyncJob {
     (status: SyncJobStatus) => {
       setScrapingChannels((prev) => mergeScrapingChannels(prev, status))
       setIsRateLimited(hasRateLimitError(status))
+      sayWhyItWaits(status)
     },
     [setIsRateLimited],
   )
 
   const pollSyncJobFallback = useCallback(
-    async (jobId: string) => {
-      const deadline = Date.now() + env.syncJobTimeoutMs
-      while (Date.now() < deadline) {
-        const status = await api.getSyncJobStatus(jobId)
-        applySyncJobStatus(status)
-        if (isTerminalSyncStatus(status.status)) {
-          return status
-        }
-        await new Promise((resolve) =>
-          setTimeout(resolve, env.syncJobFallbackPollMs),
-        )
-      }
-      await api.cancelSyncJob(jobId)
-      throw new Error(SYNC_TIMED_OUT_MESSAGE)
-    },
+    (jobId: string) =>
+      pollSyncJob(
+        {
+          getStatus: api.getSyncJobStatus,
+          cancel: api.cancelSyncJob,
+          apply: applySyncJobStatus,
+          timeoutMs: env.syncJobTimeoutMs,
+          pollMs: env.syncJobFallbackPollMs,
+        },
+        jobId,
+      ),
     [applySyncJobStatus],
   )
 

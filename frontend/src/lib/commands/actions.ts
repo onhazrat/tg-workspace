@@ -2,6 +2,7 @@ import { toast } from "sonner"
 
 import { api } from "@/api"
 import { getNextTheme } from "@/components/theme-provider"
+import { gatedBy } from "@/hooks/useRequestKinds"
 import { syncAllConfirmation } from "@/lib/channels/manual-sync"
 import { filterChannelsForOperation } from "@/lib/channels/sync-permissions"
 import type { CommandDef } from "@/lib/commands/types"
@@ -100,7 +101,7 @@ export function buildActionCommands(): CommandDef[] {
       label: "Sync Selected",
       keywords: ["sync", "scrape", "selected", "channels"],
       group: "Sync",
-      disabled: (ctx) => {
+      disabled: gatedBy("bulk", (ctx) => {
         if (ctx.isOffline) {
           return { disabled: true, reason: "Server offline" }
         }
@@ -120,7 +121,7 @@ export function buildActionCommands(): CommandDef[] {
           }
         }
         return { disabled: false }
-      },
+      }),
       run: async (ctx) => {
         await ctx.handleScrapeSelected()
       },
@@ -131,7 +132,7 @@ export function buildActionCommands(): CommandDef[] {
       label: "Sync All",
       keywords: ["sync", "scrape", "all", "channels"],
       group: "Sync",
-      disabled: (ctx) => {
+      disabled: gatedBy("bulk", (ctx) => {
         if (ctx.isOffline) {
           return { disabled: true, reason: "Server offline" }
         }
@@ -146,7 +147,7 @@ export function buildActionCommands(): CommandDef[] {
           }
         }
         return { disabled: false }
-      },
+      }),
       requiresConfirmation: true,
       getConfirmDescription: (ctx) =>
         syncAllConfirmation(ctx.channels).description,
@@ -160,7 +161,7 @@ export function buildActionCommands(): CommandDef[] {
       label: "Recheck Restricted Channels",
       keywords: ["sync", "recheck", "restricted", "unavailable", "channels"],
       group: "Sync",
-      disabled: (ctx) => {
+      disabled: gatedBy("bulk", (ctx) => {
         if (ctx.isOffline) {
           return { disabled: true, reason: "Server offline" }
         }
@@ -168,7 +169,7 @@ export function buildActionCommands(): CommandDef[] {
           return { disabled: true, reason: "No restricted channels" }
         }
         return { disabled: false }
-      },
+      }),
       run: async (ctx) => {
         await ctx.handleRecheckRestricted()
       },

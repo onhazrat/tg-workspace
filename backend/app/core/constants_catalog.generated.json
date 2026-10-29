@@ -164,7 +164,7 @@
       "comment": "How long the drain waits for a healthy worker before concluding that every proxy is parked. Only reached when no worker is free *and* none can become free by a release \u2014 which is either \"everything is busy\" (resolved by waiting on the running tasks) or \"every proxy is in cooldown\" (resolved by giving up and letting the 30-second sweep come back). **Ticket 14's per-proxy wait does not feed into this, and that is a claim worth stating rather than assuming.** Ticket 13's handover asked that if deliberate waits longer than this constant appeared, it be re-derived from them instead of left a literal. They appeared, and the two still do not meet: this bounds the wait for a *free and healthy worker*, and a worker serving a paced fetch is `busy` \u2014 not free, not parked. Pacing lengthens the message a worker is already running, which the drain sees through `all_busy()` as ordinary backpressure. Deriving this from `PACE_MAX_MS` would make every empty-queue sweep block for thirty seconds to no purpose. `tests/services/test_adaptive_proxy_wait.py` holds the guard.",
       "expression": "5.0",
       "file": "backend/app/jobs/sync_queue.py",
-      "line": 182,
+      "line": 183,
       "name": "_NO_HEALTHY_WORKER_WAIT_SECONDS",
       "value": 5.0
     },
@@ -172,7 +172,7 @@
       "comment": "How many accounts one lane read will interleave between. A bound because each one costs a read: the round-robin below issues one `pgmq.read` per account with work, and a deployment with 200 accounts on one lane should serve 20 of them per pass rather than issue 200 queries to fill ten slots. The accounts it does not reach this pass are reached on the next, because `distinct_due_values` orders by value and the ones it served have had their messages claimed out of the due set.",
       "expression": "20",
       "file": "backend/app/jobs/sync_queue.py",
-      "line": 348,
+      "line": 349,
       "name": "MAX_INTERLEAVED_USERS",
       "value": 20
     },
@@ -180,7 +180,7 @@
       "comment": "How often the paused-lane set is re-read during one drain. See `_LaneBuffers._refresh_pauses` \u2014 a drain is not bounded in length, so a snapshot taken at its start can be hours stale.",
       "expression": "5.0",
       "file": "backend/app/jobs/sync_queue.py",
-      "line": 353,
+      "line": 354,
       "name": "_PAUSE_RECHECK_SECONDS",
       "value": 5.0
     },
@@ -188,7 +188,7 @@
       "comment": "How long a lane that read empty is left alone before being asked again. Bounds the cost of re-checking the normal tier while a long best-effort backlog drains \u2014 the strict-tier rule needs that re-check to be live, and without an interval it would be a query per dispatched message.",
       "expression": "0.5",
       "file": "backend/app/jobs/sync_queue.py",
-      "line": 359,
+      "line": 360,
       "name": "_EMPTY_LANE_RECHECK_SECONDS",
       "value": 0.5
     },
@@ -348,7 +348,7 @@
       "comment": "How stale the worker's view of `cancel_requested` may be, in seconds. Small, because a person pressed Cancel and is watching; not zero, because the alternative is a `Session` per checkpoint per handle. See `_cancelled`.",
       "expression": "1.0",
       "file": "backend/app/services/bulk_follow.py",
-      "line": 512,
+      "line": 524,
       "name": "_CANCEL_POLL_SECONDS",
       "value": 1.0
     },
@@ -716,7 +716,7 @@
       "comment": "Attempts a media fetch gets. One, meaning no retry ladder at all. `retries=N` is N *attempts*, and the default 8 with a 3s escalating delay is sized for a page fetch, where losing the page loses the sync. Media is not that. An avatar is re-resolved on **every page** of a walk, so the page loop already is the retry, and a thumb is cosmetic. Left at the default, one dead avatar URL cost eight backed-off attempts per page: `tests/api/test_sync_jobs.py` went from 13 seconds to 8 minutes when the avatar cache first moved onto the lane pool, which is what surfaced this. Shared by both image caches rather than spelled twice, because they are twins and `test_image_cache_egress.py` asserts they stay that way.",
       "expression": "1",
       "file": "backend/app/services/network.py",
-      "line": 479,
+      "line": 487,
       "name": "MEDIA_FETCH_RETRIES",
       "value": 1
     },
@@ -945,6 +945,22 @@
       "value": 30
     },
     {
+      "comment": "How stale this process's copy of the switches may be.",
+      "expression": "5.0",
+      "file": "backend/app/services/request_kinds.py",
+      "line": 61,
+      "name": "RECHECK_SECONDS",
+      "value": 5.0
+    },
+    {
+      "comment": "The one status every route refuses a disabled kind with, set in `app.main`. 409: the request is well formed and the caller may make it; the deployment's state says no until an Operator enables the kind again.",
+      "expression": "409",
+      "file": "backend/app/services/request_kinds.py",
+      "line": 66,
+      "name": "KIND_DISABLED_STATUS",
+      "value": 409
+    },
+    {
       "comment": "Rows per delete, each its own transaction, so a backlog never holds one long transaction that pins the vacuum horizon (see `prune_finished_jobs`).",
       "expression": "5000",
       "file": "backend/app/services/request_stats.py",
@@ -956,7 +972,7 @@
       "comment": "Rows per delete transaction in `prune_finished_jobs`. Bounds transaction length, not memory \u2014 see that function.",
       "expression": "1000",
       "file": "backend/app/services/scraper_jobs.py",
-      "line": 46,
+      "line": 47,
       "name": "SYNC_JOB_DELETE_BATCH",
       "value": 1000
     },
@@ -964,7 +980,7 @@
       "comment": "How many watched-but-not-run jobs this process keeps mirrored. Evicting one costs a row read to rebuild it, never correctness, so a modest cap is free insurance against the mirror becoming a leak: `GET /jobs/sync/{id}` seeds an entry for any job id a client asks about, and nothing about a finished job makes it fall out on its own.",
       "expression": "256",
       "file": "backend/app/services/scraper_jobs.py",
-      "line": 276,
+      "line": 277,
       "name": "MAX_MIRRORED_JOBS",
       "value": 256
     },
@@ -972,7 +988,7 @@
       "comment": "Same bound, same reason, for the cancellation flags. See `_get_cancel_event`.",
       "expression": "256",
       "file": "backend/app/services/scraper_jobs.py",
-      "line": 279,
+      "line": 280,
       "name": "MAX_TRACKED_CANCEL_EVENTS",
       "value": 256
     },
@@ -1052,7 +1068,7 @@
       "comment": "How long a coalesced request waits before giving up and reporting a skip. **Ticket 12 removed this constant's original reason and it still earns its place, on a different one.** Ticket 11 justified the bound by the waiter holding a slot in the worker's concurrency gate; ticket 12 made the permit releasable (`sync_queue.SyncSlot`), so a waiter now scrapes nobody's slot. What remains is that the waiter's *message* is claimed from PGMQ under a visibility timeout of about 2.4 hours: a waiter that outlasted it would have its own message redelivered and processed a second time while the first was still waiting. And a person is on the other end of the SSE stream, for whom an answer of \"still running\" beats an open connection. Fifteen minutes is a judgement, not a derivation, and worth naming as such: long enough that an ordinary sync -- seconds to a couple of minutes -- is always ridden rather than skipped, short enough to stay well inside the visibility timeout.",
       "expression": "900",
       "file": "backend/app/services/sync_orchestrator.py",
-      "line": 1521,
+      "line": 1515,
       "name": "COALESCE_MAX_WAIT_SECONDS",
       "value": 900
     },
@@ -1060,7 +1076,7 @@
       "comment": "How often a waiter re-checks the claim when no notification arrives. Small, because it is only reached when a ring was lost or the holder died, and both of those should resolve in seconds rather than at the next sweep.",
       "expression": "2.0",
       "file": "backend/app/services/sync_orchestrator.py",
-      "line": 1526,
+      "line": 1520,
       "name": "_COALESCE_POLL_SECONDS",
       "value": 2.0
     },
@@ -1316,7 +1332,7 @@
       "comment": "The topic or row a link names, and how long it stays highlighted.",
       "expression": "2500",
       "file": "frontend/src/components/settings-page/sections.ts",
-      "line": 41,
+      "line": 48,
       "name": "FLASH_MS",
       "value": 2500
     },
@@ -1380,7 +1396,7 @@
       "comment": "The Settling curve is refitted daily and the reach settings change by hand, so an hour-old copy is as good as a fresh one (PFB-03).",
       "expression": "60 * 60 * 1000",
       "file": "frontend/src/hooks/queryKeys.ts",
-      "line": 182,
+      "line": 186,
       "name": "VIEW_ESTIMATE_STALE_TIME",
       "value": 3600000
     },
@@ -1740,7 +1756,7 @@
       "comment": "Rows the Requests tab's Channel table shows first.",
       "expression": "25",
       "file": "frontend/src/lib/requests/breakdown.ts",
-      "line": 304,
+      "line": 333,
       "name": "FIRST_CHANNELS",
       "value": 25
     },
@@ -1748,7 +1764,7 @@
       "comment": "Rows each \"Show more\" adds to the Requests tab's Channel table.",
       "expression": "50",
       "file": "frontend/src/lib/requests/breakdown.ts",
-      "line": 306,
+      "line": 335,
       "name": "MORE_CHANNELS",
       "value": 50
     },
@@ -1756,7 +1772,7 @@
       "comment": "Steps on the violet Account ramp, `--account-1` to `--account-4`.",
       "expression": "4",
       "file": "frontend/src/lib/requests/breakdown.ts",
-      "line": 453,
+      "line": 482,
       "name": "ACCOUNT_STEPS",
       "value": 4
     },

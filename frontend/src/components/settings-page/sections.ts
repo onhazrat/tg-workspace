@@ -4,6 +4,8 @@
  */
 import { getRouteApi } from "@tanstack/react-router"
 import { useEffect, useMemo, useState } from "react"
+import type { RequestKindSwitch } from "@/client"
+import { useRequestKinds } from "@/hooks/useRequestKinds"
 import {
   elementId,
   type Filters,
@@ -14,7 +16,12 @@ import {
   type Scope,
   sectionTopic,
 } from "./model"
-import { type Panel, panelMatches, visiblePanels } from "./panels"
+import {
+  absorbingPanel,
+  type Panel,
+  panelMatches,
+  visiblePanels,
+} from "./panels"
 import { type SettingsRegistry, useSettingsRegistry } from "./registry"
 
 export interface ScopeGroup {
@@ -41,7 +48,10 @@ const HIDDEN_SCOPES: readonly Scope[] = ["env", "code"]
 const FLASH_MS = 2500
 
 export function buildSections(
-  registry: Pick<SettingsRegistry, "rows" | "topics" | "permissions">,
+  registry: Pick<SettingsRegistry, "rows" | "topics" | "permissions"> & {
+    /** The Request kind switches, whose Settings a panel shows (RKD-02). */
+    kinds?: readonly RequestKindSwitch[]
+  },
   query: string,
   filters: Filters,
   unfolded: ReadonlySet<string>,
@@ -51,7 +61,12 @@ export function buildSections(
   const askedForHidden = [filters.scope, parsed.filters.scope].some(
     (s) => s === "env" || s === "code",
   )
-  const rows = filterRows(registry.rows, query, filters)
+  const hits = filterRows(registry.rows, query, filters)
+  // A row a panel shows is found through the panel, never listed twice.
+  const kinds = registry.kinds ?? []
+  const rows = hits.filter(
+    (r) => !absorbingPanel(r.id, registry.permissions, kinds),
+  )
   // A panel holds no value, so a filter on values or an operator hides it.
   const panels =
     filters.modifiedOnly ||
@@ -59,8 +74,10 @@ export function buildSections(
     filters.scope !== "all" ||
     query.includes("@")
       ? []
-      : visiblePanels(registry.permissions).filter((p) =>
-          panelMatches(p, parsed.text),
+      : visiblePanels(registry.permissions).filter(
+          (p) =>
+            panelMatches(p, parsed.text) ||
+            hits.some((r) => p.absorbs?.(kinds).includes(r.id)),
         )
   const out: Section[] = []
   for (const topic of registry.topics) {
@@ -114,6 +131,15 @@ export function landingFor(
   }
 }
 
+/** What a link lands on: a Setting a panel shows lands on the panel. */
+export function linkTarget(
+  asked: string | undefined,
+  permissions: readonly string[],
+  kinds: readonly RequestKindSwitch[],
+): string | undefined {
+  return (asked && absorbingPanel(asked, permissions, kinds)?.id) || asked
+}
+
 /**
  * Scrolls to `id` now and again while the panels above it load, so a link
  * still lands once their content has pushed the row down. Returns a cancel.
@@ -129,6 +155,7 @@ function scrollToId(id: string, block: ScrollLogicalPosition): () => void {
 
 export function useSettingsPage() {
   const registry = useSettingsRegistry()
+  const kinds = useRequestKinds()
   const { setting, section } = workspaceRoute.useSearch()
   const [query, setQuery] = useState("")
   const [filters, setFilters] = useState<Filters>({
@@ -139,8 +166,8 @@ export function useSettingsPage() {
   const [unfolded, setUnfolded] = useState<Set<string>>(new Set())
 
   const sections = useMemo(
-    () => buildSections(registry, query, filters, unfolded),
-    [registry, query, filters, unfolded],
+    () => buildSections({ ...registry, kinds }, query, filters, unfolded),
+    [registry, kinds, query, filters, unfolded],
   )
 
   const totals = useMemo(
@@ -155,7 +182,11 @@ export function useSettingsPage() {
   // `?setting=<id>` scrolls to a row, panel or topic and flashes it; an old
   // `?section=` lands on the topic that holds what it showed.
   const [flash, setFlash] = useState<string | null>(null)
-  const target = setting ?? sectionTopic(section)
+  const target = linkTarget(
+    setting ?? sectionTopic(section),
+    registry.permissions,
+    kinds,
+  )
   const loaded = !registry.isLoading
   useEffect(() => {
     if (!target || !loaded) return

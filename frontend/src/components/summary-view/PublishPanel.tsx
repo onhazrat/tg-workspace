@@ -9,6 +9,7 @@ import type {
 } from "@/client"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgToggle } from "@/components/ui/tg-toggle"
+import { useKindGate } from "@/hooks/useRequestKinds"
 import { CITATION_STYLES, type CitationStyle } from "@/lib/settings/schema"
 import { cn } from "@/lib/utils"
 import type { BotCredential, ChatDestination, PublishingOptions } from "@/types"
@@ -98,13 +99,14 @@ function PublishTarget(p: PublishPanelProps) {
   // included; a pick made by hand wins.
   const botId = pickedBot || loneId(p.bots)
   const destId = pickedDest || loneId(p.destinations)
+  const dest = p.destinations.find((d) => d.id === destId)
+  const gate = useKindGate("botApi", !botId || !dest || !p.plan)
   if (p.bots.length === 0 || p.destinations.length === 0)
     return (
       <p className="text-xs text-app-ink/60">
         Add a bot and a destination in Settings to publish.
       </p>
     )
-  const dest = p.destinations.find((d) => d.id === destId)
   const publish = async () => {
     setSending(true)
     try {
@@ -126,7 +128,7 @@ function PublishTarget(p: PublishPanelProps) {
       </div>
       <TgButton
         variant="primary"
-        disabled={!botId || !dest || !p.plan}
+        {...gate}
         loading={sending}
         loadingLabel="Sending…"
         onClick={publish}

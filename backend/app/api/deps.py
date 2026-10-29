@@ -16,8 +16,10 @@ from app.core.acting_owner import bind as bind_acting_owner
 from app.core.config import settings
 from app.core.db import engine
 from app.core.permissions import Permission
+from app.core.request_recording import RequestKind
 from app.models import TokenPayload, User
 from app.services import rbac
+from app.services.request_kinds import assert_kind_enabled
 
 reusable_oauth2 = OAuth2PasswordBearer(
     tokenUrl=f"{settings.API_V1_STR}/login/access-token"
@@ -664,3 +666,18 @@ class require_permission:  # noqa: N801 — reads as a dependency at call sites
                 status_code=403, detail="The user doesn't have enough privileges"
             )
         return current_user
+
+
+class require_kind_enabled:  # noqa: N801 (reads as a dependency)
+    """A route dependency refusing work of a disabled Request kind (RKD-01).
+
+    Runs before the handler, so a route whose body turns every failure into a
+    500 never sees the refusal; `app.main` answers it with the one status every
+    route uses. The chokepoint refuses the same work again if a path forgets.
+    """
+
+    def __init__(self, kind: RequestKind) -> None:
+        self.kind = kind
+
+    def __call__(self) -> None:
+        assert_kind_enabled(self.kind)
