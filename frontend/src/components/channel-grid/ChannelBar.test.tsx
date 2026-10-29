@@ -46,7 +46,13 @@ describe("SortMenu", () => {
     fireEvent.change(screen.getByPlaceholderText("Search sort options..."), {
       target: { value: "sync" },
     })
-    expect(screen.getAllByRole("radio")).toHaveLength(3)
+    const radios = screen.getAllByRole("radio")
+    expect(radios.map((r) => r.textContent?.replace("○ ", ""))).toEqual([
+      "Last sync",
+      "Next regular sync",
+      "Next dynamic sync",
+      "Next auto sync",
+    ])
     cleanup()
     mount(true)
     expect(screen.getByRole("radio", { name: /Subscribers/ })).toBeTruthy()
@@ -56,9 +62,12 @@ describe("SortMenu", () => {
     const calls: Calls = []
     mount(false, calls)
     fireEvent.click(screen.getByRole("radio", { name: /Total posts/ }))
+    fireEvent.click(screen.getByTestId("channel-sort"))
+    fireEvent.click(screen.getByRole("radio", { name: /Last post/ }))
     fireEvent.click(screen.getByRole("button", { name: "Sort ascending" }))
     expect(calls).toEqual([
       ["sort", "total_posts"],
+      ["sort", "last_post"],
       ["direction", undefined],
     ])
   })

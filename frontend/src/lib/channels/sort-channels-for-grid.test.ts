@@ -218,6 +218,57 @@ describe("sortChannelsForGrid sort options", () => {
     expect(sortNames(list, sortBy, "desc")).toEqual([...expected].reverse())
   })
 
+  it("Last post ranks by the stats' newest Post (TGU-01)", () => {
+    const list = ["old", "new", "mid"].map((name) => makeChannel(name))
+    const stats = (lastPostAt: number) => ({
+      count: 1,
+      reach: null,
+      reachEstimated: false,
+      lastPostAt,
+    })
+    const order = sortChannelsForGrid({
+      channels: list,
+      channelStats: { old: stats(1), new: stats(9), mid: stats(5) },
+      selectedChannels: new Set(),
+      sortBy: "last_post",
+      sortDirection: "desc",
+      groupBySelection: false,
+    }).map((channel) => channel.name)
+    expect(order).toEqual(["new", "mid", "old"])
+  })
+
+  it.each<["asc" | "desc"]>([["asc"], ["desc"]])(
+    "a Channel with no Last sync or Last post sorts last, %s (TGU-01)",
+    (sortDirection) => {
+      const list = [
+        makeChannel("never", { lastUpdated: undefined }),
+        makeChannel("one", { lastUpdated: 1 }),
+        makeChannel("two", { lastUpdated: 2 }),
+      ]
+      const lastPost = {
+        one: { count: 1, reach: null, reachEstimated: false, lastPostAt: 1 },
+        two: { count: 1, reach: null, reachEstimated: false, lastPostAt: 2 },
+        never: {
+          count: 1,
+          reach: null,
+          reachEstimated: false,
+          lastPostAt: null,
+        },
+      }
+      for (const sortBy of ["last_updated", "last_post"] as const) {
+        const order = sortChannelsForGrid({
+          channels: list,
+          channelStats: lastPost,
+          selectedChannels: new Set(),
+          sortBy,
+          sortDirection,
+          groupBySelection: false,
+        }).map((channel) => channel.name)
+        expect(order.at(-1)).toBe("never")
+      }
+    },
+  )
+
   it("counts a channel with no stats as zero", () => {
     const list = [makeChannel("alpha"), makeChannel("unknown")]
     expect(sortNames(list, "total_posts")).toEqual(["unknown", "alpha"])

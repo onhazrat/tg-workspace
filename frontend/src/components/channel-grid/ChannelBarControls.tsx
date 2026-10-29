@@ -22,7 +22,8 @@ import type { ChannelGridSortOption } from "@/lib/channels/sort-channels-for-gri
 import type { Channel } from "@/types"
 
 const SORT_OPTIONS: { value: ChannelGridSortOption; label: string }[] = [
-  { value: "last_updated", label: "Last updated" },
+  { value: "last_updated", label: "Last sync" },
+  { value: "last_post", label: "Last post" },
   { value: "followed_at", label: "Followed at" },
   { value: "activity_rate", label: "Activity rate" },
   { value: "reach", label: "Reach" },
