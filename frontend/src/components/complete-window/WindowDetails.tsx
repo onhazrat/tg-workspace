@@ -49,7 +49,7 @@ const HATCH = {
 }
 const gapStyle = (g: Gap) => (g === "stuck" ? HATCH : undefined)
 
-const TONE: Record<"red" | "amber" | "slate", string> = {
+export const TONE: Record<"red" | "amber" | "slate", string> = {
   red: "bg-red-500/10 text-red-700 dark:text-red-300 border-red-500/30",
   amber:
     "bg-amber-500/10 text-amber-800 dark:text-amber-200 border-amber-500/30",
@@ -78,7 +78,7 @@ function ReasonChip({ reason, title }: { reason: Reason; title?: string }) {
 }
 
 /** A row's chips, minus what its words already say; a failure's error on hover. */
-function Chips({ c }: { c: Verdict }) {
+export function Chips({ c }: { c: Verdict }) {
   const worded: Reason[] = shortfall(c) ? ["end", "hole", "start"] : []
   return (
     <>

@@ -34,6 +34,7 @@ import {
   pendingTagRun,
   tagRunSnapshot,
 } from "@/lib/channels/tag-run"
+import { takeGateOutcome } from "@/lib/complete-window/gate"
 import { tryWriteTextToClipboard } from "@/lib/data-transfer/clipboard"
 import { scopeSubmission } from "@/lib/posts/posts-view"
 import {
@@ -183,7 +184,11 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
   const openTagRun = async (source: "generated" | "pasted") =>
     submitTagRun({
       id: crypto.randomUUID(),
-      scope: scopeSubmission(view, selectedChannelNames),
+      // The gate's outcome, when the gate ran this (CW-02).
+      scope: {
+        ...scopeSubmission(view, selectedChannelNames),
+        gate: takeGateOutcome(),
+      },
       mode,
       source,
       status: "pending",

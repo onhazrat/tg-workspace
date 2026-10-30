@@ -4,20 +4,10 @@
  * the saving and the state.
  */
 import { withMissingPosts } from "@/lib/artifacts/artifact-run"
-import type {
-  Channel,
-  ChatMessage,
-  ChatMode,
-  ChatSession,
-  LLMLog,
-  Post,
-} from "@/types"
+import type { ChatMessage, ChatMode, ChatSession, LLMLog, Post } from "@/types"
 
 export const NO_CONTEXT_REPLY =
   "I couldn't find any relevant information in your history to answer that question. Please ensure your posts have been synced and processed."
-
-/** A channel synced within this long of the window's end counts as current. */
-const SYNC_SLACK_MS = 60_000
 
 /**
  * Replace the model's turn at the end of the transcript, or start one.
@@ -34,22 +24,6 @@ export function replaceLastTurn(
   turn: ChatMessage,
 ): ChatMessage[] {
   return [...messages.slice(0, -1), turn]
-}
-
-/**
- * Selected channels whose last sync is older than a minute before the window
- * ends (or now, if sooner). `AIContext` syncs these before a Summary too.
- */
-export function staleSelectedChannels(
-  channels: Channel[],
-  selected: ReadonlySet<string>,
-  windowEnd: number,
-  now: number,
-): Channel[] {
-  const target = Math.min(windowEnd, now) - SYNC_SLACK_MS
-  return channels.filter(
-    (c) => selected.has(c.name) && (!c.lastUpdated || c.lastUpdated < target),
-  )
 }
 
 export const chatErrorText = (err: unknown): string =>

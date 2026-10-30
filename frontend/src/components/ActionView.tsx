@@ -6,6 +6,7 @@ import { DiscoverAction } from "@/components/action/DiscoverAction"
 import { RunSettingsBar } from "@/components/action/RunSettingsBar"
 import { SummaryAction } from "@/components/action/SummaryAction"
 import { TagAction } from "@/components/action/TagAction"
+import { Gate } from "@/components/complete-window/Gate"
 import { LiveWindowBanner } from "@/components/complete-window/LiveWindowBanner"
 
 /**
@@ -61,6 +62,8 @@ export const ActionView: React.FC = () => (
       </header>
       {/* Whether the window holds every Post, before any action (CW-01). */}
       <LiveWindowBanner where="action" />
+      {/* Every button below freezes a Scope through it (CW-02). */}
+      <Gate />
       <ul className="divide-y divide-app-ink/10">
         <SummaryAction />
         <ChatAction />

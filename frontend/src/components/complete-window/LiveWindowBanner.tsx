@@ -34,28 +34,25 @@ function SyncNow({ check }: { check: WindowCheck }) {
   )
   const targets = channels.filter((c) => fixable.has(c.name))
   if (targets.length === 0) return null
-  const start = async () => {
+  const start = () => {
+    const job = scrapeChannelsInParallel(targets, "Complete window sync").then(
+      () => {
+        toast.success(`Synced ${targets.length}. Checking the window again.`)
+      },
+      () => {
+        toast.error("The sync stopped. Checking the window again.")
+      },
+    )
     setBannerSync({
       names: new Set(targets.map((c) => c.name)),
       startedAt: Date.now(),
+      job,
     })
-    try {
-      await scrapeChannelsInParallel(targets, "Complete window sync")
-      toast.success(`Synced ${targets.length}. Checking the window again.`)
-    } catch {
-      toast.error("The sync stopped. Checking the window again.")
-    } finally {
-      // The sync's own end refetches every Posts read, this check included.
-      setBannerSync(null)
-    }
+    // The sync's own end refetches every Posts read, this check included.
+    void job.then(() => setBannerSync(null))
   }
   return (
-    <TgButton
-      type="button"
-      size="sm"
-      variant="secondary"
-      onClick={() => void start()}
-    >
+    <TgButton type="button" size="sm" variant="secondary" onClick={start}>
       <RefreshCw size={12} />
       Sync {targets.length}
     </TgButton>

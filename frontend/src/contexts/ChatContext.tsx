@@ -1,4 +1,3 @@
-import { useQueryClient } from "@tanstack/react-query"
 import type React from "react"
 import { createContext, useContext, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
@@ -20,7 +19,6 @@ import {
   chatSessionRecord,
   NO_CONTEXT_REPLY,
   replaceLastTurn,
-  staleSelectedChannels,
   type TurnResult,
   transcriptLoad,
 } from "@/lib/chat-sessions/chat-turn"
@@ -34,16 +32,16 @@ import {
   saveChatSession,
   submitChatSession,
 } from "@/lib/chat-sessions/store"
+import { takeGateOutcome } from "@/lib/complete-window/gate"
 import { saveLLMLog } from "@/lib/logs/write"
 import { scopeSubmission } from "@/lib/posts/posts-view"
 import { chatWithHistoryStream, generateChatStream } from "../services/ai"
 import type { ChatMessage, ChatMode, Post } from "../types"
 import { useData } from "./DataContext"
-import { invalidatePostsReads, usePostsViewState } from "./PostsViewContext"
+import { usePostsViewState } from "./PostsViewContext"
 import { useRAG } from "./RAGContext"
 import { useScope } from "./ScopeContext"
 import { useSettings } from "./SettingsContext"
-import { useSync } from "./SyncContext"
 import { useUI } from "./UIContext"
 
 interface ChatContextType {
@@ -86,8 +84,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   const { startDate, endDate } = useScope()
   const { activeTab, currentChatSessionId, workspaceTabs } = useUI()
   const { aiLanguage, selectedModel, aiTemperature } = useSettings()
-  const { scrapeChannelsInParallel } = useSync()
-  const queryClient = useQueryClient()
   const { view } = usePostsViewState()
   const { searchSimilarPosts } = useRAG()
 
@@ -218,20 +214,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }
 
-  /** Sync the selected channels whose posts may not reach the window's end yet. */
-  const syncStaleSelection = async () => {
-    const stale = staleSelectedChannels(
-      channels,
-      selectedChannels,
-      endDate,
-      Date.now(),
-    )
-    if (stale.length === 0) return
-    toast.info(`Syncing ${stale.length} channels to ensure up-to-date data...`)
-    await scrapeChannelsInParallel(stale, "Pre-Chat Sync")
-    invalidatePostsReads(queryClient)
-  }
-
   /**
    * Answer from the Chat's own Covered Posts.
    *
@@ -244,7 +226,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     userMessage: string,
     history: ChatMessage[],
   ): Promise<TurnResult> => {
-    await syncStaleSelection()
     const { stream, prompt, config, systemInstruction, missingPosts } =
       await generateChatStream(
         sessionId,
@@ -308,7 +289,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     if (send.sessionId) return
     await submitChatSession({
       id: sessionId,
-      scope: scopeSubmission(view, selectedChannelNames),
+      // The gate's outcome; a later turn never syncs or checks (CW-02).
+      scope: {
+        ...scopeSubmission(view, selectedChannelNames),
+        gate: takeGateOutcome(),
+      },
       language: aiLanguage,
       model: selectedModel,
       mode: chatMode,

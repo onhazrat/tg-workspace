@@ -1561,14 +1561,6 @@
       "value": 86400000
     },
     {
-      "comment": "A channel synced within this long of the window's end counts as current.",
-      "expression": "60_000",
-      "file": "frontend/src/lib/chat-sessions/chat-turn.ts",
-      "line": 20,
-      "name": "SYNC_SLACK_MS",
-      "value": 60000
-    },
-    {
       "comment": "",
       "expression": "16",
       "file": "frontend/src/lib/citations/find-citation.ts",
@@ -1615,6 +1607,22 @@
       "line": 7,
       "name": "SEARCH_RESULTS_CAP",
       "value": 50
+    },
+    {
+      "comment": "ADR-043's wait for a person; \"Continue now\" ends it sooner.",
+      "expression": "5 * 60_000",
+      "file": "frontend/src/lib/complete-window/gate.ts",
+      "line": 37,
+      "name": "DEADLINE_MS",
+      "value": 300000
+    },
+    {
+      "comment": "Untouched, the gate syncs and continues by itself after this.",
+      "expression": "30",
+      "file": "frontend/src/lib/complete-window/gate.ts",
+      "line": 39,
+      "name": "AUTO_SYNC_SECONDS",
+      "value": 30
     },
     {
       "comment": "",

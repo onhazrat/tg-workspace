@@ -9,6 +9,8 @@ import { useSyncExternalStore } from "react"
 export interface BannerSync {
   names: ReadonlySet<string>
   startedAt: number
+  /** Settles when the sync ends, however it ends: the gate waits on it. */
+  job?: Promise<void>
 }
 
 let running: BannerSync | null = null
