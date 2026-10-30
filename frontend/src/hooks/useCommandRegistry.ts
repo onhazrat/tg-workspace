@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { getRouteApi } from "@tanstack/react-router"
 import { useCallback, useMemo } from "react"
 import { useCommandPaletteContext } from "@/components/CommandPaletteProvider"
+import { runGated } from "@/components/complete-window/Gate"
 import { useSettingsRegistry } from "@/components/settings-page/registry"
 import { useAI } from "@/contexts/AIContext"
 import { useChatContext } from "@/contexts/ChatContext"
@@ -110,12 +111,7 @@ export function useCommandRegistry(): {
   } = useSync()
   const { view: postsView } = usePostsViewState()
   const postsEdits = usePostsViewEdits()
-  const {
-    setSummary,
-    handleSummarize,
-    copySummaryPrompt,
-    completePendingSummary,
-  } = useAI()
+  const { setSummary, completePendingSummary } = useAI()
   const { setChatMessages } = useChatContext()
   const { getEffectiveGlobalStartTime } = useSettings()
   const { isOffline } = useApiStatus()
@@ -185,8 +181,15 @@ export function useCommandRegistry(): {
       getPostsInScopeCounts,
       starredOnly,
       setStarredOnly,
-      handleSummarize,
-      copySummaryPrompt,
+      // Through the gate on the Action tab, as its buttons are (CW-02).
+      handleSummarize: async () => {
+        workspaceTabs.openTab("action")
+        runGated("summary")
+      },
+      copySummaryPrompt: async () => {
+        workspaceTabs.openTab("action")
+        runGated("summary-prompt")
+      },
       completePendingSummary,
       loadHistory,
       databaseTables: [...SERVER_TABLE_NAMES],
@@ -201,12 +204,10 @@ export function useCommandRegistry(): {
       channelStats,
       channels,
       completePendingSummary,
-      copySummaryPrompt,
       currentSummaryId,
       endDate,
       getPostsInScopeCounts,
       getEffectiveGlobalStartTime,
-      handleSummarize,
       handleScrapeAll,
       handleScrapeChannel,
       handleScrapeSelected,

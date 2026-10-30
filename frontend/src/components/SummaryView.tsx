@@ -4,6 +4,7 @@ import { useMemo, useState } from "react"
 import ReactMarkdown from "react-markdown"
 import { toast } from "sonner"
 import { ArtifactScopeLine } from "@/components/ArtifactScopeLine"
+import { runGated } from "@/components/complete-window/Gate"
 import { GoToActionEmptyState } from "@/components/history/GoToActionEmptyState"
 import { usePostsViewEdits } from "@/contexts/PostsViewContext"
 import { useAiKeys } from "@/hooks/useAiKeys"
@@ -41,7 +42,6 @@ import { generatesOnTab } from "./workspace-shell/workspace-shell-model"
 export const SummaryView: React.FC = () => {
   const {
     summary,
-    handleSummarize,
     generateBackgroundSummary,
     regeneratingSummaries,
     completePendingSummary,
@@ -127,7 +127,9 @@ export const SummaryView: React.FC = () => {
       return
     }
     if (!currentSummary) {
-      handleSummarize()
+      // A new Summary goes through the gate on the Action tab (CW-02).
+      setActiveTab("action")
+      runGated("summary")
       return
     }
     toast.promise(generateBackgroundSummary(currentSummary, false), {
