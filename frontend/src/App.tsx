@@ -36,6 +36,11 @@ import { ToolsTab } from "./components/tools/ToolsTab"
 // The Operator's Requests tab downloads only when it opens (RQS-03): most
 // Accounts never see it, and its trend brings Plotly (spec, "The Requests tab").
 const RequestsTab = lazy(() => import("./components/requests/RequestsTab"))
+const CoverageTab = lazy(() =>
+  import("./components/complete-window-prototype/variants").then((m) => ({
+    default: m.CoverageTab,
+  })),
+)
 
 import {
   Tooltip,
@@ -240,6 +245,14 @@ export default function App() {
           fallback={<p className="text-sm text-app-ink/50">Loading…</p>}
         >
           <RequestsTab />
+        </Suspense>
+      ),
+      // PROTOTYPE (complete-window)
+      coverage: () => (
+        <Suspense
+          fallback={<p className="text-sm text-app-ink/50">Loading…</p>}
+        >
+          <CoverageTab />
         </Suspense>
       ),
     }

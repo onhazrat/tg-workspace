@@ -3,6 +3,7 @@ import type React from "react"
 import { useState } from "react"
 
 import { ActionIconButton, ActionRow } from "@/components/action/ActionRow"
+import { useGated } from "@/components/complete-window-prototype/variants"
 import { TgButton } from "@/components/ui/tg-button"
 import { useAI } from "@/contexts/AIContext"
 import { useData } from "@/contexts/DataContext"
@@ -39,6 +40,7 @@ export const SummaryAction: React.FC = () => {
   const { handleSummarize, copySummaryPrompt } = useAI()
   const [copyingPrompt, setCopyingPrompt] = useState(false)
 
+  const gated = useGated()
   const postsInScopeCounts = useScopedPostCounts()
   const hasPostsInScope = Object.values(postsInScopeCounts).some((n) => n > 0)
 
@@ -74,14 +76,14 @@ export const SummaryAction: React.FC = () => {
           icon={Copy}
           label="Copy summary prompt"
           hint="Copies the prompt to your clipboard and creates a history entry awaiting the external AI response."
-          onClick={() => void handleCopyPrompt()}
+          onClick={gated("summary-prompt", () => void handleCopyPrompt())}
           disabled={actionsDisabled}
           loading={copyingPrompt}
         />
       }
       primary={
         <TgButton
-          onClick={handleSummarize}
+          onClick={gated("summary", handleSummarize)}
           disabled={actionsDisabled || noKey}
           title={noKey ? "Add an AI key above to run this." : undefined}
           loading={summarizing}

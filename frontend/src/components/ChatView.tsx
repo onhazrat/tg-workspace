@@ -16,6 +16,7 @@ import {
   chatViewSections,
   newestMissingPosts,
 } from "@/components/chat/chat-view-model"
+import { ProtoArtifactPanel } from "@/components/complete-window-prototype/variants"
 import { GoToActionEmptyState } from "@/components/history/GoToActionEmptyState"
 import { useChatContext } from "../contexts/ChatContext"
 import { useRAG } from "../contexts/RAGContext"
@@ -137,6 +138,14 @@ export const ChatView: React.FC = () => {
             artifact={chatSession}
             missingPosts={newestMissingPosts(chatMessages)}
           />
+          {/* PROTOTYPE (complete-window) */}
+          <div className="mt-3">
+            <ProtoArtifactPanel
+              artifactId={chatSession.id}
+              kind="chat"
+              scope={chatSession.scope}
+            />
+          </div>
         </div>
       )}
 

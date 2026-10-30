@@ -2,6 +2,7 @@ import { motion } from "motion/react"
 import type React from "react"
 import { useMemo } from "react"
 import { ArtifactScopeLine } from "@/components/ArtifactScopeLine"
+import { ProtoArtifactPanel } from "@/components/complete-window-prototype/variants"
 import { GoToActionEmptyState } from "@/components/history/GoToActionEmptyState"
 import { ApplyTagsBar } from "@/components/tag/ApplyTagsBar"
 import { TagViewBody } from "@/components/tag/TagViewBody"
@@ -59,7 +60,15 @@ export const TagView: React.FC = () => {
         selectedCount={selectedChannels.size}
         selectedRun={selectedRun}
         scopeLine={(run) => (
-          <ArtifactScopeLine artifact={run} missingPosts={run.missingPosts} />
+          <>
+            <ArtifactScopeLine artifact={run} missingPosts={run.missingPosts} />
+            {/* PROTOTYPE (complete-window) */}
+            <ProtoArtifactPanel
+              artifactId={run.id}
+              kind="tag"
+              scope={run.scope}
+            />
+          </>
         )}
         emptyState={
           <GoToActionEmptyState

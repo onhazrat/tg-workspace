@@ -6,6 +6,10 @@ import { DiscoverAction } from "@/components/action/DiscoverAction"
 import { RunSettingsBar } from "@/components/action/RunSettingsBar"
 import { SummaryAction } from "@/components/action/SummaryAction"
 import { TagAction } from "@/components/action/TagAction"
+import {
+  ProtoGate,
+  ProtoWindowIndicator,
+} from "@/components/complete-window-prototype/variants"
 
 /**
  * The one place you start work.
@@ -58,12 +62,14 @@ export const ActionView: React.FC = () => (
         </div>
         <RunSettingsBar />
       </header>
+      <ProtoWindowIndicator where="action" slot="row" />
       <ul className="divide-y divide-app-ink/10">
         <SummaryAction />
         <ChatAction />
         <TagAction />
         <DiscoverAction />
       </ul>
+      <ProtoGate />
     </section>
   </motion.div>
 )

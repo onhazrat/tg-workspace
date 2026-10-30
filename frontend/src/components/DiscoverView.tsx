@@ -1,6 +1,8 @@
 import { motion } from "motion/react"
 import type React from "react"
 import { useMemo, useState } from "react"
+import type { FrozenScope } from "@/client"
+import { ProtoArtifactPanel } from "@/components/complete-window-prototype/variants"
 import { DiscoverBulkBar } from "@/components/discover/DiscoverBulkBar"
 import { DiscoverCandidatePanel } from "@/components/discover/DiscoverCandidatePanel"
 import { DiscoverCandidateTable } from "@/components/discover/DiscoverCandidateTable"
@@ -280,6 +282,13 @@ export const DiscoverView: React.FC = () => {
         liveChannelCount={selectedChannels.size}
         candidateCount={candidates.length}
         unfollowedCount={unfollowedCount}
+      />
+      {/* PROTOTYPE (complete-window) */}
+      <ProtoArtifactPanel
+        artifactId={view?.id}
+        kind="discovery"
+        // A report keeps the same fields under its own type.
+        scope={view?.scope as FrozenScope | undefined}
       />
 
       <div className="rounded-xl border border-app-ink/10 bg-app-card p-4 shadow-sm">

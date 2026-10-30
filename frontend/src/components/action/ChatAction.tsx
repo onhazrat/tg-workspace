@@ -3,6 +3,7 @@ import type React from "react"
 
 import { ActionRow } from "@/components/action/ActionRow"
 import { startChatButton } from "@/components/action/action-view-model"
+import { useGated } from "@/components/complete-window-prototype/variants"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgInlineChoice } from "@/components/ui/tg-inline-segments"
 import { useChatContext } from "@/contexts/ChatContext"
@@ -33,6 +34,7 @@ export const ChatAction: React.FC = () => {
     actionDraft: draft,
     setActionDraft: setDraft,
   } = useChatContext()
+  const gated = useGated()
   const { embeddingsEnabled } = useSettings()
   const { isOffline } = useApiStatus()
   const button = startChatButton({
@@ -60,7 +62,12 @@ export const ChatAction: React.FC = () => {
     setChatMessages([])
     // The empty Chat tab, or a new one; the first turn fills it.
     workspaceTabs.openTab("chat")
-    void handleSendMessage({ message: question, history: [], sessionId: null })
+    // Returned so the complete-window gate can wait for the turn (PROTOTYPE).
+    return handleSendMessage({
+      message: question,
+      history: [],
+      sessionId: null,
+    })
   }
 
   return (
@@ -92,7 +99,7 @@ export const ChatAction: React.FC = () => {
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault()
-                startChat()
+                if (draft.trim() && !isChatting) gated("chat", startChat)()
               }
             }}
             placeholder="Ask about trends, topics, or the channels in scope…"
@@ -103,7 +110,7 @@ export const ChatAction: React.FC = () => {
       primary={
         <TgButton
           data-testid="action-start-chat"
-          onClick={startChat}
+          onClick={gated("chat", startChat)}
           disabled={button.disabled}
           title={button.title}
           loading={isChatting}

@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import type React from "react"
 import { createContext, useContext, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
+import { gateOwnsSync } from "@/components/complete-window-prototype/store"
 import {
   useChatSessionQuery,
   useInvalidateChatSessions,
@@ -220,6 +221,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
   /** Sync the selected channels whose posts may not reach the window's end yet. */
   const syncStaleSelection = async () => {
+    // PROTOTYPE (complete-window): the gate already synced or skipped.
+    if (gateOwnsSync) return
     const stale = staleSelectedChannels(
       channels,
       selectedChannels,

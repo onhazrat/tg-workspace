@@ -1,5 +1,6 @@
 import type React from "react"
 import type { ScopedPostRef } from "@/client"
+import { ProtoArtifactPanel } from "@/components/complete-window-prototype/variants"
 import { scopeChannels } from "@/lib/scope/artifact-scope"
 import type { SummaryTextSize } from "@/lib/settings/schema"
 import type { CitedPost } from "@/lib/summaries/cited-posts"
@@ -93,6 +94,11 @@ export function SummaryBody(props: SummaryBodyProps) {
   if (body)
     return (
       <>
+        <ProtoArtifactPanel
+          artifactId={summary?.id}
+          kind="summary"
+          scope={summary?.scope}
+        />
         <SummaryHeader
           summary={summary}
           body={body}

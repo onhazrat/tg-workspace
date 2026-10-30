@@ -1,3 +1,4 @@
+import { coverageTabOffered } from "@/components/complete-window-prototype/store"
 import type { TabType } from "@/constants"
 import { DIRECTORY_PARAMS } from "@/lib/directory/directory-view"
 import { artifactDestination } from "@/lib/history/open-artifact"
@@ -77,6 +78,8 @@ export function offeredTab(
   kind: TabType,
   permissions: readonly string[],
 ): boolean {
+  // PROTOTYPE (complete-window): the Coverage tab is offered in variant A only.
+  if (kind === "coverage" && !coverageTabOffered()) return false
   const needed = TAB_PERMISSIONS[kind]
   return !needed || permissions.includes(needed)
 }

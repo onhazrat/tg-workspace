@@ -8,6 +8,7 @@ import {
   dataSendSummaryPublication,
   dataStartSummaryAttempt,
 } from "@/client"
+import { gateOwnsSync } from "@/components/complete-window-prototype/store"
 import { queryKeys } from "@/hooks/queryKeys"
 import { useBotCredentials, useChatDestinations } from "@/hooks/useBots"
 import {
@@ -113,6 +114,8 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
 
   /** Sync the selected channels whose posts may not reach the window's end yet. */
   const syncStaleSelection = async () => {
+    // PROTOTYPE (complete-window): the gate already synced or skipped.
+    if (gateOwnsSync) return
     const stale = staleSelectedChannels(
       channels,
       selectedChannels,

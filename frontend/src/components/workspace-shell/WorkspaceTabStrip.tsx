@@ -17,6 +17,7 @@ import {
 import { Link } from "@tanstack/react-router"
 import {
   Activity,
+  BarChart3,
   Compass,
   Database,
   FileText,
@@ -55,6 +56,7 @@ import {
 import { tabAnnouncements, tabPresentation } from "./workspace-shell-model"
 
 const TAB_ICONS = {
+  BarChart3,
   Database,
   Gauge,
   List,

@@ -39,6 +39,7 @@ import {
   usePostsViewState,
 } from "../contexts/PostsViewContext"
 import { useUI } from "../contexts/UIContext"
+import { ProtoWindowIndicator } from "./complete-window-prototype/variants"
 import { PostFeedResults } from "./PostFeedResults"
 import { PostFilter } from "./PostFilter"
 import { pillClass } from "./PostFilterParts"
@@ -230,6 +231,8 @@ export const PostFeed: React.FC<PostFeedProps> = ({
             }
           />
 
+          {/* PROTOTYPE (complete-window) */}
+          <ProtoWindowIndicator where="posts" />
           <PostSelectionBar
             selected={selectedCount}
             total={windowTotal}

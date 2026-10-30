@@ -59,7 +59,16 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       port: 5173,
+      // PROTOTYPE (complete-window): `.ts.net` for Tailscale serve, /proto to
+      // the local prototype API, the rest upstream.
+      allowedHosts: [".ts.net"],
       proxy: {
+        ...(process.env.PROTO_API_PORT && {
+          "/proto": {
+            target: `http://127.0.0.1:${process.env.PROTO_API_PORT}`,
+            rewrite: (path: string) => path.replace(/^\/proto/, ""),
+          },
+        }),
         "/api": {
           target:
             process.env.PLAYWRIGHT_API_URL ||

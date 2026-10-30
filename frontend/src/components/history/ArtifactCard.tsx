@@ -1,4 +1,5 @@
 import type React from "react"
+import { ProtoHistoryMark } from "@/components/complete-window-prototype/variants"
 import { highlightText } from "@/lib/utils"
 import type { ArtifactListItem } from "@/types"
 
@@ -78,6 +79,7 @@ export const ArtifactCard: React.FC<ArtifactCardProps> = ({
         <KindLabel artifact={artifact} />
         <StatusBadge artifact={artifact} />
         <FlagChips artifact={artifact} />
+        <ProtoHistoryMark id={artifact.id} kind={artifact.kind} />
         <PublishChip artifact={artifact} target={actions.publishTarget} />
         <span className="ml-auto shrink-0 text-app-ink/50">
           <RelativeTime timestamp={artifact.timestamp} />

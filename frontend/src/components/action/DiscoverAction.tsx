@@ -3,6 +3,7 @@ import type React from "react"
 
 import { ActionRow } from "@/components/action/ActionRow"
 import { discoverButton } from "@/components/action/action-view-model"
+import { useGated } from "@/components/complete-window-prototype/variants"
 import { TgButton } from "@/components/ui/tg-button"
 import { useApiStatus } from "@/hooks/useApiStatus"
 import { useDiscoverGenerate } from "@/hooks/useDiscoverGenerate"
@@ -14,6 +15,7 @@ import { useDiscoverGenerate } from "@/hooks/useDiscoverGenerate"
 export const DiscoverAction: React.FC = () => {
   const { isOffline } = useApiStatus()
   const { generate, isGenerating, channelCount } = useDiscoverGenerate()
+  const gated = useGated()
   const button = discoverButton({ isGenerating, isOffline, channelCount })
 
   return (
@@ -25,7 +27,7 @@ export const DiscoverAction: React.FC = () => {
         <TgButton
           data-testid="action-generate-report"
           disabled={button.disabled}
-          onClick={() => void generate()}
+          onClick={gated("discover", () => void generate())}
         >
           <Compass size={13} />
           {button.label}

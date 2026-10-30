@@ -30,6 +30,8 @@ export const WORKSPACE_TABS = [
   { id: "tools", label: "Tools", icon: "Activity" },
   { id: "requests", label: "Requests", icon: "Gauge" },
   { id: "settings", label: "Settings", icon: "Settings" },
+  // PROTOTYPE (complete-window): the per-Channel timeline, in a tab of its own.
+  { id: "coverage", label: "Coverage", icon: "BarChart3" },
 ] as const
 
 /**
