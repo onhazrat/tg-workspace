@@ -263,6 +263,80 @@ class _Window:
     cutoff: int
 
 
+def _stretches(
+    channel: Channel,
+    held: _Held,
+    window: _Window,
+    *,
+    missing: int,
+    hole: tuple[int, int] | None,
+) -> list[tuple[Reason, UnprovenStretch]]:
+    """Each failing test's reason and the stretch it leaves unproven."""
+    start, e = window.start, window.e
+    out: list[tuple[Reason, UnprovenStretch]] = []
+    head_read = channel.head_read_at or 0
+    if held.head_id is None and head_read < e:
+        since = max(start, head_read, held.newest_ts or 0)
+        out.append(("end", UnprovenStretch(kind="end", **{"from": since}, to=e)))
+    if held.start_id is None and not channel.history_reached_channel_start:
+        first = held.first_ts if held.first_ts is not None else e
+        reason: Reason = "retention" if start < window.cutoff else "start"
+        stretch = UnprovenStretch(kind="start", **{"from": start}, to=min(first, e))
+        out.append((reason, stretch))
+    if missing > 0 and hole is not None:
+        since, to = max(start, hole[0]), min(e, hole[1])
+        out.append(("hole", UnprovenStretch(kind="hole", **{"from": since}, to=to)))
+    return out
+
+
+@dataclass(frozen=True)
+class _Standing:
+    """What the Account's settings and the last sync say: reasons no test
+    names, the failed sync's error, and whether a sync can fix anything."""
+
+    reasons: list[Reason]
+    error: str | None
+    blocked: bool
+
+
+def _standing(
+    group: ChannelSettingGroup | None, last_log: tuple[str, str | None] | None
+) -> _Standing:
+    status, error = last_log or ("", None)
+    failed = status == "failed"
+    error = error if failed else None
+    unavailable = bool(group and group.is_unavailable_on_web_view) or (
+        UNAVAILABLE_WEB_VIEW_MESSAGE in (error or "")
+    )
+    frozen = bool(group and group.is_frozen)
+    reasons: list[Reason] = []
+    if unavailable:
+        reasons.append("unavailable")
+    elif failed:
+        reasons.append("failed")
+    if frozen:
+        reasons.append("frozen")
+    return _Standing(reasons, error, frozen or unavailable)
+
+
+def _is_behind(
+    channel: Channel,
+    group: ChannelSettingGroup | None,
+    reasons: list[Reason],
+    syncable: bool,
+    frozen_at: int,
+) -> bool:
+    """Only lagging, a sync can fix it, and its next scheduled sync is not
+    past due: routine lag the scheduler will clear. Otherwise Overdue."""
+    next_due = _next_due(channel, group) if group else None
+    return (
+        [r for r in reasons if r != "skipped"] == ["end"]
+        and syncable
+        and next_due is not None
+        and next_due >= frozen_at
+    )
+
+
 def _verdict(
     channel: Channel,
     group: ChannelSettingGroup | None,
@@ -274,50 +348,13 @@ def _verdict(
     last_log: tuple[str, str | None] | None,
     pace: float | None,
 ) -> ChannelVerdict:
-    start, e = window.start, window.e
-    reasons: list[Reason] = []
-    stretches: list[UnprovenStretch] = []
-    head_read = channel.head_read_at or 0
-    if held.head_id is None and head_read < e:
-        reasons.append("end")
-        since = max(start, head_read, held.newest_ts or 0)
-        stretches.append(UnprovenStretch(kind="end", **{"from": since}, to=e))
-    if held.start_id is None and not channel.history_reached_channel_start:
-        reasons.append("retention" if start < window.cutoff else "start")
-        first = held.first_ts if held.first_ts is not None else e
-        stretches.append(
-            UnprovenStretch(kind="start", **{"from": start}, to=min(first, e))
-        )
-    if missing > 0 and hole is not None:
-        reasons.append("hole")
-        stretches.append(
-            UnprovenStretch(
-                kind="hole", **{"from": max(start, hole[0])}, to=min(e, hole[1])
-            )
-        )
-    status, error = last_log or ("", None)
-    failed = status == "failed"
-    error = error if failed else None
-    unavailable = bool(group and group.is_unavailable_on_web_view) or (
-        UNAVAILABLE_WEB_VIEW_MESSAGE in (error or "")
-    )
-    frozen = bool(group and group.is_frozen)
-    if reasons:
-        if unavailable:
-            reasons.append("unavailable")
-        elif failed:
-            reasons.append("failed")
-        if frozen:
-            reasons.append("frozen")
+    failing = _stretches(channel, held, window, missing=missing, hole=hole)
+    standing = _standing(group, last_log)
+    # A failure or a freeze explains an Incomplete Channel; alone it is none.
+    reasons = [r for r, _ in failing] + (standing.reasons if failing else [])
     reasons.sort(key=REASON_ORDER.index)
-    syncable = not frozen and not unavailable and reasons != ["retention"]
-    next_due = _next_due(channel, group) if group else None
-    behind = (
-        [r for r in reasons if r != "skipped"] == ["end"]
-        and syncable
-        and next_due is not None
-        and next_due >= window.frozen_at
-    )
+    stretches = [s for _, s in failing]
+    syncable = not standing.blocked and reasons != ["retention"]
     paced_ms = sum(s.to - s.from_ for s in stretches if s.kind != "hole")
     return ChannelVerdict(
         name=channel.name,
@@ -325,11 +362,11 @@ def _verdict(
         reason=reasons[0] if reasons else None,
         lastSync=channel.last_updated,
         headReadAt=channel.head_read_at,
-        error=error if reasons else None,
+        error=standing.error if reasons else None,
         stretches=stretches,
         missingIds=missing,
         syncable=syncable,
-        behind=behind,
+        behind=_is_behind(channel, group, reasons, syncable, window.frozen_at),
         pacePerHour=pace,
         heldPosts=held.held,
         unprovenPosts=missing + (pace or 0) * paced_ms / HOUR_MS,
