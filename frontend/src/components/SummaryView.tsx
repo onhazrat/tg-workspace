@@ -23,11 +23,11 @@ import { reportDirection } from "../lib/report-direction"
 import type { Summary } from "../types"
 import { PasteSummaryModal } from "./PasteSummaryModal"
 import { usePreviewWorkspace } from "./PostPreview"
+import { CutShortRetry } from "./summary-view/CutShortMark"
 import {
   AttemptsFold,
   FailedSummaryPanel,
 } from "./summary-view/FailedSummaryPanel"
-import { IncompleteRetry } from "./summary-view/IncompleteMark"
 import { RetryRunWith, useRetryChoice } from "./summary-view/RetryRunWith"
 import { SummaryBody } from "./summary-view/SummaryBody"
 import {
@@ -186,9 +186,9 @@ export const SummaryView: React.FC = () => {
           attemptsFold={
             <AttemptsFold attempts={attempts} keyLabel={keyLabel} />
           }
-          incompleteMark={
-            // Rendered by `SummaryBody` only for an open Incomplete Summary.
-            <IncompleteRetry
+          cutShortMark={
+            // Rendered by `SummaryBody` only for an open Cut short Summary.
+            <CutShortRetry
               attempt={runningAttempt}
               text={runningText}
               keyLabel={keyLabel}

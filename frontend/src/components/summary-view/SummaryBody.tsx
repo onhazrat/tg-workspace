@@ -36,8 +36,8 @@ export interface SummaryBodyProps {
   failurePanel: (summary: Summary) => React.ReactNode
   /** A finished report's earlier Attempts, beside its Scope line (SFR-02). */
   attemptsFold?: React.ReactNode
-  /** Where an Incomplete Summary's text stops, with its retry (SFR-03). */
-  incompleteMark?: React.ReactNode
+  /** Where a Cut short Summary's text stops, with its retry (SFR-03). */
+  cutShortMark?: React.ReactNode
   /** The publish panel (SUMTAB-09); a slot because it reads the server's plan. */
   publishPanel: (summary: Summary) => React.ReactNode
   /** Renders report Markdown; a slot because its paragraphs read the workspace. */
@@ -119,7 +119,7 @@ export function SummaryBody(props: SummaryBodyProps) {
         >
           <FoldableSections markdown={body} render={props.renderMarkdown} />
         </div>
-        {summary?.incomplete && props.incompleteMark}
+        {summary?.cutShort && props.cutShortMark}
         {summary &&
           props.cited &&
           (props.cited.loading ? (

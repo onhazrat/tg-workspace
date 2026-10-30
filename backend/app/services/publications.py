@@ -34,7 +34,7 @@ from app.services.publication_parts import (
     metadata_text,
 )
 from app.services.publish import PartFailed, load_publishing_settings, send_parts
-from app.services.summaries import is_incomplete
+from app.services.summaries import is_cut_short
 from app.services.sync_meta import touch_sync
 from app.services.tenancy import assert_owner_on_write, may_act_on, scoped_select
 
@@ -67,9 +67,9 @@ def summary_publishing(
     )
 
 
-#: How a Publication of an Incomplete Summary ends (SFR-03): a kept Partial
+#: How a Publication of a Cut short Summary ends (SFR-03): a kept Partial
 #: response stops short, and a reader in the channel should know it does.
-INCOMPLETE_PUBLICATION_LINE = "⚠️ Incomplete: the text stops here."
+CUT_SHORT_PUBLICATION_LINE = "⚠️ Cut short: the text stops here."
 
 
 def plan_publication(
@@ -103,8 +103,8 @@ def plan_publication(
     generated = metadata_text(rows, omitted)
     metadata = (extra.get("metadataText") or generated) if include_metadata else None
     text = summary.text or ""
-    if is_incomplete(summary):
-        text = f"{text}\n\n{INCOMPLETE_PUBLICATION_LINE}"
+    if is_cut_short(summary):
+        text = f"{text}\n\n{CUT_SHORT_PUBLICATION_LINE}"
     parts = build_parts(
         text,
         metadata,

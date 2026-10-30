@@ -3861,7 +3861,7 @@
       "post": {
         "tags": ["data"],
         "summary": "Keep Summary Partial",
-        "description": "Finish the summary with this attempt's partial response; it becomes incomplete.",
+        "description": "Finish the summary with this attempt's partial response; it becomes Cut short.",
         "operationId": "data-keep_summary_partial",
         "security": [{ "OAuth2PasswordBearer": [] }],
         "parameters": [

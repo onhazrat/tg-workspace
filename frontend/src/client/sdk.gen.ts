@@ -1658,7 +1658,7 @@ export const dataCancelSummaryAttempt = <ThrowOnError extends boolean = true>(op
 /**
  * Keep Summary Partial
  *
- * Finish the summary with this attempt's partial response; it becomes incomplete.
+ * Finish the summary with this attempt's partial response; it becomes Cut short.
  */
 export const dataKeepSummaryPartial = <ThrowOnError extends boolean = true>(options: Options<DataKeepSummaryPartialData, ThrowOnError>): RequestResult<DataKeepSummaryPartialResponses, DataKeepSummaryPartialErrors, ThrowOnError, 'data'> => (options.client ?? client).post<DataKeepSummaryPartialResponses, DataKeepSummaryPartialErrors, ThrowOnError, 'data'>({
     responseStyle: 'data',

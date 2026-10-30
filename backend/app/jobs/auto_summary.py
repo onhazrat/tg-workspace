@@ -37,7 +37,7 @@ from app.services.scraper_jobs import create_job, has_active_sync_job
 from app.services.summaries import (
     FAILED_STATUS,
     derived_scope,
-    is_incomplete,
+    is_cut_short,
     submit_summary,
 )
 from app.services.sync_meta import touch_sync
@@ -378,7 +378,7 @@ async def _auto_publish(
             status="skipped",
         )
         return
-    if is_incomplete(summary):
+    if is_cut_short(summary):
         # A kept Partial response stops short. A person may publish one by
         # hand, with a line saying so; nobody unattended should (SFR-03).
         _log_publish_failure(
@@ -388,7 +388,7 @@ async def _auto_publish(
             bot_id=bot_id,
             chat_id="",
             chat_name="",
-            error="Not published: this Summary is Incomplete.",
+            error="Not published: this Summary is Cut short.",
             text_sent="",
             status="skipped",
         )

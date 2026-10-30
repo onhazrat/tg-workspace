@@ -623,12 +623,12 @@ def own_summary(
 
 
 #: The flag a kept Partial response leaves (SFR-03): the text stops short.
-INCOMPLETE_KEY = "incomplete"
-_UNFINISHED_KEYS = frozenset({"status", INCOMPLETE_KEY})
+CUT_SHORT_KEY = "cutShort"
+_UNFINISHED_KEYS = frozenset({"status", CUT_SHORT_KEY})
 
 
-def is_incomplete(summary: Summary) -> bool:
-    return (summary.extra or {}).get(INCOMPLETE_KEY) is True
+def is_cut_short(summary: Summary) -> bool:
+    return (summary.extra or {}).get(CUT_SHORT_KEY) is True
 
 
 def note_write(session: Session, summary: Summary) -> None:
@@ -643,7 +643,7 @@ def note_write(session: Session, summary: Summary) -> None:
 
 
 def has_report(summary: Summary) -> bool:
-    """Finished with text a reader has, full or Incomplete."""
+    """Finished with text a reader has, full or Cut short."""
     return bool(summary.text) and "status" not in (summary.extra or {})
 
 
@@ -651,7 +651,7 @@ def mark_summary_failed(session: Session, summary: Summary) -> None:
     """Set the Failed status; the caller commits it with the Attempt.
 
     A Summary that already has a report keeps it: a failed retry of an
-    Incomplete one (story 30) is the Attempt's failure, and Failed would hide
+    Cut short one (story 30) is the Attempt's failure, and Failed would hide
     the kept text behind the failure page.
     """
     if not has_report(summary):
@@ -742,7 +742,7 @@ def finish_summary(
     model: str,
     key_id: str | None,
     cited_posts: dict[str, Any],
-    incomplete: bool = False,
+    cut_short: bool = False,
 ) -> None:
     """Write a succeeded Attempt's answer onto its Summary; the caller commits.
 
@@ -751,7 +751,7 @@ def finish_summary(
     Summary keeps only when it came from Copy). It also takes the model and the
     AI Key that wrote it, so the next scheduled run pays with the same Key.
 
-    `incomplete` is a kept Partial response (SFR-03): finished and readable,
+    `cut_short` is a kept Partial response (SFR-03): finished and readable,
     but its text stops short, so the prompt stays for the retry that may
     replace it. A full answer clears the mark.
     """
@@ -760,8 +760,8 @@ def finish_summary(
     }
     if key_id is not None:
         extra["aiKeyId"] = key_id
-    if incomplete:
-        extra[INCOMPLETE_KEY] = True
+    if cut_short:
+        extra[CUT_SHORT_KEY] = True
     summary.extra = extra
     summary.text = text
     summary.model = model
@@ -771,7 +771,7 @@ def finish_summary(
         summary.id,
         user_id=summary.user_id,
         updates={"cited_posts": cited_posts},
-        removals=set() if incomplete else {"prompt_text"},
+        removals=set() if cut_short else {"prompt_text"},
     )
     refresh_summary_derived_columns(summary, payload)
     summary.updated_at = utc_now()

@@ -24,7 +24,7 @@ from app.core.config import settings
 from app.core.db import engine
 from app.models_tg import PublishLog, Summary
 from app.services import publish as publish_service
-from app.services.publications import INCOMPLETE_PUBLICATION_LINE, resume_publication
+from app.services.publications import CUT_SHORT_PUBLICATION_LINE, resume_publication
 from app.services.telegram_web import telegram_channel_post_url
 
 DATA = f"{settings.API_V1_STR}/data"
@@ -128,19 +128,19 @@ def test_the_plan_names_the_window_in_the_accounts_time_zone(
     assert plan["defaultMetadata"] == GENERATED
 
 
-def test_an_incomplete_summary_ends_its_last_part_saying_where_it_stops(
+def test_a_cut_short_summary_ends_its_last_part_saying_where_it_stops(
     client: TestClient, superuser_token_headers: dict[str, str]
 ) -> None:
     """SFR-03: published by hand, a kept Partial response says it is one."""
-    incomplete = _summary("Half a report", extra={"incomplete": True})
+    cut_short = _summary("Half a report", extra={"cutShort": True})
     complete = _summary("A whole report")
 
-    parts = _plan(client, superuser_token_headers, incomplete)["parts"]
+    parts = _plan(client, superuser_token_headers, cut_short)["parts"]
     whole = _plan(client, superuser_token_headers, complete)["parts"]
 
     assert parts[-1]["text"].startswith("Half a report")
-    assert parts[-1]["text"].endswith(INCOMPLETE_PUBLICATION_LINE)
-    assert INCOMPLETE_PUBLICATION_LINE not in whole[-1]["text"]
+    assert parts[-1]["text"].endswith(CUT_SHORT_PUBLICATION_LINE)
+    assert CUT_SHORT_PUBLICATION_LINE not in whole[-1]["text"]
 
 
 def test_a_summarys_own_time_zone_wins_over_the_accounts(
