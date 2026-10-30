@@ -16,7 +16,7 @@ the client).
 
 **Blocked by:** CW-01.
 
-**Status:** ready-for-agent
+**Status:** done
 
 ## The gate
 
@@ -78,3 +78,8 @@ the client).
   banner and Regenerate; the History pill and its popover by tap at 375 px.
 - [x] Route mocks in existing specs match the new response shapes; new
   branching components get render tests.
+
+## Comments
+
+- 2026-10-31: implemented on `claude/cw-02` and merged into the integration branch in 39e28b04 (fast-forward).
+  Open, handed to the code review: re-check-now reuses the live check route with the fixed window (no new route); History's popover shows only the pill fields, no per-reason breakdown; a gate deadline marks every still-Incomplete fixable Channel timed out even when its own sync finished; the full backend suite was not rerun after the last guard fix.
