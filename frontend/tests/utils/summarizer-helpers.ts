@@ -255,7 +255,8 @@ export async function mockDiscoverForwardPosts(
     // sibling POSTs under /posts/ have their own handlers registered later,
     // which win because Playwright evaluates newest-first.
     if (new URL(route.request().url()).pathname !== "/api/v1/data/posts") {
-      await route.continue()
+      // To the fixture's Complete window check, then the network.
+      await route.fallback()
       return
     }
     await route.fulfill({ json: posts })

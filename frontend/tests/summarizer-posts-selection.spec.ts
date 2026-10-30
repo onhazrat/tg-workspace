@@ -64,7 +64,8 @@ async function mockReads(page: Page, channel: string) {
         },
       })
     } else {
-      await route.continue()
+      // To the fixture's Complete window check, then the network.
+      await route.fallback()
     }
   })
   await page.route("**/api/v1/data/summaries", async (route) => {
