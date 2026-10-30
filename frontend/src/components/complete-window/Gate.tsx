@@ -21,19 +21,26 @@ import {
   useInvalidateSettingGroups,
   useSettingGroupsQuery,
 } from "@/hooks/useSettingGroups"
-import { bannerSync, useBannerSync } from "@/lib/complete-window/banner-sync"
+import {
+  type BannerSync,
+  bannerSync,
+  useBannerSync,
+} from "@/lib/complete-window/banner-sync"
 import {
   ACTION_VERB,
   type ActionKind,
   AUTO_SYNC_SECONDS,
+  afterWait,
   type Choice,
   canUnfreeze,
   DEADLINE_MS,
   fixableNames,
   gateGroups,
   gateTitle,
+  type Lists,
   leaveOut,
   outcomeOf,
+  outcomeToast,
   setGateOutcome,
   syncedSaid,
   syncPlan,
@@ -43,7 +50,6 @@ import {
 import {
   behindLag,
   incompleteOf,
-  measure,
   postsPhrase,
   shortfall,
   span,
@@ -135,6 +141,109 @@ export function runGated(kind: ActionKind) {
 
 // ---- The flow ---------------------------------------------------------------
 
+/** The open gate's window checked, at its moment when given. */
+const checkGate = (frozenAt?: number) =>
+  dataWindowCheck({
+    body: {
+      channelNames: gate.names,
+      window: gate.window as WireWindow,
+      frozenAt,
+    },
+  })
+
+/** E: the earlier of the window's End and the gate's moment. */
+const gateEnd = () => gate.check?.end ?? gate.frozenAt
+
+/** The gate's outcome goes to the action's submission, then the action runs. */
+async function finish(choice: Choice, lists: Lists = {}, said?: string) {
+  const { kind, frozenAt, check, leftOut } = gate
+  setGateOutcome(outcomeOf(choice, frozenAt, check, lists, leftOut))
+  setGate({ phase: "idle" })
+  const note = outcomeToast(kind, choice, check, said)
+  if (note) toast[note.level](note.text)
+  await runOwed(kind)
+}
+
+async function runOwed(kind: ActionKind) {
+  if (!owed) return
+  owed = false
+  try {
+    await latest[kind]?.()
+  } finally {
+    setGateOutcome(null)
+  }
+}
+
+/** Open on the banner's answer, marked refreshing, when it has work to show. */
+function openOnCached(cached: WindowCheck | undefined) {
+  if (cached && fixableNames(cached).length)
+    setGate({ phase: "review", check: cached, refreshing: true })
+}
+
+/** Cancelled, or the person already chose on the cached answer. */
+const superseded = (mine: number) =>
+  mine !== run || !["checking", "review"].includes(gate.phase)
+
+/** The check frozen at the click landed: swap it in, or run at once. */
+async function onFrozen(check: WindowCheck, mine: number) {
+  const frozen = leaveOut(check, gate.leftOut)
+  if (superseded(mine)) return
+  setGate({ frozenAt: frozen.frozenAt, refreshing: false })
+  // An edit on the cached answer stands.
+  if (gate.touched) return
+  const next = verdictOf(frozen)
+  setGate({ check: frozen, phase: next === "review" ? "review" : gate.phase })
+  if (next !== "review") await finish(next)
+}
+
+function failed(err: unknown, mine: number) {
+  if (mine !== run) return
+  setGate({ phase: "idle" })
+  toast.error(`The window check failed: ${String(err)}`)
+}
+
+/**
+ * Every sync the gate waits on: the banner's it joins, its own, and another
+ * behind a banner sync that read its head before E.
+ */
+function planJob(
+  plan: ReturnType<typeof syncPlan>,
+  banner: BannerSync | null,
+  scrape: (names: string[]) => Promise<void>,
+) {
+  const behind = () =>
+    (banner?.job ?? Promise.resolve()).then(() => scrape(plan.after))
+  return Promise.all([
+    plan.join.length ? banner?.job : undefined,
+    plan.now.length ? scrape(plan.now) : undefined,
+    plan.after.length ? behind() : undefined,
+  ])
+}
+
+/** Wait for the sync, "Continue now" or the deadline; whether it finished. */
+async function waitOrDeadline(job: Promise<unknown>): Promise<boolean> {
+  let done = false
+  const settled = job.then(
+    () => {
+      done = true
+    },
+    () => {
+      done = true
+    },
+  )
+  let timer: ReturnType<typeof setTimeout> | undefined
+  await Promise.race([
+    settled,
+    new Promise<void>((resolve) => {
+      continueNow = resolve
+      timer = setTimeout(resolve, DEADLINE_MS)
+    }),
+  ])
+  clearTimeout(timer)
+  continueNow = null
+  return done
+}
+
 function useGateFlow() {
   const queryClient = useQueryClient()
   const { channels, selectedChannels, setSelectedChannels, loadChannels } =
@@ -143,42 +252,6 @@ function useGateFlow() {
   const { scrapeChannelsInParallel } = useSync()
   const { data: groups = [] } = useSettingGroupsQuery()
   const invalidateSettingGroups = useInvalidateSettingGroups()
-
-  const check = (frozenAt?: number) =>
-    dataWindowCheck({
-      body: {
-        channelNames: gate.names,
-        window: gate.window as WireWindow,
-        frozenAt,
-      },
-    })
-
-  const finish = async (
-    choice: Choice,
-    lists: { timedOut?: string[]; leftOut?: string[] } = {},
-    said?: string,
-  ) => {
-    const { kind, frozenAt } = gate
-    const leftOut = [...gate.leftOut, ...(lists.leftOut ?? [])]
-    setGateOutcome(
-      outcomeOf(choice, frozenAt, gate.check, { ...lists, leftOut }),
-    )
-    const incomplete =
-      choice === "complete_only" ? [] : incompleteOf(gate.check)
-    setGate({ phase: "idle" })
-    if (incomplete.length)
-      toast.warning(
-        `${said ? `${said}. ` : ""}${ACTION_VERB[kind]} runs on an Incomplete window: ${measure(incomplete)}.`,
-      )
-    else if (said) toast.success(`${said}.`)
-    if (!owed) return
-    owed = false
-    try {
-      await latest[kind]?.()
-    } finally {
-      setGateOutcome(null)
-    }
-  }
 
   const begin = async (kind: ActionKind) => {
     const names = [...selectedChannels].sort()
@@ -192,25 +265,15 @@ function useGateFlow() {
       frozenAt: Date.now(),
     })
     // The banner already checked this Scope: open on its answer at once.
-    const cached = queryClient.getQueryData<WindowCheck>(
-      queryKeys.windowCheck(names, windowKey, liveTick),
+    openOnCached(
+      queryClient.getQueryData<WindowCheck>(
+        queryKeys.windowCheck(names, windowKey, liveTick),
+      ),
     )
-    if (cached && fixableNames(cached).length)
-      setGate({ phase: "review", check: cached, refreshing: true })
     try {
-      const frozen = leaveOut(await check(), gate.leftOut)
-      // Cancelled, or the person already chose on the cached answer.
-      if (mine !== run || !["checking", "review"].includes(gate.phase)) return
-      setGate({ frozenAt: frozen.frozenAt, refreshing: false })
-      if (gate.touched) return
-      setGate({ check: frozen })
-      const next = verdictOf(frozen)
-      if (next === "review") setGate({ phase: "review" })
-      else await finish(next)
+      await onFrozen(await checkGate(), mine)
     } catch (err) {
-      if (mine !== run) return
-      setGate({ phase: "idle" })
-      toast.error(`The window check failed: ${String(err)}`)
+      failed(err, mine)
     }
   }
 
@@ -223,53 +286,20 @@ function useGateFlow() {
       return
     }
     const banner = bannerSync()
-    const plan = syncPlan(wanted, banner, gate.check?.end ?? gate.frozenAt)
+    const plan = syncPlan(wanted, banner, gateEnd())
     const source = `Before: ${ACTION_VERB[gate.kind]}`
     setGate({ phase: "syncing", syncing: wanted, refreshing: false })
-    let done = false
-    const job = Promise.all([
-      plan.join.length ? banner?.job : undefined,
-      plan.now.length
-        ? scrapeChannelsInParallel(pick(plan.now), source)
-        : undefined,
-      // That sync read its head before E: another goes behind it.
-      plan.after.length
-        ? (banner?.job ?? Promise.resolve()).then(() =>
-            scrapeChannelsInParallel(pick(plan.after), source),
-          )
-        : undefined,
-    ]).then(
-      () => {
-        done = true
-      },
-      () => {
-        done = true
-      },
+    const done = await waitOrDeadline(
+      planJob(plan, banner, (names) =>
+        scrapeChannelsInParallel(pick(names), source),
+      ),
     )
-    let timer: ReturnType<typeof setTimeout> | undefined
-    await Promise.race([
-      job,
-      new Promise<void>((resolve) => {
-        continueNow = resolve
-        timer = setTimeout(resolve, DEADLINE_MS)
-      }),
-    ])
-    clearTimeout(timer)
-    continueNow = null
     invalidatePostsReads(queryClient)
-    const again = leaveOut(await check(gate.frozenAt), gate.leftOut)
+    const again = leaveOut(await checkGate(gate.frozenAt), gate.leftOut)
     const still = incompleteOf(again)
-    // ponytail: every fixable Channel still Incomplete when the wait ends is
-    // timed out, finished or not; track each Channel's end if that misleads.
-    const timedOut = done
-      ? []
-      : still.filter((c) => wanted.includes(c.name)).map((c) => c.name)
     setGate({ check: again })
-    await finish(
-      done ? "synced" : "continued_early",
-      { timedOut },
-      syncedSaid(wanted, still),
-    )
+    const { choice, timedOut } = afterWait(done, wanted, still)
+    await finish(choice, { timedOut }, syncedSaid(wanted, still))
   }
 
   const narrow = (names: string[]) => {

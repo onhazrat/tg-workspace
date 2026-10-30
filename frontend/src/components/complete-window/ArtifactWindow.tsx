@@ -62,10 +62,7 @@ function NowAndRegenerate({
   kind: ArtifactKind
   check: WindowCheck
 }) {
-  const { restore } = usePostsViewEdits()
-  const { workspaceTabs } = useUI()
-  const names = scope.channels ?? []
-  const { data } = useCheckNow(names, check.start, check.end)
+  const { data } = useCheckNow(scope.channels ?? [], check.start, check.end)
   if (!data)
     return (
       <span className="inline-flex items-center gap-1 text-[12px] opacity-70">
@@ -73,13 +70,6 @@ function NowAndRegenerate({
       </span>
     )
   const now = incompleteOf(data)
-  const action = regenerateAction(kind)
-  const regenerate = () => {
-    if (!action) return
-    restore(scope)
-    workspaceTabs.openTab("action")
-    runGated(action)
-  }
   return (
     <>
       <span
@@ -90,17 +80,40 @@ function NowAndRegenerate({
         {nowPhrase(now)}
       </span>
       {offersRegenerate(kind, now) && (
-        <TgButton
-          type="button"
-          size="sm"
-          variant={now.length === 0 ? "primary" : "secondary"}
-          onClick={regenerate}
-        >
-          <RefreshCw size={12} />
-          Regenerate
-        </TgButton>
+        <Regenerate scope={scope} kind={kind} complete={now.length === 0} />
       )}
     </>
+  )
+}
+
+function Regenerate({
+  scope,
+  kind,
+  complete,
+}: {
+  scope: FrozenScope
+  kind: ArtifactKind
+  complete: boolean
+}) {
+  const { restore } = usePostsViewEdits()
+  const { workspaceTabs } = useUI()
+  const action = regenerateAction(kind)
+  const regenerate = () => {
+    if (!action) return
+    restore(scope)
+    workspaceTabs.openTab("action")
+    runGated(action)
+  }
+  return (
+    <TgButton
+      type="button"
+      size="sm"
+      variant={complete ? "primary" : "secondary"}
+      onClick={regenerate}
+    >
+      <RefreshCw size={12} />
+      Regenerate
+    </TgButton>
   )
 }
 

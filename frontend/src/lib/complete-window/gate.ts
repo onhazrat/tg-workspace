@@ -10,6 +10,7 @@ import type { BannerSync } from "./banner-sync"
 import {
   byFix,
   incompleteOf,
+  measure,
   type Reason,
   type Verdict,
   type WindowCheck,
@@ -131,20 +132,59 @@ export function syncedSaid(wanted: string[], still: Verdict[]): string {
   return `Synced ${wanted.length}: ${fixed} now complete${rest ? `, ${rest} still not` : ""}`
 }
 
-/** What the record says each choice did to the Channels a sync could fix. */
+export type Lists = { timedOut?: string[]; leftOut?: string[] }
+
+/**
+ * What the record says each choice did to the Channels a sync could fix;
+ * `prior` is what Leave out already took out.
+ */
 export function outcomeOf(
   choice: Choice,
   frozenAt: number,
   check: WindowCheck | undefined,
-  lists: { timedOut?: string[]; leftOut?: string[] } = {},
+  lists: Lists = {},
+  prior: string[] = [],
 ): GateOutcome {
   return {
     choice,
     frozenAt,
     skipped: choice === "skipped" ? fixableNames(check) : [],
     timedOut: lists.timedOut ?? [],
-    leftOut: lists.leftOut ?? [],
+    leftOut: [...prior, ...(lists.leftOut ?? [])],
   }
+}
+
+/**
+ * The toast as the action runs: what the sync did, and what the window still
+ * lacks; nothing when there is nothing to say.
+ */
+export function outcomeToast(
+  kind: ActionKind,
+  choice: Choice,
+  check: WindowCheck | undefined,
+  said?: string,
+): { level: "warning" | "success"; text: string } | null {
+  const incomplete = choice === "complete_only" ? [] : incompleteOf(check)
+  const lead = said ? `${said}.` : ""
+  if (incomplete.length)
+    return {
+      level: "warning",
+      text: `${lead ? `${lead} ` : ""}${ACTION_VERB[kind]} runs on an Incomplete window: ${measure(incomplete)}.`,
+    }
+  return lead ? { level: "success", text: lead } : null
+}
+
+/**
+ * How the gate's sync ended: synced, or continued early (by a person or the
+ * deadline) with what is still Incomplete of it timed out.
+ */
+export function afterWait(done: boolean, wanted: string[], still: Verdict[]) {
+  // ponytail: every fixable Channel still Incomplete when the wait ends is
+  // timed out, finished or not; track each Channel's end if that misleads.
+  const timedOut = done
+    ? []
+    : still.filter((c) => wanted.includes(c.name)).map((c) => c.name)
+  return { choice: (done ? "synced" : "continued_early") as Choice, timedOut }
 }
 
 /** The rows, grouped as the gate shows them. */

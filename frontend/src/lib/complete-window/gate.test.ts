@@ -6,10 +6,12 @@
 import { describe, expect, test } from "bun:test"
 
 import {
+  afterWait,
   canUnfreeze,
   gateTitle,
   leaveOut,
   outcomeOf,
+  outcomeToast,
   setGateOutcome,
   syncedSaid,
   syncPlan,
@@ -160,5 +162,59 @@ describe("what the record is sent", () => {
       "Synced 165: 160 now complete, 5 still not",
     )
     expect(syncedSaid(["a"], [])).toBe("Synced 1: 1 now complete")
+  })
+})
+
+describe("how the gate's sync ended", () => {
+  test("synced, or continued early with what is still Incomplete timed out", () => {
+    const still = [v("a"), v("other")]
+    expect(afterWait(true, ["a", "b"], still)).toEqual({
+      choice: "synced",
+      timedOut: [],
+    })
+    expect(afterWait(false, ["a", "b"], still)).toEqual({
+      choice: "continued_early",
+      timedOut: ["a"],
+    })
+  })
+
+  test("Leave out's Channels join the Left out of the record", () => {
+    expect(
+      outcomeOf("skipped", E, check([v("lag")]), {}, ["ice"]).leftOut,
+    ).toEqual(["ice"])
+  })
+})
+
+describe("the toast as the action runs", () => {
+  test("says what the sync did and what the window still lacks", () => {
+    expect(
+      outcomeToast(
+        "discover",
+        "synced",
+        check([frozen]),
+        "Synced 1: 1 now complete",
+      ),
+    ).toEqual({
+      level: "warning",
+      text: "Synced 1: 1 now complete. Generate report runs on an Incomplete window: 1 frozen.",
+    })
+    expect(
+      outcomeToast(
+        "summary",
+        "synced",
+        check([complete("a")]),
+        "Synced 1: 1 now complete",
+      ),
+    ).toEqual({ level: "success", text: "Synced 1: 1 now complete." })
+    expect(
+      outcomeToast("summary", "nothing_to_sync", check([frozen])),
+    ).toMatchObject({
+      text: "Generate summary runs on an Incomplete window: 1 frozen.",
+    })
+  })
+
+  test("says nothing on a Complete window, complete only included", () => {
+    expect(outcomeToast("tags", "complete", check([complete("a")]))).toBeNull()
+    expect(outcomeToast("tags", "complete_only", check([v("lag")]))).toBeNull()
   })
 })
