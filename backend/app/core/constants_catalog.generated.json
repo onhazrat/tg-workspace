@@ -540,7 +540,7 @@
       "comment": "How long a claim stays valid without a heartbeat. This bounds one thing only: how long a **dead** holder blocks its Channel. A live sync renews well inside it (`CHANNEL_CLAIM_HEARTBEAT_SECONDS`), so a deep backfill running for an hour is never at risk of having its claim stolen mid-walk -- which would put a second backward walk into the cursors the first is still writing, the precise interleaving this exists to prevent. Five minutes rather than the visibility timeout's ~2.4 hours, and the difference is the point. The VT decides when a crashed worker's *message* comes back; the lease decides when its *Channel* does. Sizing the lease off the VT would mean a Channel that crashed at 12:00 refusing every sync until 14:24 -- including the ones a person is sitting in front of.",
       "expression": "300",
       "file": "backend/app/services/channels.py",
-      "line": 906,
+      "line": 912,
       "name": "CHANNEL_CLAIM_LEASE_SECONDS",
       "value": 300
     },
@@ -772,7 +772,7 @@
       "comment": "",
       "expression": "500",
       "file": "backend/app/services/posts.py",
-      "line": 37,
+      "line": 38,
       "name": "DEFAULT_POST_PAGE_SIZE",
       "value": 500
     },
@@ -780,7 +780,7 @@
       "comment": "",
       "expression": "5000",
       "file": "backend/app/services/posts.py",
-      "line": 38,
+      "line": 39,
       "name": "MAX_POST_PAGE_SIZE",
       "value": 5000
     },
@@ -788,7 +788,7 @@
       "comment": "",
       "expression": "200",
       "file": "backend/app/services/posts.py",
-      "line": 39,
+      "line": 40,
       "name": "MAX_POST_LOOKUP_BATCH",
       "value": 200
     },
@@ -1076,7 +1076,7 @@
       "comment": "How long a coalesced request waits before giving up and reporting a skip. **Ticket 12 removed this constant's original reason and it still earns its place, on a different one.** Ticket 11 justified the bound by the waiter holding a slot in the worker's concurrency gate; ticket 12 made the permit releasable (`sync_queue.SyncSlot`), so a waiter now scrapes nobody's slot. What remains is that the waiter's *message* is claimed from PGMQ under a visibility timeout of about 2.4 hours: a waiter that outlasted it would have its own message redelivered and processed a second time while the first was still waiting. And a person is on the other end of the SSE stream, for whom an answer of \"still running\" beats an open connection. Fifteen minutes is a judgement, not a derivation, and worth naming as such: long enough that an ordinary sync -- seconds to a couple of minutes -- is always ridden rather than skipped, short enough to stay well inside the visibility timeout.",
       "expression": "900",
       "file": "backend/app/services/sync_orchestrator.py",
-      "line": 1512,
+      "line": 1520,
       "name": "COALESCE_MAX_WAIT_SECONDS",
       "value": 900
     },
@@ -1084,7 +1084,7 @@
       "comment": "How often a waiter re-checks the claim when no notification arrives. Small, because it is only reached when a ring was lost or the holder died, and both of those should resolve in seconds rather than at the next sweep.",
       "expression": "2.0",
       "file": "backend/app/services/sync_orchestrator.py",
-      "line": 1517,
+      "line": 1525,
       "name": "_COALESCE_POLL_SECONDS",
       "value": 2.0
     },

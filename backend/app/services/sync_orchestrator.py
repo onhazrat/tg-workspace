@@ -950,8 +950,12 @@ def _apply_scrape_page(
     user_id: uuid.UUID | None,
     session_seen_ids: set[int],
     before_id: int | None,
+    fetched_at: int | None = None,
 ) -> _PageApplyResult:
     """Apply one scraped page to the database.
+
+    `fetched_at` is when the page was asked for; on the newest page it is the
+    Channel's head-read moment (ADR-043).
 
     The stages, in order: record telemetry, reconcile the chat id, refresh
     channel metadata, record gaps, persist new posts, collect auto-follow
@@ -1008,6 +1012,8 @@ def _apply_scrape_page(
             return result
 
         _refresh_channel_meta(channel, response, result)
+        if before_id is None and fetched_at is not None:
+            channel.head_read_at = fetched_at
 
         # And the Directory's copy of the same page, for free (ticket 03).
         #
@@ -1398,6 +1404,7 @@ async def _walk_channel_pages(
         # One page, one chain of attempts across both retry layers, judged by
         # what applying it wrote (RQS-01).
         with page(PageType.POSTS) as posts_page:
+            fetched_at = int(time.time() * 1000)
             response = await _fetch_one_page(
                 ctx, before_id=before_id, known_latest_id=known_latest_id
             )
@@ -1415,6 +1422,7 @@ async def _walk_channel_pages(
                 user_id=user_id,
                 session_seen_ids=session_seen_ids,
                 before_id=before_id,
+                fetched_at=fetched_at,
             )
             posts_page.report_posts(
                 page_result.new_posts,
