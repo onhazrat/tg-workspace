@@ -17,7 +17,7 @@ spec's Prototype reference section.
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done
 
 ## Prefactor first
 
@@ -75,3 +75,8 @@ spec's Prototype reference section.
   indexes.
 - [x] Mocked Playwright (workers=1, mutation-tested): the line, Sync, Details
   toggles and isolate, Visualize, and phone width.
+
+## Comments
+
+- 2026-10-30: implemented on `claude/cw-01` and merged into the integration branch in 7a5f0df6 (fast-forward).
+  Open: the Glossary's Behind entry still says "two sync intervals"; nothing tests that the line stays undimmed when a Live window's minute rolls. Both handed to the code review.
