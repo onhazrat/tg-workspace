@@ -24,8 +24,9 @@ over the week before its head-read moment (no earlier than its first Post or
 the scrape cutoff). A pace over less than an hour is unknown, and an unknown
 pace under a non-hole stretch makes the total a floor.
 
-The live check reads only what it holds now; it never syncs. Skipped, timed
-out and refused are the action's to overlay (CW-02); this reads none of them.
+The live check reads only what it holds now; it never syncs. Skipped and
+timed out are the action's: `freeze_record` lays them over the check an
+Artifact freezes (CW-02). Refused is the scheduler's (CW-03).
 """
 
 from __future__ import annotations

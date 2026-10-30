@@ -224,7 +224,10 @@ def window_check(
     from the window's Start to its End or now, whichever is earlier, and why
     not. Reads what is held; never syncs.
     """
-    window = resolve_analysis_window(body.window)
+    # CW-02: the gate reads the window again as it was at its click.
+    now = server_now_ms()
+    frozen_at = now if body.frozen_at is None else min(body.frozen_at, now)
+    window = resolve_analysis_window(body.window, now_ms=frozen_at)
     assert window.start is not None and window.end is not None
     return check_window(
         session,
@@ -232,7 +235,7 @@ def window_check(
         names=body.channel_names,
         start=window.start,
         end=window.end,
-        frozen_at=server_now_ms(),
+        frozen_at=frozen_at,
     )
 
 

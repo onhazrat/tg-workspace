@@ -98,6 +98,26 @@ def _null(type_: Any) -> Any:
     return cast(null(), type_)
 
 
+#: What History's pill reads of an Artifact's completeness record (CW-02);
+#: the Incomplete Channels themselves stay with a read of the Artifact.
+LIST_COMPLETENESS_KEYS = (
+    "unprovenPosts",
+    "unprovenFloor",
+    "fixable",
+    "incompleteCount",
+)
+
+
+def _list_scope(scope: dict[str, Any] | None) -> dict[str, Any] | None:
+    record = (scope or {}).get("completeness")
+    if scope is None or record is None:
+        return scope
+    return {
+        **scope,
+        "completeness": {k: record[k] for k in LIST_COMPLETENESS_KEYS},
+    }
+
+
 def _starred(model: Any) -> Any:
     """`extra->>'isStarred'` as a boolean.
 
@@ -414,7 +434,7 @@ def _row_to_camel(row: Any) -> dict[str, Any]:
         # column depending on the family, and this module's one rule is that it
         # opens neither; `scopedPostCount` inside the value is what a list shows
         # instead.
-        "scope": row["scope"],
+        "scope": _list_scope(row["scope"]),
     }
     if kind == "summary":
         out["status"] = row["status"]
