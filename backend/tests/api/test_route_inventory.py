@@ -179,11 +179,13 @@ def test_the_split_did_not_change_the_route_count() -> None:
     Kind and Status counts and the time filter's spread, siblings of the list
     rather than more of its answer because the list stays a bare array; and
     **119** with TGU-02's `POST /tags/uses` and `POST /tags/order`, recording a
-    Tag use and reading each Tag's order and counts on a tab.
+    Tag use and reading each Tag's order and counts on a tab; and **120**
+    with CW-01's `POST /posts/window-check`, which Channels of a Scope are
+    Incomplete and why (ADR-043).
     """
     data_routes = {
         (m, p) for m, p in _mounted_routes() if p.startswith("/api/v1/data/")
     }
-    assert len(data_routes) == 119, (
-        f"expected 119 /data endpoints, found {len(data_routes)}"
+    assert len(data_routes) == 120, (
+        f"expected 120 /data endpoints, found {len(data_routes)}"
     )

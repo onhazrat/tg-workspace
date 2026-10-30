@@ -28,9 +28,12 @@ from app.schemas.posts import (
     ViewCurveResponse,
     ViewEstimateResponse,
 )
+from app.schemas.window_check import WindowCheckRequest, WindowCheckResponse
 from app.services import posts_view
+from app.services.analysis_window import resolve_analysis_window, server_now_ms
 from app.services.posts import bulk_upsert_posts
 from app.services.settling_curve import current_estimate
+from app.services.window_check import check_window
 
 router = APIRouter()
 
@@ -207,6 +210,30 @@ def lookup_posts_route(
             [(ref.channel_name, ref.post_id) for ref in body.posts],
         )
     ]
+
+
+# CW-01, ADR-043. A read expressed as a POST for the reason `posts_counts` is
+# one, and on `VIEW_AS_READ_ONLY_PATHS` beside it.
+@router.post("/posts/window-check")
+def window_check(
+    body: WindowCheckRequest,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> WindowCheckResponse:
+    """Which of these Channels the workspace can prove it holds every Post of,
+    from the window's Start to its End or now, whichever is earlier, and why
+    not. Reads what is held; never syncs.
+    """
+    window = resolve_analysis_window(body.window)
+    assert window.start is not None and window.end is not None
+    return check_window(
+        session,
+        user_id=current_user.id,
+        names=body.channel_names,
+        start=window.start,
+        end=window.end,
+        frozen_at=server_now_ms(),
+    )
 
 
 @router.post("/posts/bulk")

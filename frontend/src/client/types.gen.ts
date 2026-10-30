@@ -1286,6 +1286,66 @@ export type ChannelUpsertRequest = {
 };
 
 /**
+ * ChannelVerdict
+ *
+ * One Channel's answer: why it is Incomplete, if it is, and by how much.
+ */
+export type ChannelVerdict = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Reasons
+     */
+    reasons: Array<'skipped' | 'failed' | 'timed_out' | 'refused' | 'end' | 'hole' | 'start' | 'retention' | 'frozen' | 'unavailable'>;
+    /**
+     * Reason
+     */
+    reason: 'skipped' | 'failed' | 'timed_out' | 'refused' | 'end' | 'hole' | 'start' | 'retention' | 'frozen' | 'unavailable' | null;
+    /**
+     * Lastsync
+     */
+    lastSync: number | null;
+    /**
+     * Headreadat
+     */
+    headReadAt: number | null;
+    /**
+     * Error
+     */
+    error: string | null;
+    /**
+     * Stretches
+     */
+    stretches: Array<UnprovenStretch>;
+    /**
+     * Missingids
+     */
+    missingIds: number;
+    /**
+     * Syncable
+     */
+    syncable: boolean;
+    /**
+     * Behind
+     */
+    behind: boolean;
+    /**
+     * Paceperhour
+     */
+    pacePerHour: number | null;
+    /**
+     * Heldposts
+     */
+    heldPosts: number;
+    /**
+     * Unprovenposts
+     */
+    unprovenPosts: number;
+};
+
+/**
  * ChatArtifactResponse
  */
 export type ChatArtifactResponse = {
@@ -8633,6 +8693,26 @@ export type TypeCondition = {
 };
 
 /**
+ * UnprovenStretch
+ *
+ * A part of the window a Channel cannot vouch for, `[from, to]` in epoch ms.
+ */
+export type UnprovenStretch = {
+    /**
+     * Kind
+     */
+    kind: 'end' | 'hole' | 'start';
+    /**
+     * From
+     */
+    from: number;
+    /**
+     * To
+     */
+    to: number;
+};
+
+/**
  * UpdateJobRequest
  */
 export type UpdateJobRequest = {
@@ -9014,6 +9094,62 @@ export type ViewsFilter = {
      * Value
      */
     value: number;
+};
+
+/**
+ * WindowCheckRequest
+ *
+ * A Scope's Channels and its Analysis window.
+ */
+export type WindowCheckRequest = {
+    /**
+     * Channelnames
+     */
+    channelNames: Array<string>;
+    /**
+     * Window
+     */
+    window: ({
+        mode: 'live';
+    } & LiveAnalysisWindow) | ({
+        mode: 'fixed';
+    } & FixedAnalysisWindow);
+};
+
+/**
+ * WindowCheckResponse
+ *
+ * Every Channel's verdict for the window, read up to `end`.
+ */
+export type WindowCheckResponse = {
+    /**
+     * Frozenat
+     */
+    frozenAt: number;
+    /**
+     * Start
+     */
+    start: number;
+    /**
+     * End
+     */
+    end: number;
+    /**
+     * Channels
+     */
+    channels: Array<ChannelVerdict>;
+    /**
+     * Heldposts
+     */
+    heldPosts: number;
+    /**
+     * Unprovenposts
+     */
+    unprovenPosts: number;
+    /**
+     * Unprovenfloor
+     */
+    unprovenFloor: boolean;
 };
 
 /**
@@ -10673,6 +10809,31 @@ export type DataLookupPostsRouteResponses = {
 };
 
 export type DataLookupPostsRouteResponse = DataLookupPostsRouteResponses[keyof DataLookupPostsRouteResponses];
+
+export type DataWindowCheckData = {
+    body: WindowCheckRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data/posts/window-check';
+};
+
+export type DataWindowCheckErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataWindowCheckError = DataWindowCheckErrors[keyof DataWindowCheckErrors];
+
+export type DataWindowCheckResponses = {
+    /**
+     * Successful Response
+     */
+    200: WindowCheckResponse;
+};
+
+export type DataWindowCheckResponse = DataWindowCheckResponses[keyof DataWindowCheckResponses];
 
 export type DataBulkUpsertPostsRouteData = {
     /**

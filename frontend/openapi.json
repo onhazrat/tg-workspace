@@ -2142,6 +2142,41 @@
         "security": [{ "OAuth2PasswordBearer": [] }]
       }
     },
+    "/api/v1/data/posts/window-check": {
+      "post": {
+        "tags": ["data"],
+        "summary": "Window Check",
+        "description": "Which of these Channels the workspace can prove it holds every Post of,\nfrom the window's Start to its End or now, whichever is earlier, and why\nnot. Reads what is held; never syncs.",
+        "operationId": "data-window_check",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/WindowCheckRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/WindowCheckResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
     "/api/v1/data/posts/bulk": {
       "post": {
         "tags": ["data"],
@@ -8576,6 +8611,95 @@
         "type": "object",
         "title": "ChannelUpsertRequest",
         "description": "Body for ``PUT /data/channels/{id}``.\n\nDeliberately permissive, like `SummaryUpsertRequest`. `upsert_channel`\nnormalises camelCase to snake_case itself, rejects server-managed and\ngroup-inherited fields with a 400, and writes only recognised\n`Channel.model_fields` \u2014 so validation belongs there, not here, and a\nstricter model would turn those 400s into 422s and change the API's error\ncontract."
+      },
+      "ChannelVerdict": {
+        "properties": {
+          "name": { "type": "string", "title": "Name" },
+          "reasons": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "skipped",
+                "failed",
+                "timed_out",
+                "refused",
+                "end",
+                "hole",
+                "start",
+                "retention",
+                "frozen",
+                "unavailable"
+              ]
+            },
+            "type": "array",
+            "title": "Reasons"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "skipped",
+                  "failed",
+                  "timed_out",
+                  "refused",
+                  "end",
+                  "hole",
+                  "start",
+                  "retention",
+                  "frozen",
+                  "unavailable"
+                ]
+              },
+              { "type": "null" }
+            ],
+            "title": "Reason"
+          },
+          "lastSync": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Lastsync"
+          },
+          "headReadAt": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Headreadat"
+          },
+          "error": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Error"
+          },
+          "stretches": {
+            "items": { "$ref": "#/components/schemas/UnprovenStretch" },
+            "type": "array",
+            "title": "Stretches"
+          },
+          "missingIds": { "type": "integer", "title": "Missingids" },
+          "syncable": { "type": "boolean", "title": "Syncable" },
+          "behind": { "type": "boolean", "title": "Behind" },
+          "pacePerHour": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Paceperhour"
+          },
+          "heldPosts": { "type": "integer", "title": "Heldposts" },
+          "unprovenPosts": { "type": "number", "title": "Unprovenposts" }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "reasons",
+          "reason",
+          "lastSync",
+          "headReadAt",
+          "error",
+          "stretches",
+          "missingIds",
+          "syncable",
+          "behind",
+          "pacePerHour",
+          "heldPosts",
+          "unprovenPosts"
+        ],
+        "title": "ChannelVerdict",
+        "description": "One Channel's answer: why it is Incomplete, if it is, and by how much."
       },
       "ChatArtifactResponse": {
         "properties": {
@@ -15985,6 +16109,21 @@
         "required": ["type", "value"],
         "title": "TypeCondition"
       },
+      "UnprovenStretch": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["end", "hole", "start"],
+            "title": "Kind"
+          },
+          "from": { "type": "integer", "title": "From" },
+          "to": { "type": "integer", "title": "To" }
+        },
+        "type": "object",
+        "required": ["kind", "from", "to"],
+        "title": "UnprovenStretch",
+        "description": "A part of the window a Channel cannot vouch for, `[from, to]` in epoch ms."
+      },
       "UpdateJobRequest": {
         "properties": { "enabled": { "type": "boolean", "title": "Enabled" } },
         "type": "object",
@@ -16377,6 +16516,61 @@
         "required": ["op", "value"],
         "title": "ViewsFilter",
         "description": "At least or at most a number of views."
+      },
+      "WindowCheckRequest": {
+        "properties": {
+          "channelNames": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Channelnames"
+          },
+          "window": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/LiveAnalysisWindow" },
+              { "$ref": "#/components/schemas/FixedAnalysisWindow" }
+            ],
+            "title": "Window",
+            "discriminator": {
+              "propertyName": "mode",
+              "mapping": {
+                "fixed": "#/components/schemas/FixedAnalysisWindow",
+                "live": "#/components/schemas/LiveAnalysisWindow"
+              }
+            }
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["channelNames", "window"],
+        "title": "WindowCheckRequest",
+        "description": "A Scope's Channels and its Analysis window."
+      },
+      "WindowCheckResponse": {
+        "properties": {
+          "frozenAt": { "type": "integer", "title": "Frozenat" },
+          "start": { "type": "integer", "title": "Start" },
+          "end": { "type": "integer", "title": "End" },
+          "channels": {
+            "items": { "$ref": "#/components/schemas/ChannelVerdict" },
+            "type": "array",
+            "title": "Channels"
+          },
+          "heldPosts": { "type": "integer", "title": "Heldposts" },
+          "unprovenPosts": { "type": "integer", "title": "Unprovenposts" },
+          "unprovenFloor": { "type": "boolean", "title": "Unprovenfloor" }
+        },
+        "type": "object",
+        "required": [
+          "frozenAt",
+          "start",
+          "end",
+          "channels",
+          "heldPosts",
+          "unprovenPosts",
+          "unprovenFloor"
+        ],
+        "title": "WindowCheckResponse",
+        "description": "Every Channel's verdict for the window, read up to `end`."
       },
       "YourChannels": {
         "properties": {
