@@ -8967,6 +8967,75 @@
         "title": "ClearTableResponse",
         "description": "How many rows `DELETE /data/tables/{name}` removed."
       },
+      "Completeness": {
+        "properties": {
+          "unprovenPosts": { "type": "integer", "title": "Unprovenposts" },
+          "unprovenFloor": { "type": "boolean", "title": "Unprovenfloor" },
+          "fixable": { "type": "boolean", "title": "Fixable" },
+          "incompleteCount": { "type": "integer", "title": "Incompletecount" },
+          "choice": {
+            "type": "string",
+            "enum": [
+              "synced",
+              "continued_early",
+              "skipped",
+              "complete_only",
+              "nothing_to_sync",
+              "complete"
+            ],
+            "title": "Choice"
+          },
+          "frozenAt": { "type": "integer", "title": "Frozenat" },
+          "start": { "type": "integer", "title": "Start" },
+          "end": { "type": "integer", "title": "End" },
+          "channelCount": { "type": "integer", "title": "Channelcount" },
+          "heldPosts": { "type": "integer", "title": "Heldposts" },
+          "channels": {
+            "items": { "$ref": "#/components/schemas/ChannelVerdict" },
+            "type": "array",
+            "title": "Channels"
+          },
+          "leftOut": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Leftout"
+          }
+        },
+        "type": "object",
+        "required": [
+          "unprovenPosts",
+          "unprovenFloor",
+          "fixable",
+          "incompleteCount",
+          "choice",
+          "frozenAt",
+          "start",
+          "end",
+          "channelCount",
+          "heldPosts",
+          "channels",
+          "leftOut"
+        ],
+        "title": "Completeness",
+        "description": "An Artifact's window as it froze: its Incomplete and Left out Channels."
+      },
+      "CompletenessMark": {
+        "properties": {
+          "unprovenPosts": { "type": "integer", "title": "Unprovenposts" },
+          "unprovenFloor": { "type": "boolean", "title": "Unprovenfloor" },
+          "fixable": { "type": "boolean", "title": "Fixable" },
+          "incompleteCount": { "type": "integer", "title": "Incompletecount" }
+        },
+        "type": "object",
+        "required": [
+          "unprovenPosts",
+          "unprovenFloor",
+          "fixable",
+          "incompleteCount"
+        ],
+        "title": "CompletenessMark",
+        "description": "What History's pill shows of an Artifact's window."
+      },
       "DbStatsResponse": {
         "properties": {
           "postCount": {
@@ -11057,6 +11126,12 @@
             "type": "boolean",
             "title": "Groupbychannel",
             "default": false
+          },
+          "gate": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/GateOutcome" },
+              { "type": "null" }
+            ]
           }
         },
         "additionalProperties": false,
@@ -11269,6 +11344,14 @@
               { "type": "null" }
             ],
             "title": "Posts"
+          },
+          "completeness": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/Completeness" },
+              { "$ref": "#/components/schemas/CompletenessMark" },
+              { "type": "null" }
+            ],
+            "title": "Completeness"
           },
           "durationMinutes": {
             "type": "integer",
@@ -11676,6 +11759,14 @@
             ],
             "title": "Posts"
           },
+          "completeness": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/Completeness" },
+              { "$ref": "#/components/schemas/CompletenessMark" },
+              { "type": "null" }
+            ],
+            "title": "Completeness"
+          },
           "durationMinutes": {
             "type": "integer",
             "title": "Durationminutes",
@@ -11686,6 +11777,43 @@
         "required": ["start", "end"],
         "title": "FrozenScope",
         "description": "The immutable Scope an Artifact was produced from."
+      },
+      "GateOutcome": {
+        "properties": {
+          "choice": {
+            "type": "string",
+            "enum": [
+              "synced",
+              "continued_early",
+              "skipped",
+              "complete_only",
+              "nothing_to_sync",
+              "complete"
+            ],
+            "title": "Choice"
+          },
+          "frozenAt": { "type": "integer", "title": "Frozenat" },
+          "skipped": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Skipped"
+          },
+          "timedOut": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Timedout"
+          },
+          "leftOut": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Leftout"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["choice", "frozenAt"],
+        "title": "GateOutcome",
+        "description": "What the person chose in the gate, sent with the Scope the action froze."
       },
       "GlobalStartTimeSnapshot": {
         "properties": {
@@ -14432,6 +14560,12 @@
             },
             "type": "array",
             "title": "Selection"
+          },
+          "gate": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/GateOutcome" },
+              { "type": "null" }
+            ]
           }
         },
         "additionalProperties": false,
@@ -16537,6 +16671,10 @@
                 "live": "#/components/schemas/LiveAnalysisWindow"
               }
             }
+          },
+          "frozenAt": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Frozenat"
           }
         },
         "additionalProperties": false,

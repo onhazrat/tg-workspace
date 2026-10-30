@@ -324,7 +324,7 @@
       "comment": "A generous fetch-safety bound, so a pathological Scope never materialises a giant result. The token budget is the real user-facing limit.",
       "expression": "10000",
       "file": "backend/app/services/artifact_coverage.py",
-      "line": 57,
+      "line": 58,
       "name": "MAX_PROMPT_POSTS",
       "value": 10000
     },

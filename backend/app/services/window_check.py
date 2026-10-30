@@ -46,6 +46,8 @@ from app.jobs.settings import (
 from app.models_tg import Channel, ChannelSettingGroup, Post, PostSyncState, SyncLog
 from app.schemas.window_check import (
     ChannelVerdict,
+    Completeness,
+    GateOutcome,
     Reason,
     UnprovenStretch,
     WindowCheckResponse,
@@ -446,4 +448,51 @@ def check_window(
             v.pace_per_hour is None and any(s.kind != "hole" for s in v.stretches)
             for v in incomplete
         ),
+    )
+
+
+def _overlaid(verdict: ChannelVerdict, reason: Reason | None) -> ChannelVerdict:
+    if reason is None or reason in verdict.reasons:
+        return verdict
+    reasons = sorted([*verdict.reasons, reason], key=REASON_ORDER.index)
+    return verdict.model_copy(update={"reasons": reasons, "reason": reasons[0]})
+
+
+def freeze_record(
+    session: Session,
+    *,
+    user_id: uuid.UUID,
+    names: list[str],
+    start: int,
+    end: int,
+    gate: GateOutcome,
+) -> Completeness:
+    """The record an Artifact freezes (CW-02): the check run here, at the
+    gate's moment, with the person's skips and the gate's timeouts laid over
+    the server's own verdicts. Only a Channel this check finds Incomplete
+    takes one; the client's view of the check is never the record."""
+    check = check_window(
+        session,
+        user_id=user_id,
+        names=names,
+        start=start,
+        end=end,
+        frozen_at=gate.frozen_at,
+    )
+    said: dict[str, Reason] = dict.fromkeys(gate.timed_out, "timed_out")
+    said.update(dict.fromkeys(gate.skipped, "skipped"))
+    incomplete = [_overlaid(v, said.get(v.name)) for v in check.channels if v.reasons]
+    return Completeness(
+        choice=gate.choice,
+        frozenAt=check.frozen_at,
+        start=check.start,
+        end=check.end,
+        channelCount=len(check.channels),
+        heldPosts=check.held_posts,
+        channels=incomplete,
+        leftOut=gate.left_out,
+        unprovenPosts=check.unproven_posts,
+        unprovenFloor=check.unproven_floor,
+        fixable=any(v.syncable for v in incomplete),
+        incompleteCount=len(incomplete),
     )

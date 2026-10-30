@@ -1652,6 +1652,86 @@ export type ClearTableResponse = {
 };
 
 /**
+ * Completeness
+ *
+ * An Artifact's window as it froze: its Incomplete and Left out Channels.
+ */
+export type Completeness = {
+    /**
+     * Unprovenposts
+     */
+    unprovenPosts: number;
+    /**
+     * Unprovenfloor
+     */
+    unprovenFloor: boolean;
+    /**
+     * Fixable
+     */
+    fixable: boolean;
+    /**
+     * Incompletecount
+     */
+    incompleteCount: number;
+    /**
+     * Choice
+     */
+    choice: 'synced' | 'continued_early' | 'skipped' | 'complete_only' | 'nothing_to_sync' | 'complete';
+    /**
+     * Frozenat
+     */
+    frozenAt: number;
+    /**
+     * Start
+     */
+    start: number;
+    /**
+     * End
+     */
+    end: number;
+    /**
+     * Channelcount
+     */
+    channelCount: number;
+    /**
+     * Heldposts
+     */
+    heldPosts: number;
+    /**
+     * Channels
+     */
+    channels: Array<ChannelVerdict>;
+    /**
+     * Leftout
+     */
+    leftOut: Array<string>;
+};
+
+/**
+ * CompletenessMark
+ *
+ * What History's pill shows of an Artifact's window.
+ */
+export type CompletenessMark = {
+    /**
+     * Unprovenposts
+     */
+    unprovenPosts: number;
+    /**
+     * Unprovenfloor
+     */
+    unprovenFloor: boolean;
+    /**
+     * Fixable
+     */
+    fixable: boolean;
+    /**
+     * Incompletecount
+     */
+    incompleteCount: number;
+};
+
+/**
  * DbStatsResponse
  *
  * Row counts across the corpus, scoped to the operator.
@@ -3344,6 +3424,7 @@ export type DiscoverReportCreateRequest = {
      * Groupbychannel
      */
     groupByChannel?: boolean;
+    gate?: GateOutcome | null;
 };
 
 /**
@@ -3531,6 +3612,10 @@ export type DiscoverReportScopeResponse = {
      * Posts
      */
     posts?: Array<ScopedPostRef> | null;
+    /**
+     * Completeness
+     */
+    completeness?: Completeness | CompletenessMark | null;
     /**
      * Durationminutes
      */
@@ -3910,9 +3995,41 @@ export type FrozenScope = {
      */
     posts?: Array<ScopedPostRef> | null;
     /**
+     * Completeness
+     */
+    completeness?: Completeness | CompletenessMark | null;
+    /**
      * Durationminutes
      */
     durationMinutes?: number;
+};
+
+/**
+ * GateOutcome
+ *
+ * What the person chose in the gate, sent with the Scope the action froze.
+ */
+export type GateOutcome = {
+    /**
+     * Choice
+     */
+    choice: 'synced' | 'continued_early' | 'skipped' | 'complete_only' | 'nothing_to_sync' | 'complete';
+    /**
+     * Frozenat
+     */
+    frozenAt: number;
+    /**
+     * Skipped
+     */
+    skipped?: Array<string>;
+    /**
+     * Timedout
+     */
+    timedOut?: Array<string>;
+    /**
+     * Leftout
+     */
+    leftOut?: Array<string>;
 };
 
 /**
@@ -6790,6 +6907,7 @@ export type ScopeSubmission = {
      * Selection
      */
     selection?: Array<SelectionRuleInput | SelectionPick>;
+    gate?: GateOutcome | null;
 };
 
 /**
@@ -9114,6 +9232,10 @@ export type WindowCheckRequest = {
     } & LiveAnalysisWindow) | ({
         mode: 'fixed';
     } & FixedAnalysisWindow);
+    /**
+     * Frozenat
+     */
+    frozenAt?: number | null;
 };
 
 /**

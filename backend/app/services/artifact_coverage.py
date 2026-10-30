@@ -42,7 +42,7 @@ from app.prompts.posts import (
 )
 from app.schemas.post_filter import to_steps
 from app.schemas.scope import FrozenScope, ScopeSubmission
-from app.services.analysis_window import freeze_scope
+from app.services.analysis_window import freeze_scope, server_now_ms
 from app.services.posts_view import (
     count_selected,
     feed,
@@ -51,6 +51,7 @@ from app.services.posts_view import (
 )
 from app.services.serialization import post_to_camel
 from app.services.tenancy import scoped_select
+from app.services.window_check import freeze_record
 
 # A generous fetch-safety bound, so a pathological Scope never materialises a
 # giant result. The token budget is the real user-facing limit.
@@ -93,7 +94,25 @@ def freeze(
     first, by `freeze_scope`, and the selection is applied over it once, so
     the refs an Artifact keeps are the Posts it covered at that minute.
     """
+    gate = submission.gate
+    if gate is not None:
+        # The action froze at the gate's click, not at this request, which a
+        # sync may have kept waiting up to minutes (ADR-043). Never later
+        # than now: a window cannot be frozen in the future.
+        gate = gate.model_copy(
+            update={"frozen_at": min(gate.frozen_at, server_now_ms())}
+        )
+        now_ms = gate.frozen_at
     frozen = freeze_scope(submission, now_ms=now_ms)
+    if gate is not None:
+        frozen.completeness = freeze_record(
+            session,
+            user_id=user_id,
+            names=frozen.channels,
+            start=frozen.start,
+            end=frozen.end,
+            gate=gate,
+        )
     view = resolve_posts_view(
         session,
         user_id=user_id,
