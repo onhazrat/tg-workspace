@@ -1,5 +1,6 @@
 import type React from "react"
 import type { ScopedPostRef } from "@/client"
+import { ArtifactWindowBanner } from "@/components/complete-window/ArtifactWindow"
 import { scopeChannels } from "@/lib/scope/artifact-scope"
 import type { SummaryTextSize } from "@/lib/settings/schema"
 import type { CitedPost } from "@/lib/summaries/cited-posts"
@@ -93,6 +94,8 @@ export function SummaryBody(props: SummaryBodyProps) {
   if (body)
     return (
       <>
+        {/* Whether its window was Complete, and is now (CW-02). */}
+        <ArtifactWindowBanner scope={summary?.scope} kind="summary" />
         <SummaryHeader
           summary={summary}
           body={body}

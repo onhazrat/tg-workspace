@@ -1,6 +1,7 @@
 import { motion } from "motion/react"
 import type React from "react"
 import { useMemo, useState } from "react"
+import { ArtifactWindowBanner } from "@/components/complete-window/ArtifactWindow"
 import { DiscoverBulkBar } from "@/components/discover/DiscoverBulkBar"
 import { DiscoverCandidatePanel } from "@/components/discover/DiscoverCandidatePanel"
 import { DiscoverCandidateTable } from "@/components/discover/DiscoverCandidateTable"
@@ -281,6 +282,7 @@ export const DiscoverView: React.FC = () => {
         candidateCount={candidates.length}
         unfollowedCount={unfollowedCount}
       />
+      <ArtifactWindowBanner scope={view?.scope} kind="discovery" />
 
       <div className="rounded-xl border border-app-ink/10 bg-app-card p-4 shadow-sm">
         <CandidatesHeading

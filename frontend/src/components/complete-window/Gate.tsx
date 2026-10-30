@@ -151,7 +151,7 @@ function useGateFlow() {
         window: gate.window as WireWindow,
         frozenAt,
       },
-    }) as unknown as Promise<WindowCheck>
+    })
 
   const finish = async (
     choice: Choice,
