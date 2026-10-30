@@ -1,10 +1,8 @@
-import { useQueryClient } from "@tanstack/react-query"
 import { Loader2, RefreshCw } from "lucide-react"
 import { toast } from "sonner"
 
 import { TgButton } from "@/components/ui/tg-button"
 import { useData } from "@/contexts/DataContext"
-import { invalidatePostsReads } from "@/contexts/PostsViewContext"
 import { useSync } from "@/contexts/SyncContext"
 import { useWindowCheck } from "@/hooks/useWindowCheck"
 import { setBannerSync, useBannerSync } from "@/lib/complete-window/banner-sync"
@@ -22,7 +20,6 @@ function SyncNow({ check }: { check: WindowCheck }) {
   const running = useBannerSync()
   const { channels } = useData()
   const { scrapeChannelsInParallel } = useSync()
-  const queryClient = useQueryClient()
   if (running)
     return (
       <span className="inline-flex items-center gap-1 text-[12px]">
@@ -48,8 +45,8 @@ function SyncNow({ check }: { check: WindowCheck }) {
     } catch {
       toast.error("The sync stopped. Checking the window again.")
     } finally {
+      // The sync's own end refetches every Posts read, this check included.
       setBannerSync(null)
-      invalidatePostsReads(queryClient)
     }
   }
   return (

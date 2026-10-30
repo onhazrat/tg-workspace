@@ -141,7 +141,7 @@ describe("a row's words", () => {
 describe("Details", () => {
   const all = check([
     verdict("ok"),
-    frozen("never-posts", 0),
+    frozen("asleep", 0),
     frozen("busy", 40),
     holed("holed", 4),
     lagging("lag", 2, { behind: true }),
@@ -151,7 +151,7 @@ describe("Details", () => {
   test("rows group by what a sync fixes, most Posts at risk first", () => {
     const groups = rowGroups(all, new Set())
     expect(groups.fixable.map((c) => c.name)).toEqual(["late", "holed", "lag"])
-    expect(groups.stuck.map((c) => c.name)).toEqual(["busy", "never-posts"])
+    expect(groups.stuck.map((c) => c.name)).toEqual(["busy", "asleep"])
     expect(groups.complete.map((c) => c.name)).toEqual(["ok"])
   })
 
