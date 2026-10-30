@@ -1193,7 +1193,28 @@
     },
     {
       "default": null,
+      "name": "PRE_COMMIT_FROM_REF",
+      "required": false,
+      "scope": "tooling",
+      "sensitive": false
+    },
+    {
+      "default": null,
+      "name": "PRE_COMMIT_TO_REF",
+      "required": false,
+      "scope": "tooling",
+      "sensitive": false
+    },
+    {
+      "default": null,
       "name": "TEST_POSTGRES_DB",
+      "required": false,
+      "scope": "tooling",
+      "sensitive": false
+    },
+    {
+      "default": null,
+      "name": "TG_DEPLOYMENT_NAMES",
       "required": false,
       "scope": "tooling",
       "sensitive": false
