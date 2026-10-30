@@ -52,3 +52,4 @@ The locked migration decisions of June 2026 sit outside this series, in
 | [ADR-040](./ADR-040-request-kinds-can-be-disabled.md) | An Operator can disable a Request kind, losslessly, refused at entry and at `fetch_with_retry` |
 | [ADR-041](./ADR-041-accounted-work.md) | Accounted work: one context attributes and pays, extending ADR-035 |
 | [ADR-042](./ADR-042-tags-listed-by-tag-use.md) | Tags are listed by Tag use, per tab, kept per Account |
+| [ADR-043](./ADR-043-complete-window.md) | An action runs on a Complete window or records why not; the old Incomplete becomes Cut short |

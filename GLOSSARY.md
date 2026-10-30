@@ -297,6 +297,52 @@ means the window ends now; a positive value deliberately excludes the newest
 period.
 _Avoid_: padding, lag, delay, end offset
 
+**Incomplete Channel**:
+A Channel in the Channel selection for which nobody can prove the workspace
+holds every Post it published inside the Analysis window, read up to the
+window's End or the moment the action started, whichever is earlier. Proof
+needs three things: the newest page read at or after that moment, or a Post
+published after it; a Post at or before the window's Start, or the Channel's
+first Post; and every Post between them held or known not to exist. An
+Incomplete Channel carries one reason: not synced to the end, a hole in the
+window, history short of the Start, before the retention cutoff, frozen,
+unavailable (Telegram will not serve it publicly), its sync failed, timed out
+or was refused, or the Account skipped it. Skipping is
+one Account's choice for one Artifact and says nothing about the Channel to
+anybody else.
+_Avoid_: stale, lagging, unsynced, unverified
+
+**Complete window**:
+An Analysis window, as an action froze it, with no Incomplete Channel. One with
+any is an **Incomplete window**. An action that cannot make its window
+Complete still runs, and an Artifact made on an Incomplete window keeps, for
+good, which Channels were Incomplete, why, and their Last sync at the time. An
+Artifact made before this was recorded is not checked, which is not the same
+as Complete.
+_Avoid_: fresh, full window, synced window
+
+**Behind**:
+An Incomplete Channel whose only reason is not synced to the end, a sync can
+repair it, and it is less than two of its own sync intervals short of the
+window's end: routine lag that its next sync clears. Past that it is
+**Overdue**. Both are still Incomplete Channels; the words only say which ones
+need a look.
+_Avoid_: stale, lagging, just synced
+
+**Unproven Posts**:
+About how many Posts an Incomplete window may lack: a hole's missing post ids
+exactly, and the rest at each Channel's own posting pace. Always an estimate,
+always written with "~", and frozen with the Artifact as it was when the action
+started. A Channel with no known pace makes it a floor, written with "+", and
+never "none expected".
+_Avoid_: missing Posts (most of them may not exist), lost Posts
+
+**Left out**:
+A Channel the person dropped from the Channel selection at an action's start,
+to make the window Complete. The Artifact names it, but it is not an Incomplete
+Channel: the Artifact's window never included it.
+_Avoid_: excluded, skipped (a skip keeps the Channel in), removed
+
 ### Choosing Channels
 
 **Setting group**:
@@ -608,14 +654,16 @@ way to start an Attempt)
 
 **Partial response**:
 The text a model produced before its Attempt was cut off or stopped. It can be kept as the
-Summary's text, which makes the Summary Incomplete, or dismissed and later
+Summary's text, which makes the Summary Cut short, or dismissed and later
 restored.
 _Avoid_: draft, fragment, partial summary
 
-**Incomplete**:
+**Cut short**:
 A Summary whose text is a kept Partial response rather than a finished one. It
-is finished, readable and retryable, and says where its text stops.
-_Avoid_: partial, truncated, draft
+is finished, readable and retryable, and says where its text stops. Unrelated
+to an Incomplete window, which is about the Posts, not the prose.
+_Avoid_: incomplete (an Incomplete Channel is something else), partial,
+truncated, draft
 
 **Output language**:
 The Language an Artifact is written in, chosen by the Account that asks for it.
