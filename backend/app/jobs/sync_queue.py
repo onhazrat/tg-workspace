@@ -40,7 +40,7 @@ and interleaved across accounts inside a lane. The permit itself is a
 `SyncSlot` rather than a bare `async with`, because ticket 11's coalescing
 needs to put it down while it waits.
 
-*One caveat, stated rather than glossed:* `auto_summary._sync_channels_for_summary`
+*One caveat, stated rather than glossed:* `auto_summary._sync_own`
 still calls `run_sync_job` directly, because it needs the sync finished before
 it can summarise — enqueueing there would invert its control flow. It stays
 outside the lane ladder for that reason. It is **not** outside the Partition

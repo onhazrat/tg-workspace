@@ -1953,7 +1953,7 @@ async def sync_single_channel(
     crosses the ceiling was enqueued while the account was still under it —
     ticket 23 named that overshoot and handed it here. Checking per Channel is
     also what reaches the one sync that never enqueues at all:
-    `auto_summary._sync_channels_for_summary` arrives through `run_sync_job`
+    `auto_summary._sync_own` arrives through `run_sync_job`
     and lands in this function. (There were two. The legacy `_run_whole_job`
     was deleted in ADR-012, and `RUN_SYNC_JOB_CALLERS` is the list that would
     fail if a third appeared.)

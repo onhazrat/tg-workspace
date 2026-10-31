@@ -771,7 +771,8 @@ def channels_in_flight(names: list[str]) -> dict[str, int]:
 def has_active_sync_job() -> bool:
     """True when a sync job is pending or running — running *or still queued*.
 
-    `run_auto_sync` and `run_auto_summary` skip their tick on this. It used to
+    Both schedulers once skipped their tick on this; neither does now (see
+    `active_sync_job_owners`, and CW-03 for the successor). It used to
     read `_active_jobs` alone, which was complete while `create_job` registered
     every job it made. It no longer does (see `claim_job`), so between enqueue
     and the first message being claimed this dict says nothing — and that gap is
@@ -783,8 +784,8 @@ def has_active_sync_job() -> bool:
     So a queued-but-unclaimed job counts as active. The row check runs only when
     the cheap in-memory answer is negative, and at most once a tick.
 
-    **Deployment-wide, which is right for `run_auto_summary` and was wrong for
-    `run_auto_sync`.** See `active_sync_job_owners`.
+    **Deployment-wide**, which made a scheduled successor skip its sync
+    whenever anything synced anywhere (ADR-043).
     """
     if any(j.status in ("pending", "running") for j in _active_jobs.values()):
         return True

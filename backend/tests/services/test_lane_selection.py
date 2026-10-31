@@ -568,7 +568,7 @@ def test_work_over_budget_is_degraded_rather_than_dropped(
 #: a third door into a red test instead of a discovery.
 RUN_SYNC_JOB_CALLERS: dict[str, str] = {
     "app/jobs/auto_summary.py": (
-        "`_sync_channels_for_summary` needs the sync finished before it can "
+        "`_sync_own` needs the sync finished before it can "
         "summarise, so enqueueing would invert its control flow — ticket 10 "
         "declined to build the probe-shaped message that would take, and "
         "ticket 13's docstring still carries the forward reference. It is "
