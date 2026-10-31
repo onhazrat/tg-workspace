@@ -12,7 +12,7 @@ prototype does not cover this.
 
 **Blocked by:** CW-02.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] The "any sync job active, skip" shortcut is gone from the successor's
   pre-sync.
@@ -27,3 +27,8 @@ prototype does not cover this.
 - [x] Tests (the scheduler's job, time injected): runs while another sync job is
   active; joins an in-flight sync; queues behind a stale head read; times out
   and records it; the metadata line's three cases.
+
+## Comments
+
+- 2026-10-31: implemented on `claude/cw-03` and merged into the integration branch in 50805b2c (fast-forward).
+  Open, handed to the code review: a deadline records choice `continued_early` (no `timed_out` choice); `has_active_sync_job` has no app caller left and can go.
