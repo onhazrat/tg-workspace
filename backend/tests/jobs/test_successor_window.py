@@ -197,13 +197,29 @@ def test_it_syncs_while_another_sync_job_is_active(
     assert record["channels"] == []
 
 
-def test_it_joins_a_sync_in_flight_that_started_after_e(
-    session: Session, user: User, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize(
+    ("started", "head_read_at"),
+    [
+        pytest.param(E + MINUTE, None, id="started after E"),
+        # Its head read is still to come, so after E: an earlier sync's
+        # read, before this one started, says nothing about it.
+        pytest.param(E - MINUTE, START, id="started before E, head not read yet"),
+    ],
+)
+def test_it_joins_a_sync_in_flight_that_reads_its_head_after_e(
+    session: Session,
+    user: User,
+    monkeypatch: pytest.MonkeyPatch,
+    started: int,
+    head_read_at: int | None,
 ) -> None:
-    """**Mutation:** sync every Channel now and it syncs this one twice."""
+    """**Mutation:** sync every Channel now and it syncs this one twice;
+    judge by when the job started and it queues behind the second."""
     channel = _lagging(session, user)
+    if head_read_at is not None:
+        _read_head(channel.id, head_read_at)
     events: list[str] = []
-    other = _in_flight(session, channel, started=E + MINUTE)
+    other = _in_flight(session, channel, started=started)
     telegram = _Telegram(events)
     monkeypatch.setattr(auto_summary, "run_sync_job", telegram)
 
@@ -228,8 +244,9 @@ def test_it_queues_another_behind_a_sync_that_read_its_head_before_e(
     **Mutation:** join it instead, and the window freezes Incomplete.
     """
     channel = _lagging(session, user)
+    _read_head(channel.id, E - MINUTE)
     events: list[str] = []
-    other = _in_flight(session, channel, started=E - MINUTE)
+    other = _in_flight(session, channel, started=E - 2 * MINUTE)
     telegram = _Telegram(events)
     monkeypatch.setattr(auto_summary, "run_sync_job", telegram)
 

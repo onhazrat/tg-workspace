@@ -23,7 +23,7 @@ from sqlmodel import Session, col, select
 from app.core import acting_owner
 from app.core.db import engine
 from app.jobs.summary_generation import start_attempt
-from app.models_tg import Summary, utc_now
+from app.models_tg import Channel, Summary, utc_now
 from app.schemas.scope import FrozenScope
 from app.schemas.summaries import SummaryDerivation
 from app.schemas.window_check import (
@@ -215,13 +215,32 @@ async def _sync_own(
     return [c.channel_name for c in job.channels.values() if c.status == "skipped"]
 
 
+def _read_head_before(flight: dict[str, int], e: int) -> set[str]:
+    """Channels whose sync in flight already read its head, before E.
+
+    A head-read moment at or after the sync's start is that sync's own; an
+    older one is a previous sync's, and this one's read is still to come,
+    after E, since E is past.
+    """
+    if not flight:
+        return set()
+    with Session(engine) as session:
+        rows = session.exec(
+            select(Channel.name, Channel.head_read_at).where(
+                col(Channel.name).in_(flight)
+            )
+        ).all()
+    return {n for n, read in rows if read is not None and flight[n] <= read < e}
+
+
 def _sync_plan(names: list[str], e: int) -> tuple[list[str], list[str], list[str]]:
-    """The gate's `syncPlan`, server-side: join a sync in flight that started
-    at or after E, queue another behind one that started before it (its head
-    read cannot pass test 1), and sync the rest now."""
+    """The gate's `syncPlan`, server-side: join a sync in flight, but queue
+    another behind one that read its head before E (it cannot pass test 1),
+    and sync the rest now."""
     flight = channels_in_flight(names)
-    join = [n for n in names if n in flight and flight[n] >= e]
-    after = [n for n in names if n in flight and flight[n] < e]
+    stale = _read_head_before(flight, e)
+    join = [n for n in names if n in flight and n not in stale]
+    after = [n for n in names if n in stale]
     now = [n for n in names if n not in flight]
     return join, after, now
 
