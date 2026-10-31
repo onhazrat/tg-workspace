@@ -1,6 +1,6 @@
 """`run_sync_job` walks Channels on Slots out of the one Partition.
 
-The path here is `auto_summary._sync_channels_for_summary`, the one sync that
+The path here is `auto_summary._sync_own`, the one sync that
 never enqueues: it needs the walk finished before it can summarise, so putting
 it on a lane would invert its control flow. Ticket 10 declined to build the
 message shape that would take, and it has been outside the Partition ever

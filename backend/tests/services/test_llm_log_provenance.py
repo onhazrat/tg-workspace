@@ -608,7 +608,7 @@ def test_a_scheduled_success_is_auto_published(session: Session, user: User) -> 
     assert published.await_args.args[1].id == result["regenerated"][0]
 
 
-def test_auto_publish_skips_an_incomplete_summary_and_says_so(
+def test_auto_publish_skips_a_cut_short_summary_and_says_so(
     session: Session, user: User
 ) -> None:
     """A kept Partial response stops short; nobody unattended sends one (SFR-03)."""
@@ -619,7 +619,7 @@ def test_auto_publish_skips_an_incomplete_summary_and_says_so(
         language="English",
         timestamp=int(time.time() * 1000),
         extra={
-            "incomplete": True,
+            "cutShort": True,
             "autoPublish": True,
             "publishBotId": "bot",
             "publishChatId": "chat",
@@ -637,7 +637,7 @@ def test_auto_publish_skips_an_incomplete_summary_and_says_so(
             select(PublishLog).where(col(PublishLog.summary_id) == row.id)
         ).all()
     assert log.status == "skipped"
-    assert "Incomplete" in (log.error or "")
+    assert "Cut short" in (log.error or "")
 
 
 # --------------------------------------------------------------------------

@@ -323,8 +323,9 @@ def test_every_filter_a_caller_can_submit_survives_into_the_record() -> None:
     """
     submitted = set(ScopeSubmission.model_fields)
     recorded = set(FrozenScope.model_fields)
-    # `window` is the one field that changes shape: it becomes `start`/`end`.
-    stranded = submitted - recorded - {"window"}
+    # Two fields change shape: `window` becomes `start`/`end`, and the gate's
+    # outcome becomes the `completeness` record the server checks (CW-02).
+    stranded = submitted - recorded - {"window", "gate"}
 
     assert not stranded, (
         "These are submittable and unrecorded, so an Artifact made with them "

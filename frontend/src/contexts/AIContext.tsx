@@ -24,7 +24,7 @@ import {
   withMissingPosts,
   withProvisionalRow,
 } from "@/lib/artifacts/artifact-run"
-import { staleSelectedChannels } from "@/lib/chat-sessions/chat-turn"
+import { withGate } from "@/lib/complete-window/gate"
 import { scopeSubmission } from "@/lib/posts/posts-view"
 import { lookupPosts } from "@/lib/posts/store"
 import { scopeChannels } from "@/lib/scope/artifact-scope"
@@ -53,8 +53,7 @@ import { getSummaryPrompt } from "../services/ai"
 import type { BotCredential, ChatDestination, Summary } from "../types"
 import { useChatContext } from "./ChatContext"
 import { useData } from "./DataContext"
-import { invalidatePostsReads, usePostsViewState } from "./PostsViewContext"
-import { useScope } from "./ScopeContext"
+import { usePostsViewState } from "./PostsViewContext"
 import { useSettings } from "./SettingsContext"
 import { useSync } from "./SyncContext"
 import { useUI } from "./UIContext"
@@ -89,10 +88,6 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
   const loadHistory = useInvalidateSummaries()
   const botCredentials = useBotCredentials()
   const chatDestinations = useChatDestinations()
-  // Only `endDate`: what a Summary is *about* is frozen server-side now
-  // (AW-05), and the one thing left that needs a boundary here is deciding
-  // which channels to sync before generating.
-  const { endDate } = useScope()
   const { workspaceTabs, setSummarizing } = useUI()
   const { aiLanguage, selectedModel, aiTemperature } = useSettings()
   const { scrapeChannelsInParallel } = useSync()
@@ -110,20 +105,6 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     channels
       .filter((channel) => selectedChannels.has(channel.name))
       .map((channel) => channel.name)
-
-  /** Sync the selected channels whose posts may not reach the window's end yet. */
-  const syncStaleSelection = async () => {
-    const stale = staleSelectedChannels(
-      channels,
-      selectedChannels,
-      endDate,
-      Date.now(),
-    )
-    if (stale.length === 0) return
-    toast.info(`Syncing ${stale.length} channels to ensure up-to-date data...`)
-    await scrapeChannelsInParallel(stale, "Pre-Summary Sync")
-    invalidatePostsReads(queryClient)
-  }
 
   /**
    * Submit before a single token is spent (AW-05). The server resolves the
@@ -143,7 +124,8 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
   ) => {
     await submitSummary({
       id,
-      scope: scopeSubmission(view, names),
+      // The gate's outcome, when the gate ran this (CW-02).
+      scope: withGate(scopeSubmission(view, names)),
       language: aiLanguage,
       model: selectedModel,
       extra: {
@@ -174,18 +156,10 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       toast.warning("Server offline — summary generation disabled.")
       return
     }
-    // A failed sync is not the end of a Generate: with Posts in range it
-    // leaves a Failed Summary that says why (SFR-01). Without any, there was
-    // nothing to ask for, and the toast says so.
-    const syncError = await syncStaleSelection().then(
-      () => null,
-      (err: unknown) => err,
-    )
+    // The gate synced or recorded why not (CW-02); nothing syncs here.
     const names = selectedChannelNames()
     if ((await selectedPostCount(queryClient, view)) === 0) {
-      toast.error(
-        syncError ? errorText(syncError, NO_POSTS_MESSAGE) : NO_POSTS_MESSAGE,
-      )
+      toast.error(NO_POSTS_MESSAGE)
       return
     }
 
@@ -194,7 +168,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     // The empty Summary tab (or a new one), which the finished run fills.
     workspaceTabs.openTab("summary")
     try {
-      await streamSummary(names, syncError)
+      await streamSummary(names)
     } catch (err: unknown) {
       console.error(err)
       toast.error(
@@ -217,14 +191,13 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
    * starts is reported here, with the HTTP status it carried, for the server
    * to classify (SFR-01); the server records every failure after that.
    */
-  const streamSummary = async (names: string[], syncError: unknown) => {
+  const streamSummary = async (names: string[]) => {
     const newId = crypto.randomUUID()
     // The submission opens the row; failing here leaves nothing to keep.
     await openSummary(newId, names, KEEP_ROW, { status: "failed" })
     setChatMessages([]) // Clear chat when new summary starts
     try {
       await loadHistory()
-      if (syncError) throw syncError
       await startFirstAttempt(newId)
       workspaceTabs.createTab("summary", newId)
       setSummary(null)

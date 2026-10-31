@@ -29,6 +29,7 @@ from app.models_tg import Post, utc_now
 from app.schemas.post_media import MEDIA_COUNTER_KEYS
 from app.services.channels import relabel_channels
 from app.services.language import own_words, read_language
+from app.services.post_sync_state import prune_sync_state_for_post_ids
 from app.services.reach import MS_PER_HOUR, REFRESH_HORIZON_HOURS
 from app.services.sync_meta import touch_sync
 from app.services.tenancy import unscoped_select
@@ -320,11 +321,13 @@ def bulk_upsert_posts_impl(
     count = edited = 0
     now_ms = int(time.time() * 1000)
     touched: set[str] = set()
+    stored: defaultdict[str, list[int]] = defaultdict(list)
     sightings: list[Sighting] = []
     for item in body:
         channel = item.get("channelName") or item.get("channel_name", "")
         touched.add(channel)
         post_id = int(item.get("id") or item.get("post_id", 0))
+        stored[channel].append(post_id)
         existing = session.exec(
             select(Post).where(Post.channel_name == channel, Post.post_id == post_id)
         ).first()
@@ -423,6 +426,10 @@ def bulk_upsert_posts_impl(
             sightings.append(_sighting(existing))
         count += 1
     record_view_observations(session, sightings)
+    # A confirmed gap says the id holds no Post; storing one proves otherwise,
+    # and a gap left behind would count it missing and held at once (ADR-043).
+    for channel, post_ids in stored.items():
+        prune_sync_state_for_post_ids(session, channel, post_ids)
     relabel_channels(session, touched, announce=announce_relabels)
     return Upserted(count, edited)
 

@@ -463,7 +463,7 @@ def test_enqueue_refuses_past_the_ceiling_and_marks_the_job(
     The job row is marked *before* the raise, so a caller that catches the
     exception and one that does not leave the same record — three of the four
     callers are unattended, and a job stuck at `pending` is what
-    `has_active_sync_job` reads.
+    `active_sync_job_owners` reads.
     """
     _pin(monkeypatch, Budget.MANUAL_SINGLE, allowance=10**9, ceiling=1)
     _spend(spender, Budget.MANUAL_SINGLE, 5)

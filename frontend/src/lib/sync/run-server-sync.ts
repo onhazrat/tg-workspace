@@ -30,6 +30,7 @@ export interface RunServerSyncIO {
     channelIds: string[]
     source: string
     syncMode: SyncMode
+    walkBackTo?: Record<string, number>
   }) => Promise<{ jobId: string }>
   waitSyncJob: (jobId: string) => Promise<SyncJobStatus>
   getChannelStats: (channelId: string) => Promise<ChannelStats | null>
@@ -52,6 +53,8 @@ export interface RunServerSyncArgs {
   source: string
   refresh: boolean
   syncMode: SyncMode
+  /** Per Channel id, a moment to walk back to past held Posts (ADR-043). */
+  walkBackTo?: Record<string, number>
 }
 
 export const OFFLINE_MESSAGE =
@@ -89,6 +92,7 @@ async function startJob(io: RunServerSyncIO, args: RunServerSyncArgs) {
       channelIds: args.channelIds,
       source: args.source,
       syncMode: args.syncMode,
+      walkBackTo: args.walkBackTo,
     })
     return jobId
   } catch (err) {

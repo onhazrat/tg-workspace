@@ -414,7 +414,7 @@ def _partial(
 def keep_partial(
     session: Session, summary_id: str, attempt_id: str, *, user_id: uuid.UUID
 ) -> SummaryAttempt:
-    """Finish the Summary Incomplete with one Attempt's Partial response. Commits.
+    """Finish the Summary Cut short with one Attempt's Partial response. Commits.
 
     Recorded as a `kept_partial` Attempt carrying the source's model and Key,
     which the Summary takes too, so a scheduled run after it pays as the text
@@ -445,7 +445,7 @@ def keep_partial(
         model=source.model,
         key_id=source.key_id,
         cited_posts=cited_posts(session, text, user_id=summary.user_id),
-        incomplete=True,
+        cut_short=True,
     )
     touch_sync(session, "summaries", commit=False)
     session.commit()

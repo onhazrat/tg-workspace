@@ -49,6 +49,7 @@ from sqlalchemy import select as sa_select
 from sqlmodel import Session, SQLModel, col
 
 from app.models_tg import ChatSession, DiscoverReport, Summary, SummaryAttempt, TagRun
+from app.schemas.window_check import CompletenessMark
 from app.services.analysis_window import ResolvedWindow
 from app.services.logs import ANY_TIME, LogSpread
 from app.services.spread_bars import Bin, spread_range
@@ -96,6 +97,23 @@ def _null(type_: Any) -> Any:
     absent per-kind field is cast explicitly.
     """
     return cast(null(), type_)
+
+
+#: What History's pill reads of an Artifact's completeness record (CW-02);
+#: the Incomplete Channels themselves stay with a read of the Artifact.
+LIST_COMPLETENESS_KEYS = tuple(
+    field.alias or name for name, field in CompletenessMark.model_fields.items()
+)
+
+
+def _list_scope(scope: dict[str, Any] | None) -> dict[str, Any] | None:
+    record = (scope or {}).get("completeness")
+    if scope is None or record is None:
+        return scope
+    return {
+        **scope,
+        "completeness": {k: record[k] for k in LIST_COMPLETENESS_KEYS if k in record},
+    }
 
 
 def _starred(model: Any) -> Any:
@@ -414,7 +432,7 @@ def _row_to_camel(row: Any) -> dict[str, Any]:
         # column depending on the family, and this module's one rule is that it
         # opens neither; `scopedPostCount` inside the value is what a list shows
         # instead.
-        "scope": row["scope"],
+        "scope": _list_scope(row["scope"]),
     }
     if kind == "summary":
         out["status"] = row["status"]

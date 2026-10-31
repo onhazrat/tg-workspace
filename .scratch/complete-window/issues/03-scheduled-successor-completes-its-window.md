@@ -12,18 +12,23 @@ prototype does not cover this.
 
 **Blocked by:** CW-02.
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] The "any sync job active, skip" shortcut is gone from the successor's
+- [x] The "any sync job active, skip" shortcut is gone from the successor's
   pre-sync.
-- [ ] It joins a sync already in flight for a Channel, and queues another
+- [x] It joins a sync already in flight for a Channel, and queues another
   behind one that read its head before E; it walks back to the Start when the
   start or continuity test fails.
-- [ ] After 5 minutes it stops waiting, re-checks, and freezes the record with
+- [x] After 5 minutes it stops waiting, re-checks, and freezes the record with
   unfinished Channels timed out; otherwise with choice synced.
-- [ ] The metadata line reads "~40 Posts unproven (2%): @a, @b +3", naming only
+- [x] The metadata line reads "~40 Posts unproven (2%): @a, @b +3", naming only
   Channels that are not Behind; omitted when only Behind Channels remain or the
   window is Complete. The prompt never mentions any of it.
-- [ ] Tests (the scheduler's job, time injected): runs while another sync job is
+- [x] Tests (the scheduler's job, time injected): runs while another sync job is
   active; joins an in-flight sync; queues behind a stale head read; times out
   and records it; the metadata line's three cases.
+
+## Comments
+
+- 2026-10-31: implemented on `claude/cw-03` and merged into the integration branch in 50805b2c (fast-forward).
+  Open, handed to the code review: a deadline records choice `continued_early` (no `timed_out` choice); `has_active_sync_job` has no app caller left and can go.

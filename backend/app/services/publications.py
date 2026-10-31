@@ -32,9 +32,10 @@ from app.services.publication_parts import (
     build_parts,
     metadata_rows,
     metadata_text,
+    unproven_line,
 )
 from app.services.publish import PartFailed, load_publishing_settings, send_parts
-from app.services.summaries import is_incomplete
+from app.services.summaries import is_cut_short
 from app.services.sync_meta import touch_sync
 from app.services.tenancy import assert_owner_on_write, may_act_on, scoped_select
 
@@ -67,9 +68,9 @@ def summary_publishing(
     )
 
 
-#: How a Publication of an Incomplete Summary ends (SFR-03): a kept Partial
+#: How a Publication of a Cut short Summary ends (SFR-03): a kept Partial
 #: response stops short, and a reader in the channel should know it does.
-INCOMPLETE_PUBLICATION_LINE = "⚠️ Incomplete: the text stops here."
+CUT_SHORT_PUBLICATION_LINE = "⚠️ Cut short: the text stops here."
 
 
 def plan_publication(
@@ -79,11 +80,13 @@ def plan_publication(
     user_id: uuid.UUID,
     include_metadata: bool,
     metadata_in_first_part: bool,
+    scheduled: bool = False,
 ) -> Plan:
     """The Parts a Publication of `summary` sends, in `summary_publishing`.
 
     The metadata is the Summary's hand-written text when it has one, else
-    generated in that time zone without the rows it leaves out.
+    generated in that time zone without the rows it leaves out. A scheduled
+    one ends with what its window lacked, if anything (CW-03).
     """
     prefs = summary_publishing(session, summary, user_id=user_id)
     extra = summary.extra or {}
@@ -102,9 +105,11 @@ def plan_publication(
     omitted = omitted_rows(extra)
     generated = metadata_text(rows, omitted)
     metadata = (extra.get("metadataText") or generated) if include_metadata else None
+    if metadata and scheduled and (lacked := unproven_line(scope)):
+        metadata = f"{metadata}\n{lacked}"
     text = summary.text or ""
-    if is_incomplete(summary):
-        text = f"{text}\n\n{INCOMPLETE_PUBLICATION_LINE}"
+    if is_cut_short(summary):
+        text = f"{text}\n\n{CUT_SHORT_PUBLICATION_LINE}"
     parts = build_parts(
         text,
         metadata,
@@ -154,6 +159,7 @@ async def send_publication(
     destination_id: str,
     include_metadata: bool,
     metadata_in_first_part: bool,
+    scheduled: bool = False,
 ) -> Outcome:
     """Plan `summary` and send exactly those Parts, then file one publish log.
 
@@ -169,6 +175,7 @@ async def send_publication(
         user_id=user_id,
         include_metadata=include_metadata,
         metadata_in_first_part=metadata_in_first_part,
+        scheduled=scheduled,
     )
     return await _deliver(
         session,

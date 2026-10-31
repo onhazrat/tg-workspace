@@ -568,7 +568,7 @@ def test_work_over_budget_is_degraded_rather_than_dropped(
 #: a third door into a red test instead of a discovery.
 RUN_SYNC_JOB_CALLERS: dict[str, str] = {
     "app/jobs/auto_summary.py": (
-        "`_sync_channels_for_summary` needs the sync finished before it can "
+        "`_sync_own` needs the sync finished before it can "
         "summarise, so enqueueing would invert its control flow — ticket 10 "
         "declined to build the probe-shaped message that would take, and "
         "ticket 13's docstring still carries the forward reference. It is "
@@ -667,7 +667,7 @@ def test_the_guard_can_actually_see_the_call_sites() -> None:
 def test_one_accounts_queued_backlog_does_not_stop_another_accounts_scheduler(
     monkeypatch: pytest.MonkeyPatch, spender: uuid.UUID
 ) -> None:
-    """Mutation: gate `run_auto_sync` on `has_active_sync_job()` again.
+    """Mutation: gate `run_auto_sync` on a deployment-wide check again.
 
     The interaction this ticket creates, and the one that costs the most if it
     is wrong. An account over its `auto_sync` Budget enqueues onto the

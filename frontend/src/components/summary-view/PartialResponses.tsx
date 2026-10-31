@@ -21,7 +21,7 @@ const PREVIEW_CHARS = 280
 
 /**
  * The text cut-off or stopped Attempts produced (SFR-03), newest first. Each
- * can be kept as the Summary's text, which makes it Incomplete, or dismissed;
+ * can be kept as the Summary's text, which makes it Cut short, or dismissed;
  * a dismissed one waits in a closed fold and can be restored.
  */
 export function PartialResponses(props: PartialResponsesProps) {
@@ -40,7 +40,7 @@ export function PartialResponses(props: PartialResponsesProps) {
       <h4 className="mb-1 text-sm font-bold">Partial responses</h4>
       <p className="mb-4 text-sm text-app-ink/80">
         Text an Attempt wrote before it stopped. Keep one as this Summary's
-        text; it is marked Incomplete and can still be retried.
+        text; it is marked Cut short and can still be retried.
       </p>
       <ol className="space-y-4">
         {shown.map((a, i) => (

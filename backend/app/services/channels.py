@@ -74,7 +74,13 @@ from app.services.tenancy import scoped_select
 #: the Channel's Posts, and a browser writing it was how one Account's detector
 #: came to overwrite the label every other Account sees.
 SERVER_MANAGED_CHANNEL_FIELDS = frozenset(
-    {"telegram_chat_id", "sync_claimed_at", "sync_claimed_by", "language"}
+    {
+        "telegram_chat_id",
+        "sync_claimed_at",
+        "sync_claimed_by",
+        "language",
+        "head_read_at",
+    }
 )
 
 

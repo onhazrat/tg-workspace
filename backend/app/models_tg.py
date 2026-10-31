@@ -103,6 +103,10 @@ class Channel(SQLModel, table=True):
     files: int | None = None
     links: int | None = None
     last_updated: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
+    #: When a sync last read this Channel's newest page (ADR-043's head test).
+    #: Set as the page is fetched, so a walk stopped at the iteration limit
+    #: still sets it; Last sync (`last_updated`) is when a sync finished.
+    head_read_at: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
     next_regular_sync_at: int | None = Field(
         default=None, sa_column=_ms_ts(nullable=True)
     )

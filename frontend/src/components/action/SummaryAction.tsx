@@ -3,6 +3,7 @@ import type React from "react"
 import { useState } from "react"
 
 import { ActionIconButton, ActionRow } from "@/components/action/ActionRow"
+import { useGated } from "@/components/complete-window/Gate"
 import { TgButton } from "@/components/ui/tg-button"
 import { useAI } from "@/contexts/AIContext"
 import { useData } from "@/contexts/DataContext"
@@ -63,6 +64,8 @@ export const SummaryAction: React.FC = () => {
       setCopyingPrompt(false)
     }
   }
+  const copyGated = useGated("summary-prompt", handleCopyPrompt)
+  const summarizeGated = useGated("summary", handleSummarize)
 
   return (
     <ActionRow
@@ -74,14 +77,14 @@ export const SummaryAction: React.FC = () => {
           icon={Copy}
           label="Copy summary prompt"
           hint="Copies the prompt to your clipboard and creates a history entry awaiting the external AI response."
-          onClick={() => void handleCopyPrompt()}
+          onClick={copyGated}
           disabled={actionsDisabled}
           loading={copyingPrompt}
         />
       }
       primary={
         <TgButton
-          onClick={handleSummarize}
+          onClick={summarizeGated}
           disabled={actionsDisabled || noKey}
           title={noKey ? "Add an AI key above to run this." : undefined}
           loading={summarizing}

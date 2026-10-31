@@ -125,7 +125,7 @@ async def drain_lane(lane: str) -> DrainResult:
     the Channels; a job goes terminal when its last Channel does
     (`sync_queue._finalize_if_complete`). Archiving 40 messages of a 50-message
     batch therefore leaves 40 Channels `pending` for ever, the job non-terminal
-    for ever, and `has_active_sync_job()` answering True — which makes auto-sync
+    for ever, and `active_sync_job_owners()` answering True, which makes auto-sync
     skip every tick from then on. The partial purge is the case that matters,
     and it is the likely one: a lane holds several jobs' messages at once.
 

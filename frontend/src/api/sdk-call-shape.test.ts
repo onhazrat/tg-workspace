@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "bun:test"
+import { afterEach, beforeEach, describe, expect, it } from "bun:test"
 import { dataUpdateSettingGroup, usersUpdateUser } from "@/client"
 import { client } from "@/client/client.gen"
 import { configureGeneratedClient } from "./generated-client"
@@ -14,6 +14,14 @@ import { configureGeneratedClient } from "./generated-client"
  */
 
 let seen: { url: string; body: string; method: string } | undefined
+
+// The client is shared by every test file in the run: put its own fetch back,
+// or a later file's unanswered read gets this stub's `{}`.
+// `setConfig` merges, so an unset key is named to unset it again.
+const real = client.getConfig()
+afterEach(() =>
+  client.setConfig({ ...real, baseUrl: real.baseUrl, fetch: real.fetch }),
+)
 
 beforeEach(() => {
   seen = undefined

@@ -26,11 +26,11 @@ from app.jobs import sync_queue
 from app.services import pgmq, proxy_pool, sync_orchestrator
 from app.services.scraper_jobs import (
     ChannelSyncState,
+    active_sync_job_owners,
     clear_active_jobs_for_tests,
     clear_jobs_for_tests,
     create_job,
     get_job,
-    has_active_sync_job,
     persist_job,
     reconcile_interrupted_jobs,
 )
@@ -316,7 +316,7 @@ def test_a_queued_job_survives_a_worker_restart() -> None:
 def test_a_queued_job_counts_as_active_for_the_scheduler() -> None:
     """Otherwise auto-sync enqueues a fresh job every tick, without bound.
 
-    `run_auto_sync` skips its tick when `has_active_sync_job()` is True. That
+    `run_auto_sync` skips an owner's tick when `active_sync_job_owners()` names it. That
     dict was complete while `create_job` registered every job; it no longer
     does, so between enqueue and the first claim it says nothing. `DRAIN_ORDER`
     puts the automatic lane last, so a long manual bulk keeps auto-sync's
@@ -335,14 +335,14 @@ def test_a_queued_job_counts_as_active_for_the_scheduler() -> None:
             sync_mode="auto",
         )
         clear_active_jobs_for_tests()
-        idle = has_active_sync_job()
+        idle = ANY_READER in active_sync_job_owners()
 
         await asyncio.to_thread(
             sync_queue._send_batch,
             AUTO_SYNC_NORMAL_LANE,
             [{"jobId": job.job_id, "channelId": "qa1", "userId": None}],
         )
-        return idle, has_active_sync_job()
+        return idle, ANY_READER in active_sync_job_owners()
 
     idle, queued = asyncio.run(run())
     assert idle is False, "an unqueued, unclaimed job blocked the scheduler forever"

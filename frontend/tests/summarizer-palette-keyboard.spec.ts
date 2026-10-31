@@ -74,7 +74,11 @@ test.describe("command palette keyboard", () => {
 
     await openPaletteKeyboard(page)
     await runPaletteCommand(page, "clear selection")
-    await page.keyboard.press("Escape")
+    // Escape in an editor only goes back a level; Close shuts the palette.
+    await page
+      .getByTestId("command-palette")
+      .getByRole("button", { name: "Close" })
+      .click()
     await expect(page.getByTestId("command-palette")).not.toBeVisible()
 
     await openPaletteKeyboard(page)
@@ -136,6 +140,15 @@ test.describe("command palette keyboard", () => {
     await channelHandle.press("Enter")
 
     await expect(page.getByTestId("command-palette")).toBeVisible()
+    // The grid is virtualized: Channels other specs in this shard left behind
+    // can push a new one past the rendered rows, so narrow the grid to it.
+    // Escape in an editor only goes back a level; Close shuts the palette.
+    await page
+      .getByTestId("command-palette")
+      .getByRole("button", { name: "Close" })
+      .click()
+    await expect(page.getByTestId("command-palette")).not.toBeVisible()
+    await page.getByPlaceholder("Search channels...").fill(channelName)
     await expect(
       page.locator("#tour-channel-grid").getByText(`@${channelName}`),
     ).toBeVisible({

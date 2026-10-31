@@ -79,6 +79,7 @@ export interface SyncJob {
     refresh?: boolean,
     syncMode?: SyncMode,
     stoppable?: StoppableSync,
+    walkBackTo?: Record<string, number>,
   ) => Promise<void>
   /** Each stoppable sync's job id, from its start until it settles. */
   runningSyncJobs: Record<StoppableSync, string | null>
@@ -170,6 +171,7 @@ export function useSyncJob(deps: SyncJobDeps): SyncJob {
       refresh = true,
       syncMode: SyncMode = "bulk",
       stoppable?: StoppableSync,
+      walkBackTo?: Record<string, number>,
     ) =>
       runServerSyncWith(
         {
@@ -191,7 +193,7 @@ export function useSyncJob(deps: SyncJobDeps): SyncJob {
           notify: toast,
           now: Date.now,
         },
-        { channelIds, channelNames, source, refresh, syncMode },
+        { channelIds, channelNames, source, refresh, syncMode, walkBackTo },
       ).finally(() => holdJob(stoppable, null)),
     [
       holdJob,

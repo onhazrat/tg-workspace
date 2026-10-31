@@ -144,6 +144,21 @@ describe("when a sync is refused", () => {
   })
 })
 
+describe("a walk back", () => {
+  test("reaches the job the server starts, per Channel", async () => {
+    const { io, state } = harness(job([ch("a", "success")]))
+    await runServerSync(io, args({ walkBackTo: { "id-a": 1_000 } }))
+    expect(state.started).toEqual([
+      {
+        channelIds: ["id-a", "id-b"],
+        source: "test",
+        syncMode: "bulk",
+        walkBackTo: { "id-a": 1_000 },
+      },
+    ])
+  })
+})
+
 describe("a sync that runs", () => {
   test("marks its channels while it runs and only its own afterwards", async () => {
     const { io, state } = harness(job([ch("a", "success"), ch("b", "success")]))

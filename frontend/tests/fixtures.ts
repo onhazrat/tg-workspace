@@ -5,7 +5,11 @@
 // Vite's inline source maps.
 import { mkdirSync, writeFileSync } from "node:fs"
 import { createRequire } from "node:module"
-import { test as base } from "@playwright/test"
+import { test as base, type Page } from "@playwright/test"
+import {
+  verdict,
+  windowCheck,
+} from "../src/lib/complete-window/verdict-fixtures"
 
 export { expect } from "@playwright/test"
 
@@ -22,6 +26,25 @@ function loadConverters() {
 }
 
 /**
+ * Every window checks Complete unless a spec routes the check itself (a later
+ * route wins). Every Action button goes through the gate (CW-02), and a
+ * seeded Channel with no head read is Incomplete, so without this each spec
+ * that clicks one would meet a review it is not about.
+ */
+async function completeWindows(page: Page) {
+  await page.route("**/api/v1/data/posts/window-check", async (route) => {
+    const { channelNames } = route.request().postDataJSON() as {
+      channelNames: string[]
+    }
+    const end = Date.now()
+    const channels = channelNames.map((name) =>
+      verdict(name, { lastSync: end, headReadAt: end, heldPosts: 0 }),
+    )
+    await route.fulfill({ json: windowCheck(channels, { end }) })
+  })
+}
+
+/**
  * A mocked route still fetching when its test ends rejects with "Test ended",
  * outside any test, and `--fail-on-flaky-tests` fails the shard over it with
  * every test green (PR #179, shard 2, a Discover `artifacts` handler). Unrouting
@@ -29,6 +52,7 @@ function loadConverters() {
  */
 const unrouted = base.extend({
   page: async ({ page }, use) => {
+    await completeWindows(page)
     await use(page)
     await page.unrouteAll({ behavior: "ignoreErrors" })
   },

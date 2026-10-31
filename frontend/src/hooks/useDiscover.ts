@@ -1,8 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-
 import { api } from "@/api"
 import type { DiscoverScopeQuery } from "@/api/data"
-import type { DirectoryViewRequest } from "@/client"
+import type { DirectoryViewRequest, GateOutcome } from "@/client"
 import type { DiscoverySignalKind } from "@/lib/posts/discover-candidates"
 
 import { queryKeys, SUMMARIZER_STALE_TIME } from "./queryKeys"
@@ -59,7 +58,7 @@ export function useDiscoverReportsQuery(search?: string) {
 export function useCreateDiscoverReportMutation() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (params: DiscoverCandidatesParams) =>
+    mutationFn: (params: DiscoverCandidatesParams & { gate?: GateOutcome }) =>
       api.createDiscoverReport(params),
     onSuccess: (report) => {
       queryClient.setQueryData(queryKeys.discoverReport(report.id), report)

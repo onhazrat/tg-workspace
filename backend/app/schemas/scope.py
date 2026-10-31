@@ -31,6 +31,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.analysis_window import AnalysisWindowInput
 from app.schemas.post_filter import PostSelection, legacy_selection, select_all
+from app.schemas.window_check import Completeness, CompletenessMark, GateOutcome
 from app.services.post_filters import CapMode as CapMode
 from app.services.post_filters import FeedSort, ForwardedFilter, ViewsOp
 from app.services.post_filters import MediaKind as MediaKind
@@ -177,6 +178,9 @@ class ScopeSubmission(_ScopeOrder):
     # What the Action covers (PTR-05). The server resolves it; the browser
     # never names the Posts.
     selection: PostSelection = Field(default_factory=select_all)
+    # The gate's outcome (CW-02): the server checks the window itself at its
+    # moment and freezes the record. Absent, the Artifact is not checked.
+    gate: GateOutcome | None = None
 
     # The previous bundle's keyword, cap and ranked `posts`, for one release.
     @model_validator(mode="before")
@@ -223,6 +227,15 @@ class FrozenScope(_ScopeOrder):
     # explicit selection" on a detail one. `scopedPostCount` is the field that
     # tells the two apart. Unbounded: every Post the selection reached.
     posts: list[ScopedPostRef] | None = None
+    # Whether the window was Complete when the Artifact froze (CW-02, ADR-043),
+    # checked by the server at the gate's moment and never cleared. `null` on
+    # one made without the gate: not checked, which is not Complete. History's
+    # list carries only the mark; a read carries the whole record.
+    # ponytail: the Incomplete Channels ride this column, which the list reads;
+    # move them beside `scope_posts` if a History page ever reads heavy.
+    completeness: Completeness | CompletenessMark | None = Field(
+        default=None, union_mode="left_to_right"
+    )
 
     #: Exact elapsed UTC minutes between the two boundaries.
     #:

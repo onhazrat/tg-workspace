@@ -17,61 +17,66 @@ spec's Prototype reference section.
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done
 
 ## Prefactor first
 
-- [ ] The kept-Partial-response state formerly called Incomplete is Cut short
+- [x] The kept-Partial-response state formerly called Incomplete is Cut short
   everywhere (code, API fields, copy, tests), so "incomplete" means only an
   Incomplete Channel. About 21 files; regenerate the client.
-- [ ] Storing a Post for a confirmed gap's id clears that gap in the same
+- [x] Storing a Post for a confirmed gap's id clears that gap in the same
   write, and a migration deletes every existing confirmed gap whose id is a
   stored Post.
 
 ## The check
 
-- [ ] Each Channel records the moment a sync last read its newest page, set
+- [x] Each Channel records the moment a sync last read its newest page, set
   when the page is read; a walk stopped at the iteration limit still sets it.
   Last sync keeps its meaning.
-- [ ] One read model answers, for an Account, Channel names, a window and a
+- [x] One read model answers, for an Account, Channel names, a window and a
   frozen moment, each Channel's verdict: reasons from the closed set (in the
   spec's order, including "unavailable" for a group marked so or a last sync
   failing with the web-view-unavailable error), the one shown, Last sync, the
   head-read moment, the failed sync's error, the unproven stretches (end, hole,
   start), missing ids, whether a sync can fix it, posting pace and held Posts;
   plus the window's held total. It reads through the Follow-scoped seam.
-- [ ] Behind: the only reason (skipped aside) is "not synced to the end", a
+- [x] Behind: the only reason (skipped aside) is "not synced to the end", a
   sync can fix it, and its next scheduled sync is not past due; otherwise
   Overdue.
-- [ ] Unproven Posts per the spec's formula; "~40+" when any pace is unknown;
+- [x] Unproven Posts per the spec's formula; "~40+" when any pace is unknown;
   "no Posts expected" only at 0 with every pace known.
-- [ ] A live check route answers it for a Scope's Channels and window, and joins
+- [x] A live check route answers it for a Scope's Channels and window, and joins
   the route inventories.
 
 ## The banner
 
-- [ ] The Action tab (under its header) and the Posts tab show the one line,
+- [x] The Action tab (under its header) and the Posts tab show the one line,
   dimmed with "Updating…" only on an edit, not when a Live window's minute
   rolls.
-- [ ] "Sync N" syncs every fixable Channel, shows "Syncing N…", and toasts when
+- [x] "Sync N" syncs every fixable Channel, shows "Syncing N…", and toasts when
   it ends.
-- [ ] Details: the bar (gap kinds in the spec's colours, no-sync-can-fix
+- [x] Details: the bar (gap kinds in the spec's colours, no-sync-can-fix
   hatched, Complete last), a legend whose items toggle their rows,
   double-click isolates and again restores; Behind switched off at first when
   anything else is there; Visualize; Hide rows; rows in words ("31 h behind,
   ~114 posts", "hole: 4 posts, 7:13 PM to 7:30 PM", "history starts 2 h late"),
   sorted by Unproven Posts.
-- [ ] At 375 px nothing scrolls sideways: rows stack name over why, each
+- [x] At 375 px nothing scrolls sideways: rows stack name over why, each
   timeline bar gets its own line.
 
 ## Tests
 
-- [ ] HTTP API: each of the three tests failing alone; every reason, including
+- [x] HTTP API: each of the three tests failing alone; every reason, including
   unavailable both ways; Behind against Overdue; Unproven Posts exact for
   holes, paced for lag, the floor, and "no Posts expected"; Follow-scoped
   isolation.
-- [ ] Sync orchestrator: a stored Post clears its gap; the head-read moment is
+- [x] Sync orchestrator: a stored Post clears its gap; the head-read moment is
   set on a capped walk. The backfill migration is tested against the unique
   indexes.
-- [ ] Mocked Playwright (workers=1, mutation-tested): the line, Sync, Details
+- [x] Mocked Playwright (workers=1, mutation-tested): the line, Sync, Details
   toggles and isolate, Visualize, and phone width.
+
+## Comments
+
+- 2026-10-30: implemented on `claude/cw-01` and merged into the integration branch in 7a5f0df6 (fast-forward).
+  Open: the Glossary's Behind entry still says "two sync intervals"; nothing tests that the line stays undimmed when a Live window's minute rolls. Both handed to the code review.

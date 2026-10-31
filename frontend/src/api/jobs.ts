@@ -68,6 +68,7 @@ export const jobsApi = {
     channelIds?: string[]
     source?: string
     syncMode?: "sync_all" | "bulk" | "individual" | "recheck_restricted"
+    walkBackTo?: Record<string, number>
   }) => jobsStartSyncJob({ body }),
 
   getSyncJobStatus: (jobId: string) =>
