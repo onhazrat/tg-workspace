@@ -11,21 +11,21 @@ frozen moment. A Channel is Complete when all three tests hold:
 3. continuity: every id from that Post (or the first one held) to the head
    (the first Post after E, or the newest held) is held or a confirmed gap.
 
-Each failing test leaves an unproven stretch: the end from the last proven
-moment to E, a hole between the Posts either side of its missing ids, the
+Each failing test leaves an unproven stretch. The end runs from the last
+proven moment to E, a hole between the Posts either side of its missing ids, the
 start from the Start to the first Post. Everything is read from data, so a
 Follow made yesterday, a capped walk and another Follower's older sync need
 no special case. The corpus is read through the Follow-scoped seam, and
 frozen, unavailable and the schedule from the Account's own Follows.
 
-**Unproven Posts** is how much an Incomplete window may lack: a hole's
-missing ids exactly, every other stretch at the Channel's pace, Posts an hour
+**Unproven Posts** is how much an Incomplete window may lack. A hole counts
+its missing ids exactly, every other stretch the Channel's pace, Posts an hour
 over the week before its head-read moment (no earlier than its first Post or
 the scrape cutoff). A pace over less than an hour is unknown, and an unknown
 pace under a non-hole stretch makes the total a floor.
 
 The live check reads only what it holds now; it never syncs. Skipped and
-timed out are the action's: `freeze_record` lays them over the check an
+timed out are the action's, and `freeze_record` lays them over the check an
 Artifact freezes (CW-02). Refused is the scheduler's (CW-03).
 """
 
@@ -64,7 +64,7 @@ from app.services.tenancy import scoped_select
 HOUR_MS = 3_600_000
 WEEK_MS = 7 * 24 * HOUR_MS
 
-#: ADR-043's order: what a person can act on first.
+#: ADR-043's order, what a person can act on first.
 REASON_ORDER: tuple[Reason, ...] = get_args(Reason)
 
 
@@ -142,7 +142,7 @@ def _accounted(
 ) -> dict[str, _Accounted]:
     """Per Channel, the ids in `[lo, hi]` held as a Post or a confirmed gap.
 
-    Disjoint by construction: storing a Post clears its gap. One read for
+    Disjoint by construction, since storing a Post clears its gap. One read for
     every span, so a Scope of many holed Channels asks once.
     """
     if not spans:
@@ -204,7 +204,7 @@ def _hole_bounds(
     session: Session, user_id: uuid.UUID, breaks: dict[str, _Accounted]
 ) -> dict[str, tuple[int, int]]:
     """When the Posts either side of each Channel's first and last missing id
-    were published: the hole's stretch."""
+    were published, which bound the hole's stretch."""
     edges = [
         (name, pid, pid)
         for name, b in breaks.items()
@@ -212,8 +212,8 @@ def _hole_bounds(
         if pid is not None
     ]
     stamps = _stamps(session, user_id, edges)
-    # A neighbour that is a confirmed gap, not a Post, has no time: the hole
-    # then reaches the window's edge.
+    # A neighbour that is a confirmed gap, not a Post, has no time, so the
+    # hole then reaches the window's edge.
     return {
         name: (
             stamps.get((name, b.before or 0), 0),
@@ -226,8 +226,8 @@ def _hole_bounds(
 def _last_logs(
     session: Session, user_id: uuid.UUID, names: list[str]
 ) -> dict[str, tuple[str, str | None]]:
-    """Each Channel's last sync up to now, not to the frozen moment: a sync
-    the gate waited on that failed shows as failed (story 39)."""
+    """Each Channel's last sync up to now, not to the frozen moment, so a
+    sync the gate waited on that failed shows as failed (story 39)."""
     rows = session.exec(
         scoped_select(
             select(SyncLog.channel_name, SyncLog.status, SyncLog.error)
@@ -322,7 +322,7 @@ def _stretches(
 
 @dataclass(frozen=True)
 class _Standing:
-    """What the Account's settings and the last sync say: reasons no test
+    """What the Account's settings and the last sync say. Reasons no test
     names, the failed sync's error, and whether a sync can fix anything."""
 
     reasons: list[Reason]
@@ -357,8 +357,8 @@ def _is_behind(
     syncable: bool,
     frozen_at: int,
 ) -> bool:
-    """Only lagging, a sync can fix it, and its next scheduled sync is not
-    past due: routine lag the scheduler will clear. Otherwise Overdue."""
+    """Only short of the end, a sync can fix it, and its next scheduled sync is not
+    past due, so the scheduler will clear it. Otherwise Overdue."""
     next_due = _next_due(channel, group) if group else None
     return (
         [r for r in reasons if r != "skipped"] == ["end"]
@@ -420,7 +420,7 @@ def _verdict(
 
 
 def _spans(listed: list[str], held: dict[str, _Held]) -> list[tuple[str, int, int]]:
-    """Each Channel's ids the continuity test reads: from the Post at or
+    """Each Channel's ids the continuity test reads, from the Post at or
     before the Start (or the first held) to the head (or the newest held)."""
     spans: list[tuple[str, int, int]] = []
     for name in listed:
@@ -433,7 +433,7 @@ def _spans(listed: list[str], held: dict[str, _Held]) -> list[tuple[str, int, in
 
 
 def frozen_moment(asked: int | None) -> int:
-    """The moment an action froze: the one asked for, never later than now,
+    """The moment an action froze. The one asked for, never later than now,
     since a window cannot be frozen in the future; now when none is asked."""
     now = server_now_ms()
     return now if asked is None else min(asked, now)
@@ -451,7 +451,7 @@ def check_window(
     """Every followed Channel in `names`, judged for `[start, min(end, frozen_at)]`.
 
     The last sync and the syncs in flight are read as they are now, whatever
-    the frozen moment: the gate waits past it (ADR-043).
+    the frozen moment, since the gate waits past it (ADR-043).
     """
     window = _Window(
         start=start,
@@ -533,7 +533,7 @@ def freeze_record(
     gate: GateOutcome,
     refused: Collection[str] = (),
 ) -> Completeness:
-    """The record an Artifact freezes (CW-02): the check run here, at the
+    """The record an Artifact freezes (CW-02). The check runs here, at the
     gate's moment, with the person's skips and the gate's timeouts laid over
     the server's own verdicts. Only a Channel this check finds Incomplete
     takes one; the client's view of the check is never the record.

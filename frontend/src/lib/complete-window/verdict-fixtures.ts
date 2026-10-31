@@ -1,6 +1,6 @@
 /**
  * A Complete Channel's verdict and a check of some, typed from the generated
- * client, for the unit tests and the Playwright mocks alike: each test says
+ * client, for the unit tests and the Playwright mocks alike. Each test says
  * only what makes its Channel Incomplete.
  */
 

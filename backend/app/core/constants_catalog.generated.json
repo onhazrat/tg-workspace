@@ -41,7 +41,7 @@
       "value": 86400000
     },
     {
-      "comment": "How long a successor waits on its syncs before it freezes anyway: the gate's deadline (ADR-043). The syncs carry on behind it.",
+      "comment": "How long a successor waits on its syncs before it freezes anyway, the gate's deadline (ADR-043). The syncs carry on behind it.",
       "expression": "300.0",
       "file": "backend/app/jobs/auto_summary.py",
       "line": 174,

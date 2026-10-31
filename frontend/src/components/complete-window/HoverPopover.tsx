@@ -4,7 +4,7 @@ import { BarPopover } from "@/components/BarPopover"
 
 /**
  * A button whose popover a mouse opens on hover and a tap or a key opens on
- * click, kept on screen: History's pill and a failed row's error (stories
+ * click, kept on screen, for History's pill and a failed row's error (stories
  * 39, 48).
  */
 export function HoverPopover({

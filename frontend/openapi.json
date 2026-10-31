@@ -8708,7 +8708,7 @@
           "unprovenPosts"
         ],
         "title": "ChannelVerdict",
-        "description": "One Channel's answer: why it is Incomplete, if it is, and by how much."
+        "description": "One Channel's answer, why it is Incomplete if it is, and by how much."
       },
       "ChatArtifactResponse": {
         "properties": {
@@ -9046,7 +9046,7 @@
           "leftOut"
         ],
         "title": "Completeness",
-        "description": "An Artifact's window as it froze: its Incomplete and Left out Channels."
+        "description": "An Artifact's window as it froze, with its Incomplete and Left out Channels."
       },
       "CompletenessMark": {
         "properties": {

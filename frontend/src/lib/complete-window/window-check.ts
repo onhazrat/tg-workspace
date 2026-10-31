@@ -26,7 +26,7 @@ export type Tone = "red" | "amber" | "slate"
 
 /**
  * Each reason's label, tone and word in the one-line phrase (singular,
- * plural), keyed in the server's order: what a person can act on first.
+ * plural), keyed in the server's order, what a person can act on first.
  */
 export const REASONS: Record<
   Reason,
@@ -245,7 +245,7 @@ export function stretchGap(c: Verdict, s: UnprovenStretch): Gap {
   return c.behind ? "behind" : "overdue"
 }
 
-/** A Channel's one segment on the summary bar: its most telling stretch. */
+/** A Channel's one segment on the summary bar, its most telling stretch. */
 export function channelGap(c: Verdict): Gap {
   if (!c.reason) return "complete"
   if (!c.syncable) return "stuck"
@@ -265,7 +265,7 @@ export function gapCounts(check: WindowCheck): [Gap, number][] {
 }
 
 /**
- * Which kinds Details starts with switched off: Complete always, Behind too
+ * Which kinds Details starts with switched off. Complete always, Behind too
  * when anything else is there, so the list opens on what needs a look.
  */
 export function initiallyHidden(check: WindowCheck): Set<Gap> {
@@ -283,7 +283,7 @@ export function toggled(hidden: Set<Gap>, gap: Gap): Set<Gap> {
 }
 
 /**
- * A double-click: show this kind alone, or, when it already is, every kind
+ * A double-click shows this kind alone, or, when it already is, every kind
  * again.
  */
 export function isolated(hidden: Set<Gap>, gap: Gap, present: Gap[]): Set<Gap> {

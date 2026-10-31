@@ -68,7 +68,7 @@ export function useGated(kind: ActionKind, run: () => unknown) {
 
 /**
  * Open the Action tab and the gate there for this action, as a row's click
- * does: the palette, a Summary tab's Generate, Regenerate.
+ * does, for the palette, a Summary tab's Generate and Regenerate.
  */
 export function useRunGated() {
   const { workspaceTabs } = useUI()
@@ -294,7 +294,7 @@ export function SyncButton({
   }, [left, count, onSync, stopped])
   const counting = !stopped && count > 0
   return (
-    // A submit button: the gate is a form, so Enter syncs.
+    // A submit button. The gate is a form, so Enter syncs.
     <TgButton
       type="submit"
       autoFocus
@@ -396,7 +396,7 @@ function Review({ state, flow }: { state: GateState; flow: GateFlow }) {
 }
 
 /**
- * The gate (ADR-043): every Action-tab button that freezes a Scope opens it.
+ * The gate (ADR-043), which every Action-tab button that freezes a Scope opens.
  * Mounted once, on the Action tab.
  */
 export function Gate() {

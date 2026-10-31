@@ -217,8 +217,9 @@ test("a Live window's minute rolling asks again without dimming the line", async
   const asked = state.bodies.length
   await page.clock.fastForward("01:01")
   await expect.poll(() => state.bodies.length).toBeGreaterThan(asked)
-  await expect(banner(page)).not.toHaveAttribute("aria-busy", "true")
-  await expect(banner(page)).not.toContainText("Updating…")
+  // Read once while the check is still held, not retried until it lands.
+  expect(await banner(page).getAttribute("aria-busy")).toBeNull()
+  expect(await banner(page).textContent()).not.toContain("Updating…")
 })
 
 test.describe("on a phone", () => {

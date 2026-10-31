@@ -1,5 +1,5 @@
 /**
- * The gate's rules (ADR-043, CW-02): what it says, what each control does to
+ * The gate's rules (ADR-043, CW-02). What it says, what each control does to
  * the list, and what the action records. Every Action-tab button that freezes
  * a Scope goes through it; the flow (`gate-flow.ts`) runs these, and the
  * component only shows the state the flow keeps.
@@ -34,7 +34,7 @@ export const AUTO_SYNC_SECONDS = 30
 export type GateChoice = GateOutcome["choice"]
 
 /**
- * The outcome the next submission sends, taken once: the gate sets it just
+ * The outcome the next submission sends, taken once. The gate sets it just
  * before its action runs, and the action's submission takes it, so a later
  * submission the gate did not run (a Chat's next turn) never carries it.
  */
@@ -70,7 +70,7 @@ export function verdictOf(check: WindowCheck): GateChoice | "review" {
 export const fixableOf = (check: WindowCheck | undefined) =>
   incompleteOf(check).filter((c) => c.syncable)
 
-/** Their names: the gate's Sync count. */
+/** Their names, the gate's Sync count. */
 export const fixableNames = (check: WindowCheck | undefined) =>
   fixableOf(check).map((c) => c.name)
 
@@ -78,7 +78,7 @@ export const fixableNames = (check: WindowCheck | undefined) =>
 export const canUnfreeze = (c: Verdict) =>
   c.reasons.includes("frozen") && !c.reasons.includes("unavailable")
 
-/** The row after Unfreeze: frozen no more, so a sync can fix it. */
+/** The row after Unfreeze, frozen no more, so a sync can fix it. */
 export function unfrozen(c: Verdict): Verdict {
   const reasons = c.reasons.filter((r) => r !== "frozen")
   return { ...c, reasons, reason: reasons[0] ?? null, syncable: true }
@@ -91,7 +91,7 @@ export function leaveOut(check: WindowCheck, names: string[]): WindowCheck {
 }
 
 /**
- * A check as the gate shows it after its edits: Left out gone, and an
+ * A check as the gate shows it after its edits, Left out gone and an
  * unfrozen row unfrozen even when the check read it before the move landed.
  */
 export function withEdits(
@@ -112,7 +112,7 @@ const names = (list: Verdict[]) => list.map((c) => c.name)
 
 /**
  * How the gate's Sync covers each Channel, from the check's own answer about
- * the syncs in flight (any Account's): join one that will read its head after
+ * the syncs in flight (any Account's). Join one that will read its head after
  * E, queue another behind one that already read it before E, and sync the
  * rest at once.
  */
@@ -126,7 +126,7 @@ export function syncPlan(wanted: Verdict[]) {
 
 /**
  * The Channels whose sync walks back to the window's Start, past the Posts
- * it holds: those short of the Start or holed.
+ * it holds, the ones short of the Start or holed.
  */
 export function walkBack(wanted: Verdict[], start: number) {
   return Object.fromEntries(
@@ -167,11 +167,11 @@ export function outcomeOf(
   }
 }
 
-/** How the gate's wait ended: every sync done, "Continue now", or the deadline. */
+/** How the gate's wait ended, every sync done, "Continue now" or the deadline. */
 export type WaitEnd = "synced" | "continued" | "deadline"
 
 /**
- * The choice the wait records, and the Channels it times out: only those a
+ * The choice the wait records, and the Channels it times out, only those a
  * sync was still syncing when it ended. One whose sync finished keeps its
  * real reason, Incomplete or not.
  */

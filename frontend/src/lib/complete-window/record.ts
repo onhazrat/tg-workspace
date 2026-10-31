@@ -1,5 +1,5 @@
 /**
- * An Artifact's completeness record said in words (CW-02): the banner on its
+ * An Artifact's completeness record said in words (CW-02), for the banner on its
  * page, the re-check now, and History's pill. The server froze the record;
  * this only phrases it.
  */

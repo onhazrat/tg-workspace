@@ -1,5 +1,5 @@
 /**
- * The gate's flow (ADR-043, CW-02): a snapshot of one action frozen at its
+ * The gate's flow (ADR-043, CW-02), a snapshot of one action frozen at its
  * click, and the steps from there to the action running. Module state, as
  * `banner-sync.ts` is, because the click that opens it (an Action row, the
  * palette, Regenerate) and the dialog that shows it are far apart; it holds
@@ -41,7 +41,7 @@ export interface GateState {
   check?: WindowCheck
   /** Showing the banner's cached check while the one frozen at the click runs. */
   refreshing: boolean
-  /** An edit stopped the countdown: only a choice acts now. */
+  /** An edit stopped the countdown, so only a choice acts now. */
   touched: boolean
   /** The Channels the gate's own Sync waits on. */
   syncing: string[]
@@ -61,7 +61,7 @@ const IDLE: GateState = {
 }
 
 let state = IDLE
-/** A request to open the gate: a row's click, the palette, or Regenerate. */
+/** A request to open the gate, from a row's click, the palette or Regenerate. */
 let requested: ActionKind | null = null
 const listeners = new Set<() => void>()
 const notify = () => {
@@ -114,7 +114,7 @@ export function takeRequest(): ActionKind | null {
 
 export const continueGate = () => continueNow?.()
 
-/** What the flow asks of the page: the Scope, the server, the selection. */
+/** What the flow asks of the page, the Scope, the server and the selection. */
 export interface GateIO {
   names: () => string[]
   window: () => WireWindow
@@ -127,7 +127,7 @@ export interface GateIO {
   ) => Promise<WindowCheck>
   /** The gate's own sync, walking back per Channel name where asked. */
   sync: (names: string[], walkBackTo: Record<string, number>) => Promise<void>
-  /** After the wait: what a sync added must show. */
+  /** After the wait, so what a sync added shows. */
   synced: () => void
   /** Narrow the selection; answers the Undo. */
   narrow: (names: string[]) => () => void
@@ -138,7 +138,7 @@ export interface GateIO {
 /** How often the gate asks whether a sync it joined has finished. */
 const POLL_MS = 2_000
 
-/** The check as the gate shows it: its own edits laid over. */
+/** The check as the gate shows it, its own edits laid over. */
 const edited = (check: WindowCheck) => withEdits(check, state)
 
 /** The gate's outcome goes to the action's submission, then the action runs. */

@@ -1,6 +1,6 @@
 """The Complete window check's request and answer (ADR-043).
 
-Docstrings stay to one line: each ships as a schema description in the
+Docstrings stay to one line, since each ships as a schema description in the
 generated client. The reasoning lives in `services/window_check.py`.
 """
 
@@ -50,7 +50,7 @@ class UnprovenStretch(BaseModel):
 
 
 class ChannelVerdict(BaseModel):
-    """One Channel's answer: why it is Incomplete, if it is, and by how much."""
+    """One Channel's answer, why it is Incomplete if it is, and by how much."""
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -128,7 +128,7 @@ class CompletenessMark(BaseModel):
 
 
 class Completeness(CompletenessMark):
-    """An Artifact's window as it froze: its Incomplete and Left out Channels."""
+    """An Artifact's window as it froze, with its Incomplete and Left out Channels."""
 
     choice: GateChoice
     frozen_at: int = Field(alias="frozenAt")

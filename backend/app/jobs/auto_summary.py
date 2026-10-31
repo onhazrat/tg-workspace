@@ -169,7 +169,7 @@ def _is_due(summary: Summary, now: int) -> bool:
     return now >= target_time
 
 
-#: How long a successor waits on its syncs before it freezes anyway: the
+#: How long a successor waits on its syncs before it freezes anyway, the
 #: gate's deadline (ADR-043). The syncs carry on behind it.
 SUCCESSOR_SYNC_DEADLINE_S = 300.0
 #: How often it asks whether a sync it joined has finished.
@@ -223,7 +223,7 @@ async def _sync_own(
 def _sync_plan(
     fixable: list[ChannelVerdict],
 ) -> tuple[list[str], list[str], list[str]]:
-    """The gate's plan, server-side, from the check's own answer: join a sync
+    """The gate's plan, server-side, from the check's own answer. Join a sync
     in flight, queue another behind one that read its head before E, and sync
     the rest at once."""
     join = [v.name for v in fixable if v.syncing_since and not v.sync_again]
@@ -235,7 +235,7 @@ def _sync_plan(
 async def _sync_window(
     fixable: list[ChannelVerdict], *, start: int, owner_id: uuid.UUID
 ) -> tuple[list[str], list[str]]:
-    """Sync what a sync can repair, up to the deadline: the Channels whose
+    """Sync what a sync can repair, up to the deadline. Answers the Channels whose
     sync had not finished by then, and those whose sync was refused."""
     walk_back = {v.name for v in fixable if {"start", "hole"} & set(v.reasons)}
     join, after, at_once = _sync_plan(fixable)
@@ -338,7 +338,7 @@ async def _regenerate_one(
     # The successor's Scope, which `submit_summary` derives again from the
     # same function (AW-06): the Channels to sync, and the window it covers.
     derived = derived_scope(summary, "successor")
-    # The wait below runs up to minutes: never across an open transaction.
+    # The wait below runs up to minutes, so never across an open transaction.
     session.commit()
     completeness = await _complete_window(derived, owner_id)
 

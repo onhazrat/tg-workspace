@@ -1288,7 +1288,7 @@ export type ChannelUpsertRequest = {
 /**
  * ChannelVerdict
  *
- * One Channel's answer: why it is Incomplete, if it is, and by how much.
+ * One Channel's answer, why it is Incomplete if it is, and by how much.
  */
 export type ChannelVerdict = {
     /**
@@ -1662,7 +1662,7 @@ export type ClearTableResponse = {
 /**
  * Completeness
  *
- * An Artifact's window as it froze: its Incomplete and Left out Channels.
+ * An Artifact's window as it froze, with its Incomplete and Left out Channels.
  */
 export type Completeness = {
     /**

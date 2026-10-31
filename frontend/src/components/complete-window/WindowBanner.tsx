@@ -11,7 +11,7 @@ import {
 import { WindowDetails } from "./WindowDetails"
 
 /**
- * The one line for a window (ADR-043): what is unproven ("Unproven through
+ * The one line for a window (ADR-043). What is unproven ("Unproven through
  * 09:07 AM: ~185 Posts (4%) · 8 frozen · last 18 h on 149"), an action slot,
  * and Details; or "Complete window" when nothing is missing. `updating`
  * dims a line that is for another selection or window until the new one

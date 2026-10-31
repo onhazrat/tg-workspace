@@ -133,7 +133,7 @@ function LeftOut({ names }: { names: string[] }) {
   )
 }
 
-/** "Window not checked", quietly: made before the record existed. */
+/** "Window not checked", quietly, for one made before the record existed. */
 const NotChecked = ({ className = "" }: { className?: string }) => (
   <span className={`text-[11px] text-app-ink/40 ${className}`}>
     Window not checked
@@ -141,7 +141,7 @@ const NotChecked = ({ className = "" }: { className?: string }) => (
 )
 
 /**
- * An Artifact's window as it froze (ADR-043): the one-line banner, with "now"
+ * An Artifact's window as it froze (ADR-043). The one-line banner, with "now"
  * and Regenerate when it was Incomplete, its Left out Channels when "complete
  * only" made it Complete, or "not checked" for one made before the record.
  */
@@ -203,7 +203,7 @@ function MarkBar({ mark }: { mark: CompletenessMark }) {
 }
 
 /**
- * History's mark of an Artifact's window: on an Incomplete one, a pill saying
+ * History's mark of an Artifact's window. On an Incomplete one, a pill saying
  * its Unproven Posts, amber when a sync could have fixed some of it and slate
  * when none could, whose breakdown (a bar and the count per reason) opens on
  * hover for a mouse and on a tap otherwise; "not checked" on one made before

@@ -22,7 +22,7 @@ const E = Date.UTC(2026, 9, 30, 9, 7)
 const verdict = (name: string, over: Partial<Verdict> = {}) =>
   base(name, { lastSync: E - HOUR, headReadAt: E - HOUR, ...over })
 
-const lagging = (name: string, hours: number, over: Partial<Verdict> = {}) =>
+const endShort = (name: string, hours: number, over: Partial<Verdict> = {}) =>
   verdict(name, {
     reasons: ["end"],
     reason: "end",
@@ -32,7 +32,7 @@ const lagging = (name: string, hours: number, over: Partial<Verdict> = {}) =>
   })
 
 const frozen = (name: string, posts = 0) =>
-  lagging(name, 31, {
+  endShort(name, 31, {
     reasons: ["end", "frozen"],
     syncable: false,
     unprovenPosts: posts,
@@ -72,9 +72,9 @@ describe("the one line", () => {
       frozen("a"),
       frozen("b"),
       holed("c", 4),
-      lagging("d", 18, { behind: true }),
-      lagging("e", 2, { behind: true }),
-      lagging("f", 30),
+      endShort("d", 18, { behind: true }),
+      endShort("e", 2, { behind: true }),
+      endShort("f", 30),
     ])
     expect(line).toBe("2 frozen · 1 hole · 1 overdue · last 18 h on 2")
   })
@@ -98,7 +98,7 @@ describe("the one line", () => {
 
 describe("a row's words", () => {
   test("lag at its own pace, a hole by its ids, a late history", () => {
-    expect(shortfall(lagging("a", 31, { pacePerHour: 114 / 31 }))).toBe(
+    expect(shortfall(endShort("a", 31, { pacePerHour: 114 / 31 }))).toBe(
       "31 h behind, ~114 posts",
     )
     expect(shortfall(holed("b", 4))).toMatch(
@@ -115,9 +115,11 @@ describe("a row's words", () => {
   })
 
   test("an unknown pace says no count, and a never-read Channel says so", () => {
-    expect(shortfall(lagging("a", 5, { pacePerHour: null }))).toBe("5 h behind")
+    expect(shortfall(endShort("a", 5, { pacePerHour: null }))).toBe(
+      "5 h behind",
+    )
     expect(
-      shortfall(lagging("b", 5, { lastSync: null, headReadAt: null })),
+      shortfall(endShort("b", 5, { lastSync: null, headReadAt: null })),
     ).toBe("never synced")
   })
 })
@@ -128,8 +130,8 @@ describe("Details", () => {
     frozen("asleep", 0),
     frozen("busy", 40),
     holed("holed", 4),
-    lagging("lag", 2, { behind: true }),
-    lagging("late", 30),
+    endShort("lag", 2, { behind: true }),
+    endShort("late", 30),
   ])
 
   test("rows group by what a sync fixes, most Posts at risk first", () => {
@@ -141,7 +143,7 @@ describe("Details", () => {
 
   test("opens with Behind and Complete off when anything else is there", () => {
     expect([...initiallyHidden(all)].sort()).toEqual(["behind", "complete"])
-    const onlyLag = check([verdict("ok"), lagging("lag", 2, { behind: true })])
+    const onlyLag = check([verdict("ok"), endShort("lag", 2, { behind: true })])
     expect([...initiallyHidden(onlyLag)]).toEqual(["complete"])
   })
 

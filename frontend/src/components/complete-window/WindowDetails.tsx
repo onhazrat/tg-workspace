@@ -106,7 +106,7 @@ export function Chips({ c }: { c: Verdict }) {
   )
 }
 
-/** The bar: one segment per kind sized by its Channels, and its legend. */
+/** The bar, one segment per kind sized by its Channels, and its legend. */
 function CoverageBar({
   check,
   hidden,
@@ -161,7 +161,7 @@ function CoverageBar({
   )
 }
 
-/** Visualize: each Channel's window as a bar, its unproven stretches coloured. */
+/** Visualize draws each Channel's window as a bar, its unproven stretches coloured. */
 function Timeline({ check, rows }: { check: WindowCheck; rows: Verdict[] }) {
   const width = Math.max(1, check.end - check.start)
   const at = (ms: number) =>
@@ -219,7 +219,7 @@ function RowGroup({ title, rows }: { title: string; rows: Verdict[] }) {
         </th>
       </tr>
       {rows.map((c) => (
-        // A phone stacks each row: the name, then why, under it.
+        // A phone stacks each row, the name, then why under it.
         <tr
           key={c.name}
           data-testid="window-row"
@@ -281,7 +281,7 @@ function ToggleButton({
 }
 
 /**
- * Details: the bar and its legend, whose items toggle their rows (a
+ * Details holds the bar and its legend, whose items toggle their rows (a
  * double-click isolates, again restores), Visualize, Hide rows, and the rows
  * grouped by what a sync fixes, most Posts at risk first.
  */
