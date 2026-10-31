@@ -48,6 +48,16 @@ export const takeGateOutcome = (): GateOutcome | undefined => {
   return outcome
 }
 
+/**
+ * A submission with the gate's outcome taken, when the gate ran this action;
+ * without one the server records the Artifact as not checked.
+ */
+export function withGate<T extends object>(
+  submission: T,
+): T & { gate?: GateOutcome } {
+  return { ...submission, gate: takeGateOutcome() }
+}
+
 /** "23 Channels need attention, 150 just behind". */
 export function gateTitle(incomplete: Verdict[]): string {
   const behind = incomplete.filter((c) => c.behind).length

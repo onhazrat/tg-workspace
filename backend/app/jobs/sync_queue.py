@@ -658,7 +658,7 @@ async def _refuse_at_ceiling(job: SyncJobState, budget: Budget) -> None:
     Called before anything is sent, so the job row is the whole record of what
     happened. Written here rather than left to each caller because three of the
     four callers are unattended: a job row stuck at `pending` for ever is what
-    `has_active_sync_job` reads, and ticket 12 already had to fix one of those.
+    `active_sync_job_owners` reads, and ticket 12 already had to fix one of those.
     """
     for ch_state in job.channels.values():
         ch_state.status = "failed"
@@ -1094,7 +1094,7 @@ async def _handle_one_inner(lane: str, msg: pgmq.PgmqMessage, slot: SyncSlot) ->
         # `_finalize_if_complete` takes it out, so a crash outside
         # `sync_single_channel`'s own handler (a database blip in `claim_job` or
         # `touch_job`) would otherwise leave it there with Channels unfinished:
-        # `has_active_sync_job()` answers True and auto-sync skips every tick
+        # `active_sync_job_owners()` answers True and auto-sync skips every tick
         # until the ~2.4h visibility timeout lapses.
         #
         # Releasing it unconditionally is worse, though, and a message now owns

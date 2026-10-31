@@ -24,7 +24,7 @@ import {
   withMissingPosts,
   withProvisionalRow,
 } from "@/lib/artifacts/artifact-run"
-import { takeGateOutcome } from "@/lib/complete-window/gate"
+import { withGate } from "@/lib/complete-window/gate"
 import { scopeSubmission } from "@/lib/posts/posts-view"
 import { lookupPosts } from "@/lib/posts/store"
 import { scopeChannels } from "@/lib/scope/artifact-scope"
@@ -125,7 +125,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     await submitSummary({
       id,
       // The gate's outcome, when the gate ran this (CW-02).
-      scope: { ...scopeSubmission(view, names), gate: takeGateOutcome() },
+      scope: withGate(scopeSubmission(view, names)),
       language: aiLanguage,
       model: selectedModel,
       extra: {

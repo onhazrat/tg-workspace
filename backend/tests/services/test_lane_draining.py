@@ -500,7 +500,7 @@ def test_draining_a_lane_archives_its_messages_and_finishes_their_jobs() -> None
 
     Since ticket 10 a job goes terminal when its *last* Channel finishes, so
     messages that will never run mean Channels that stay `pending` for ever, a
-    job that never completes, and `has_active_sync_job()` answering True — which
+    job that never completes, and `active_sync_job_owners()` answering True, which
     makes auto-sync skip every tick from then on.
     """
 

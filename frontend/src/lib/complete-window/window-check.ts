@@ -150,17 +150,22 @@ export function measure(incomplete: Verdict[]): string {
 }
 
 /**
- * The Posts an Incomplete window may lack, as a share of what it holds:
- * "~340 Posts (7%)", "~40+ Posts" when a pace is unknown, "no Posts
- * expected" only at 0 with every pace known, "an unknown number of Posts"
- * at 0 otherwise.
+ * The Posts an Incomplete window may lack: "~340 Posts", "~40+ Posts" when a
+ * pace is unknown, "no Posts expected" only at 0 with every pace known, "an
+ * unknown number of Posts" at 0 otherwise. Every surface says it this way.
  */
+export function unprovenCount(n: number, floor: boolean): string {
+  if (n === 0) return floor ? "an unknown number of Posts" : "no Posts expected"
+  return `~${n.toLocaleString("en-US")}${floor ? "+" : ""} ${n === 1 ? "Post" : "Posts"}`
+}
+
+/** The same with its share of what the window holds: "~340 Posts (7%)". */
 export function postsPhrase(check: WindowCheck): string {
   const n = check.unprovenPosts
-  const floor = check.unprovenFloor
-  if (n === 0) return floor ? "an unknown number of Posts" : "no Posts expected"
+  const count = unprovenCount(n, check.unprovenFloor)
+  if (n === 0) return count
   const share = (n / (check.heldPosts + n)) * 100
-  return `~${n.toLocaleString("en-US")}${floor ? "+" : ""} ${n === 1 ? "Post" : "Posts"} (${share < 1 ? "<1" : Math.round(share)}%)`
+  return `${count} (${share < 1 ? "<1" : Math.round(share)}%)`
 }
 
 export function span(ms: number): string {

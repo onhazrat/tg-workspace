@@ -34,7 +34,7 @@ from app.models_tg import (
     SyncJob,
 )
 from app.services import publications, scraper_jobs
-from app.services.scraper_jobs import SyncJobState, has_active_sync_job
+from app.services.scraper_jobs import SyncJobState
 from app.services.summaries import get_summary
 from tests.utils.scope import stored_scope
 from tests.utils.setting_groups import add_test_channel
@@ -181,12 +181,15 @@ def _regenerate(
 def test_it_syncs_while_another_sync_job_is_active(
     session: Session, user: User, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """**Mutation:** put back `if has_active_sync_job(): return` and nothing syncs."""
+    """No longer skipped because something else syncs on the deployment.
+
+    **Mutation:** return early while any job in `_active_jobs` runs and
+    nothing syncs.
+    """
     channel = _unread_end(session, user)
     busy = SyncJobState(job_id=f"busy-{uuid.uuid4()}", source="t", user_id="x")
     busy.status = "running"
     monkeypatch.setitem(scraper_jobs._active_jobs, busy.job_id, busy)
-    assert has_active_sync_job()
     telegram = _Telegram()
     monkeypatch.setattr(auto_summary, "run_sync_job", telegram)
 

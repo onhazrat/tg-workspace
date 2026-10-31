@@ -5,10 +5,17 @@
  */
 
 import type { Completeness, CompletenessMark } from "@/client"
+import type { ArtifactKind } from "@/types"
 import type { ActionKind } from "./gate"
-import { byFix, measure, type Verdict, type WindowCheck } from "./window-check"
+import {
+  byFix,
+  measure,
+  unprovenCount,
+  type Verdict,
+  type WindowCheck,
+} from "./window-check"
 
-export type ArtifactKind = "summary" | "chat" | "tag" | "discovery"
+export type { ArtifactKind }
 
 /** The record as a check, so the live banner can show it. */
 export function recordCheck(record: Completeness): WindowCheck {
@@ -32,12 +39,10 @@ export function isRecord(
 
 /** "~6 Posts unproven", "~40+ Posts unproven", "no Posts expected". */
 export function pillPhrase(mark: CompletenessMark): string {
-  const n = mark.unprovenPosts
-  if (n === 0)
-    return mark.unprovenFloor
-      ? "an unknown number of Posts unproven"
-      : "no Posts expected"
-  return `~${n.toLocaleString("en-US")}${mark.unprovenFloor ? "+" : ""} ${n === 1 ? "Post" : "Posts"} unproven`
+  const count = unprovenCount(mark.unprovenPosts, mark.unprovenFloor)
+  return mark.unprovenPosts === 0 && !mark.unprovenFloor
+    ? count
+    : `${count} unproven`
 }
 
 /** "now 2 holes", or "complete now", for the window checked again. */

@@ -42,7 +42,7 @@ _jobs_lock = asyncio.Lock()
 
 #: Jobs this process is *watching* but not running — the SSE mirror (ticket 10).
 #: Deliberately not `_active_jobs`: that dict means "this process is running
-#: it", which is what `has_active_sync_job` answers from, and folding watched
+#: it", which is what `active_sync_job_owners` answers from, and folding watched
 #: jobs into it would tell the worker's scheduler that a sync is in flight
 #: because a browser happened to open a progress stream.
 _mirrored_jobs: dict[str, SyncJobState] = {}
@@ -682,7 +682,7 @@ def deactivate_job(job_id: str) -> None:
 def active_sync_job_owners() -> set[uuid.UUID]:
     """Accounts with a sync job pending or running — running *or still queued*.
 
-    `has_active_sync_job`'s question, asked per account, because since ticket 21
+    Asked per account, because since ticket 21
     `run_auto_sync` creates **one job per owner** and the deployment-wide answer
     made every owner wait for the slowest one. Account A's two-thousand-Channel
     backlog stopped account B's scheduler, for as long as A's job stayed
@@ -700,7 +700,7 @@ def active_sync_job_owners() -> set[uuid.UUID]:
     second batch on top of the first, and that is a question about the account,
     not about the job id.
 
-    Same two-step as `has_active_sync_job` — the in-memory jobs are free, and
+    Two steps: the in-memory jobs are free, and
     the row read happens only for the ids that are still queued. An id whose row
     names an owner this build cannot parse is skipped rather than guessed at;
     it can only come from a hand-edited row, and the alternative is a `ValueError`
@@ -785,46 +785,6 @@ def channels_in_flight(session: Session, names: list[str]) -> dict[str, int]:
         if not _held(mode):
             found[channel] = max(found.get(channel, 0), started)
     return found
-
-
-def has_active_sync_job() -> bool:
-    """True when a sync job is pending or running — running *or still queued*.
-
-    Both schedulers once skipped their tick on this; neither does now (see
-    `active_sync_job_owners`, and CW-03 for the successor). It used to
-    read `_active_jobs` alone, which was complete while `create_job` registered
-    every job it made. It no longer does (see `claim_job`), so between enqueue
-    and the first message being claimed this dict says nothing — and that gap is
-    not always brief. `DRAIN_ORDER` puts the automatic lane last, so a long
-    manual bulk keeps auto-sync's messages waiting; every 60-second tick would
-    then see "no active job", create another one, and enqueue another N
-    messages, without bound, for as long as the worker stayed busy.
-
-    So a queued-but-unclaimed job counts as active. The row check runs only when
-    the cheap in-memory answer is negative, and at most once a tick.
-
-    **Deployment-wide**, which made a scheduled successor skip its sync
-    whenever anything synced anywhere (ADR-043).
-    """
-    if any(j.status in ("pending", "running") for j in _active_jobs.values()):
-        return True
-
-    # Imported lazily: `sync_queue` imports this module.
-    from app.jobs.sync_queue import queued_job_ids
-
-    queued = queued_job_ids()
-    if not queued:
-        return False
-    with Session(engine) as session:
-        found = session.exec(
-            select(SyncJobRow.id)
-            .where(
-                col(SyncJobRow.status).in_(("pending", "running")),
-                col(SyncJobRow.id).in_(tuple(queued)),
-            )
-            .limit(1)
-        ).first()
-    return found is not None
 
 
 def _running_job_from_row(*, user_id: uuid.UUID) -> SyncJobState | None:

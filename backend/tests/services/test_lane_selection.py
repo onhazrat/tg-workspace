@@ -667,7 +667,7 @@ def test_the_guard_can_actually_see_the_call_sites() -> None:
 def test_one_accounts_queued_backlog_does_not_stop_another_accounts_scheduler(
     monkeypatch: pytest.MonkeyPatch, spender: uuid.UUID
 ) -> None:
-    """Mutation: gate `run_auto_sync` on `has_active_sync_job()` again.
+    """Mutation: gate `run_auto_sync` on a deployment-wide check again.
 
     The interaction this ticket creates, and the one that costs the most if it
     is wrong. An account over its `auto_sync` Budget enqueues onto the

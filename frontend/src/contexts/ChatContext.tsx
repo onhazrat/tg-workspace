@@ -32,7 +32,7 @@ import {
   saveChatSession,
   submitChatSession,
 } from "@/lib/chat-sessions/store"
-import { takeGateOutcome } from "@/lib/complete-window/gate"
+import { withGate } from "@/lib/complete-window/gate"
 import { saveLLMLog } from "@/lib/logs/write"
 import { scopeSubmission } from "@/lib/posts/posts-view"
 import { chatWithHistoryStream, generateChatStream } from "../services/ai"
@@ -290,10 +290,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     await submitChatSession({
       id: sessionId,
       // The gate's outcome; a later turn never syncs or checks (CW-02).
-      scope: {
-        ...scopeSubmission(view, selectedChannelNames),
-        gate: takeGateOutcome(),
-      },
+      scope: withGate(scopeSubmission(view, selectedChannelNames)),
       language: aiLanguage,
       model: selectedModel,
       mode: chatMode,

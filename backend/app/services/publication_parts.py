@@ -205,10 +205,11 @@ def unproven_line(scope: FrozenScope | None) -> str | None:
 
 
 def _unproven_posts(record: Completeness) -> str:
-    """The gate's `postsPhrase`, as a metadata line opens."""
+    """The frontend's `postsPhrase` and `pillPhrase` in one, as a metadata
+    line opens, so a post says what History's pill says."""
     n, floor = record.unproven_posts, record.unproven_floor
     if n == 0:
-        return "Unproven Posts unknown" if floor else "No Unproven Posts expected"
+        return "An unknown number of Posts unproven" if floor else "No Posts expected"
     share = n / (record.held_posts + n) * 100
     shown = "<1" if share < 1 else str(int(share + 0.5))
     noun = "Post" if n == 1 else "Posts"
