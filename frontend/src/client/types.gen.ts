@@ -1343,6 +1343,14 @@ export type ChannelVerdict = {
      * Unprovenposts
      */
     unprovenPosts: number;
+    /**
+     * Syncingsince
+     */
+    syncingSince?: number | null;
+    /**
+     * Syncagain
+     */
+    syncAgain?: boolean;
 };
 
 /**
@@ -1674,9 +1682,19 @@ export type Completeness = {
      */
     incompleteCount: number;
     /**
+     * Channelcount
+     */
+    channelCount: number;
+    /**
+     * Counts
+     */
+    counts?: {
+        [key: string]: number;
+    };
+    /**
      * Choice
      */
-    choice: 'synced' | 'continued_early' | 'skipped' | 'complete_only' | 'nothing_to_sync' | 'complete';
+    choice: 'synced' | 'continued_early' | 'timed_out' | 'skipped' | 'complete_only' | 'nothing_to_sync' | 'complete';
     /**
      * Frozenat
      */
@@ -1689,10 +1707,6 @@ export type Completeness = {
      * End
      */
     end: number;
-    /**
-     * Channelcount
-     */
-    channelCount: number;
     /**
      * Heldposts
      */
@@ -1729,6 +1743,16 @@ export type CompletenessMark = {
      * Incompletecount
      */
     incompleteCount: number;
+    /**
+     * Channelcount
+     */
+    channelCount: number;
+    /**
+     * Counts
+     */
+    counts?: {
+        [key: string]: number;
+    };
 };
 
 /**
@@ -4013,7 +4037,7 @@ export type GateOutcome = {
     /**
      * Choice
      */
-    choice: 'synced' | 'continued_early' | 'skipped' | 'complete_only' | 'nothing_to_sync' | 'complete';
+    choice: 'synced' | 'continued_early' | 'timed_out' | 'skipped' | 'complete_only' | 'nothing_to_sync' | 'complete';
     /**
      * Frozenat
      */
@@ -7571,6 +7595,12 @@ export type StartSyncJobRequest = {
      * Syncmode
      */
     syncMode?: 'sync_all' | 'bulk' | 'individual' | 'recheck_restricted' | null;
+    /**
+     * Walkbackto
+     */
+    walkBackTo?: {
+        [key: string]: number;
+    } | null;
 };
 
 /**

@@ -11,6 +11,8 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, cast
 
+from sqlalchemy import func
+from sqlalchemy import select as sa_select
 from sqlalchemy import true as sa_true
 from sqlalchemy import update as sa_update
 from sqlmodel import Session, col, delete, select
@@ -22,7 +24,7 @@ from app.models_tg import SyncJob as SyncJobRow
 from app.models_tg import utc_now
 from app.services.channel_setting_groups import SyncOperationMode
 from app.services.request_kinds import is_kind_enabled, kind_for_sync_mode
-from app.services.tenancy import scoped_select, tenancy_enforced
+from app.services.tenancy import scoped_select, tenancy_enforced, unscoped_select
 
 #: The one `LISTEN`/`NOTIFY` channel every sync job's progress travels on
 #: (ticket 10). One channel rather than one per job: `LISTEN` is per-connection,
@@ -740,31 +742,48 @@ def _held(sync_mode: str) -> bool:
     return not is_kind_enabled(kind_for_sync_mode(sync_mode))
 
 
-def channels_in_flight(names: list[str]) -> dict[str, int]:
+#: A job Channel's metadata key: walk back to this moment (epoch ms), past the
+#: Posts an incremental pass stops at. The gate and a scheduled successor set
+#: it on a Channel whose start or continuity test failed (ADR-043).
+WALK_BACK_KEY = "walkBackTo"
+
+#: Why the in-flight read crosses Accounts: the corpus is shared (ADR-043).
+IN_FLIGHT_REASON = (
+    "a Channel's Posts are every Follower's, so any Account's sync of it counts"
+)
+_SYNCING = ("pending", "running")
+
+
+def channels_in_flight(session: Session, names: list[str]) -> dict[str, int]:
     """Which of `names` a sync job is still syncing, and when it started.
 
-    Any Account's job, since the corpus is shared (CW-03, ADR-043): a scheduled
-    successor joins one rather than syncing the Channel twice. Read from the
-    rows, at the flush interval's freshness; a held job keeps nobody busy.
-    With several, the latest start, the one most likely to read past E.
+    Any Account's job, since the corpus is shared (CW-03, ADR-043): a gate
+    joins one rather than syncing the Channel twice. Read from the rows, at
+    the flush interval's freshness; a held job keeps nobody busy. With
+    several, the latest start, the one most likely to read past E.
     """
     if not names:
         return {}
-    wanted = set(names)
-    with Session(engine) as session:
-        rows = session.exec(
-            select(
-                SyncJobRow.created_at, SyncJobRow.sync_mode, SyncJobRow.channels
-            ).where(col(SyncJobRow.status).in_(("pending", "running")))
-        ).all()
+    entry = func.json_array_elements(col(SyncJobRow.channels)).table_valued("value")
+    name = entry.c.value.op("->>")("channelName")
+    rows = session.execute(
+        unscoped_select(
+            sa_select(name, col(SyncJobRow.sync_mode), func.max(SyncJobRow.created_at))
+            .select_from(SyncJobRow)
+            .join(entry, sa_true())
+            .where(
+                col(SyncJobRow.status).in_(_SYNCING),
+                name.in_(names),
+                entry.c.value.op("->>")("status").in_(_SYNCING),
+            )
+            .group_by(name, col(SyncJobRow.sync_mode)),
+            reason=IN_FLIGHT_REASON,
+        )
+    ).all()
     found: dict[str, int] = {}
-    for started, mode, channels in rows:
-        if _held(mode):
-            continue
-        for ch in channels or []:
-            name = ch.get("channelName")
-            if name in wanted and ch.get("status") in ("pending", "running"):
-                found[name] = max(found.get(name, 0), started)
+    for channel, mode, started in rows:
+        if not _held(mode):
+            found[channel] = max(found.get(channel, 0), started)
     return found
 
 

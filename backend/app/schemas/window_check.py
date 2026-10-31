@@ -67,6 +67,10 @@ class ChannelVerdict(BaseModel):
     pace_per_hour: float | None = Field(alias="pacePerHour")
     held_posts: int = Field(alias="heldPosts")
     unproven_posts: float = Field(alias="unprovenPosts")
+    #: When the newest sync still syncing it started, any Account's.
+    syncing_since: int | None = Field(default=None, alias="syncingSince")
+    #: That sync read its head before E, so another must follow it.
+    sync_again: bool = Field(default=False, alias="syncAgain")
 
 
 class WindowCheckResponse(BaseModel):
@@ -84,10 +88,12 @@ class WindowCheckResponse(BaseModel):
 
 
 #: How the gate let the action go on (CW-02): `complete` when nothing was
-#: Incomplete, `nothing_to_sync` when no sync could fix what was.
-Choice = Literal[
+#: Incomplete, `nothing_to_sync` when no sync could fix what was, `timed_out`
+#: when its wait hit the deadline.
+GateChoice = Literal[
     "synced",
     "continued_early",
+    "timed_out",
     "skipped",
     "complete_only",
     "nothing_to_sync",
@@ -100,7 +106,7 @@ class GateOutcome(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
-    choice: Choice
+    choice: GateChoice
     frozen_at: int = Field(alias="frozenAt")
     skipped: list[str] = Field(default_factory=list)
     timed_out: list[str] = Field(default_factory=list, alias="timedOut")
@@ -116,21 +122,18 @@ class CompletenessMark(BaseModel):
     unproven_floor: bool = Field(alias="unprovenFloor")
     fixable: bool
     incomplete_count: int = Field(alias="incompleteCount")
+    channel_count: int = Field(alias="channelCount")
+    #: The Incomplete Channels by the reason each shows.
+    counts: dict[Reason, int] = Field(default_factory=dict)
 
 
 class Completeness(CompletenessMark):
     """An Artifact's window as it froze: its Incomplete and Left out Channels."""
 
-    choice: Choice
+    choice: GateChoice
     frozen_at: int = Field(alias="frozenAt")
     start: int
     end: int
-    channel_count: int = Field(alias="channelCount")
     held_posts: int = Field(alias="heldPosts")
     channels: list[ChannelVerdict]
     left_out: list[str] = Field(alias="leftOut")
-
-    def mark(self) -> CompletenessMark:
-        return CompletenessMark.model_validate(
-            self.model_dump(include=set(CompletenessMark.model_fields))
-        )

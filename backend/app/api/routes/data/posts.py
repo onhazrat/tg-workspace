@@ -30,10 +30,10 @@ from app.schemas.posts import (
 )
 from app.schemas.window_check import WindowCheckRequest, WindowCheckResponse
 from app.services import posts_view
-from app.services.analysis_window import resolve_analysis_window, server_now_ms
+from app.services.analysis_window import resolve_analysis_window
 from app.services.posts import bulk_upsert_posts
 from app.services.settling_curve import current_estimate
-from app.services.window_check import check_window
+from app.services.window_check import check_window, frozen_moment
 
 router = APIRouter()
 
@@ -222,13 +222,14 @@ def window_check(
 ) -> WindowCheckResponse:
     """Which of these Channels the workspace can prove it holds every Post of,
     from the window's Start to its End or now, whichever is earlier, and why
-    not. Reads what is held; never syncs.
+    not. Reads what is held and which syncs are still running; never syncs.
     """
     # CW-02: the gate reads the window again as it was at its click.
-    now = server_now_ms()
-    frozen_at = now if body.frozen_at is None else min(body.frozen_at, now)
+    frozen_at = frozen_moment(body.frozen_at)
     window = resolve_analysis_window(body.window, now_ms=frozen_at)
-    assert window.start is not None and window.end is not None
+    assert window.start is not None and window.end is not None, (
+        "a stated window resolves both ends"
+    )
     return check_window(
         session,
         user_id=current_user.id,

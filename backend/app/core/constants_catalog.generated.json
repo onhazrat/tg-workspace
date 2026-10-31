@@ -348,7 +348,7 @@
       "comment": "",
       "expression": "100",
       "file": "backend/app/services/artifacts.py",
-      "line": 57,
+      "line": 58,
       "name": "DEFAULT_ARTIFACT_PAGE_SIZE",
       "value": 100
     },
@@ -356,7 +356,7 @@
       "comment": "",
       "expression": "1000",
       "file": "backend/app/services/artifacts.py",
-      "line": 58,
+      "line": 59,
       "name": "MAX_ARTIFACT_PAGE_SIZE",
       "value": 1000
     },
@@ -364,7 +364,7 @@
       "comment": "How much of a summary's body travels as the list preview. The read cost is unchanged either way \u2014 the detoast happens server-side \u2014 but four kinds on one page multiplies the *wire* cost, and the list renders a two-line clamp.",
       "expression": "200",
       "file": "backend/app/services/artifacts.py",
-      "line": 65,
+      "line": 66,
       "name": "ARTIFACT_TITLE_CHARS",
       "value": 200
     },
@@ -996,7 +996,7 @@
       "comment": "Rows per delete transaction in `prune_finished_jobs`. Bounds transaction length, not memory \u2014 see that function.",
       "expression": "1000",
       "file": "backend/app/services/scraper_jobs.py",
-      "line": 52,
+      "line": 54,
       "name": "SYNC_JOB_DELETE_BATCH",
       "value": 1000
     },
@@ -1004,7 +1004,7 @@
       "comment": "How many watched-but-not-run jobs this process keeps mirrored. Evicting one costs a row read to rebuild it, never correctness, so a modest cap is free insurance against the mirror becoming a leak: `GET /jobs/sync/{id}` seeds an entry for any job id a client asks about, and nothing about a finished job makes it fall out on its own.",
       "expression": "256",
       "file": "backend/app/services/scraper_jobs.py",
-      "line": 282,
+      "line": 284,
       "name": "MAX_MIRRORED_JOBS",
       "value": 256
     },
@@ -1012,7 +1012,7 @@
       "comment": "Same bound, same reason, for the cancellation flags. See `_get_cancel_event`.",
       "expression": "256",
       "file": "backend/app/services/scraper_jobs.py",
-      "line": 285,
+      "line": 287,
       "name": "MAX_TRACKED_CANCEL_EVENTS",
       "value": 256
     },
@@ -1092,7 +1092,7 @@
       "comment": "How long a coalesced request waits before giving up and reporting a skip. **Ticket 12 removed this constant's original reason and it still earns its place, on a different one.** Ticket 11 justified the bound by the waiter holding a slot in the worker's concurrency gate; ticket 12 made the permit releasable (`sync_queue.SyncSlot`), so a waiter now scrapes nobody's slot. What remains is that the waiter's *message* is claimed from PGMQ under a visibility timeout of about 2.4 hours: a waiter that outlasted it would have its own message redelivered and processed a second time while the first was still waiting. And a person is on the other end of the SSE stream, for whom an answer of \"still running\" beats an open connection. Fifteen minutes is a judgement, not a derivation, and worth naming as such: long enough that an ordinary sync -- seconds to a couple of minutes -- is always ridden rather than skipped, short enough to stay well inside the visibility timeout.",
       "expression": "900",
       "file": "backend/app/services/sync_orchestrator.py",
-      "line": 1544,
+      "line": 1539,
       "name": "COALESCE_MAX_WAIT_SECONDS",
       "value": 900
     },
@@ -1100,7 +1100,7 @@
       "comment": "How often a waiter re-checks the claim when no notification arrives. Small, because it is only reached when a ring was lost or the holder died, and both of those should resolve in seconds rather than at the next sweep.",
       "expression": "2.0",
       "file": "backend/app/services/sync_orchestrator.py",
-      "line": 1549,
+      "line": 1544,
       "name": "_COALESCE_POLL_SECONDS",
       "value": 2.0
     },

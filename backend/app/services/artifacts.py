@@ -49,6 +49,7 @@ from sqlalchemy import select as sa_select
 from sqlmodel import Session, SQLModel, col
 
 from app.models_tg import ChatSession, DiscoverReport, Summary, SummaryAttempt, TagRun
+from app.schemas.window_check import CompletenessMark
 from app.services.analysis_window import ResolvedWindow
 from app.services.logs import ANY_TIME, LogSpread
 from app.services.spread_bars import Bin, spread_range
@@ -100,11 +101,8 @@ def _null(type_: Any) -> Any:
 
 #: What History's pill reads of an Artifact's completeness record (CW-02);
 #: the Incomplete Channels themselves stay with a read of the Artifact.
-LIST_COMPLETENESS_KEYS = (
-    "unprovenPosts",
-    "unprovenFloor",
-    "fixable",
-    "incompleteCount",
+LIST_COMPLETENESS_KEYS = tuple(
+    field.alias or name for name, field in CompletenessMark.model_fields.items()
 )
 
 
@@ -114,7 +112,7 @@ def _list_scope(scope: dict[str, Any] | None) -> dict[str, Any] | None:
         return scope
     return {
         **scope,
-        "completeness": {k: record[k] for k in LIST_COMPLETENESS_KEYS},
+        "completeness": {k: record[k] for k in LIST_COMPLETENESS_KEYS if k in record},
     }
 
 

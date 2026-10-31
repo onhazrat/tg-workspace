@@ -93,6 +93,7 @@ from app.services.quota import (
 from app.services.request_accounting import Sync, accounted_work
 from app.services.scraper import get_channel_info, scrape_channel_page
 from app.services.scraper_jobs import (
+    WALK_BACK_KEY,
     ChannelSyncState,
     SyncJobState,
     claim_job,
@@ -436,12 +437,6 @@ class _ChannelSyncCtx:
     media_settings: dict[str, Any] = field(default_factory=dict)
     #: Walk from the head back to here, past held Posts (`WALK_BACK_KEY`).
     walk_back_to: int = 0
-
-
-#: A job Channel's metadata key: walk back to this moment (epoch ms), past the
-#: Posts an incremental pass stops at. A scheduled successor sets it on a
-#: Channel whose start or continuity test failed (CW-03, ADR-043).
-WALK_BACK_KEY = "walkBackTo"
 
 
 def _walk_back(ctx: _ChannelSyncCtx, metadata: Any) -> None:

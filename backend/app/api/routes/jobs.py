@@ -43,6 +43,7 @@ from app.services.request_kinds import (
 )
 from app.services.runtime_config import build_runtime_config
 from app.services.scraper_jobs import (
+    WALK_BACK_KEY,
     SyncJobState,
     cancel_job,
     create_job,
@@ -349,6 +350,10 @@ async def start_sync_job(
         source=body.source,
         user_id=str(current_user.id),
         sync_mode=sync_mode,
+        # The gate's sync of a Channel short of its window's Start (CW-02).
+        channel_meta_by_id={
+            cid: {WALK_BACK_KEY: to} for cid, to in (body.walk_back_to or {}).items()
+        },
     )
     user_uuid = uuid.UUID(str(current_user.id))
     # Ticket 10: *every* mode enqueues now, one message per Channel, and the

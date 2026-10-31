@@ -68,7 +68,7 @@ def _quick(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(auto_summary, "IN_FLIGHT_POLL_S", 0.05)
 
 
-def _lagging(session: Session, user: User) -> Channel:
+def _unread_end(session: Session, user: User) -> Channel:
     """Held from before the Start, never read past E: its only reason is the end."""
     name = f"sw{uuid.uuid4().hex[:10]}"
     channel = add_test_channel(session, name, name=name, user_id=user.id)
@@ -182,7 +182,7 @@ def test_it_syncs_while_another_sync_job_is_active(
     session: Session, user: User, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """**Mutation:** put back `if has_active_sync_job(): return` and nothing syncs."""
-    channel = _lagging(session, user)
+    channel = _unread_end(session, user)
     busy = SyncJobState(job_id=f"busy-{uuid.uuid4()}", source="t", user_id="x")
     busy.status = "running"
     monkeypatch.setitem(scraper_jobs._active_jobs, busy.job_id, busy)
@@ -215,7 +215,7 @@ def test_it_joins_a_sync_in_flight_that_reads_its_head_after_e(
 ) -> None:
     """**Mutation:** sync every Channel now and it syncs this one twice;
     judge by when the job started and it queues behind the second."""
-    channel = _lagging(session, user)
+    channel = _unread_end(session, user)
     if head_read_at is not None:
         _read_head(channel.id, head_read_at)
     events: list[str] = []
@@ -243,7 +243,7 @@ def test_it_queues_another_behind_a_sync_that_read_its_head_before_e(
 
     **Mutation:** join it instead, and the window freezes Incomplete.
     """
-    channel = _lagging(session, user)
+    channel = _unread_end(session, user)
     _read_head(channel.id, E - MINUTE)
     events: list[str] = []
     other = _in_flight(session, channel, started=E - 2 * MINUTE)
@@ -263,33 +263,66 @@ def test_it_queues_another_behind_a_sync_that_read_its_head_before_e(
     assert record["channels"] == []
 
 
-def test_after_the_deadline_it_freezes_with_the_unfinished_timed_out(
+def test_after_the_deadline_only_the_unfinished_are_timed_out(
     session: Session, user: User, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """**Mutation:** wait without a deadline and the test hangs; record
-    `synced` regardless and the Channel is not timed out."""
-    channel = _lagging(session, user)
-    monkeypatch.setattr(auto_summary, "SUCCESSOR_SYNC_DEADLINE_S", 0.3)
+    """A Channel whose sync finished but left it Incomplete keeps its real
+    reason; the one still syncing at the deadline is timed out.
 
-    async def stuck(_job: SyncJobState, _owner: uuid.UUID | None) -> None:
+    **Mutation:** wait without a deadline and the test hangs; time out every
+    fixable Channel and the finished one reads "timed out" too; record
+    `synced` and the choice is wrong.
+    """
+    done, stuck = _unread_end(session, user), _unread_end(session, user)
+    monkeypatch.setattr(auto_summary, "SUCCESSOR_SYNC_DEADLINE_S", 0.5)
+
+    async def one_hangs(job: SyncJobState, _owner: uuid.UUID | None) -> None:
+        # Its sync answers without reading the head, so it stays Incomplete.
+        for state in job.channels.values():
+            state.status = "success" if state.channel_name == done.name else "running"
+        await scraper_jobs.persist_job(job)
         await asyncio.Event().wait()
 
-    monkeypatch.setattr(auto_summary, "run_sync_job", stuck)
+    monkeypatch.setattr(auto_summary, "run_sync_job", one_hangs)
 
-    record = _regenerate(session, _predecessor(session, user, channel.name), user)
+    record = _regenerate(
+        session, _predecessor(session, user, done.name, stuck.name), user
+    )
 
-    assert record["choice"] == "continued_early"
-    (verdict,) = record["channels"]
-    assert verdict["name"] == channel.name
-    assert verdict["reasons"] == ["timed_out", "end"]
-    assert verdict["reason"] == "timed_out"
+    assert record["choice"] == "timed_out"
+    reasons = {v["name"]: v["reasons"] for v in record["channels"]}
+    assert reasons == {done.name: ["end"], stuck.name: ["timed_out", "end"]}
+
+
+def test_no_transaction_stays_open_while_it_waits_on_its_syncs(
+    session: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An idle transaction across a wait of up to five minutes pins the
+    vacuum horizon (backend/CLAUDE.md).
+
+    **Mutation:** drop the commit before the wait and the session is open.
+    """
+    channel = _unread_end(session, user)
+    open_during: list[bool] = []
+    complete_window = auto_summary._complete_window
+
+    async def watched(*args: Any) -> Any:
+        open_during.append(session.in_transaction())
+        return await complete_window(*args)
+
+    monkeypatch.setattr(auto_summary, "_complete_window", watched)
+    monkeypatch.setattr(auto_summary, "run_sync_job", _Telegram())
+
+    _regenerate(session, _predecessor(session, user, channel.name), user)
+
+    assert open_during == [False]
 
 
 def test_a_sync_refused_by_a_ceiling_is_recorded_refused(
     session: Session, user: User, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """**Mutation:** drop the refused overlay and the reason reads "end"."""
-    channel = _lagging(session, user)
+    channel = _unread_end(session, user)
     monkeypatch.setattr(auto_summary, "run_sync_job", _Telegram(answer="skipped"))
 
     record = _regenerate(session, _predecessor(session, user, channel.name), user)

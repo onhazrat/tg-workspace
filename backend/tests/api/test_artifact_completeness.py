@@ -12,7 +12,6 @@ only what its pill needs.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Iterator
 from typing import Any
 
 import pytest
@@ -20,33 +19,23 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, col, select
 
 from app.core.config import settings
-from app.core.db import engine
 from app.models_tg import Channel, PostSyncState, SyncLog
 from tests.api.test_window_check import (
     HOUR,
     NOW,
+    UNREAD_END,
     WHOLE,
     E,
     S,
     _channel,
+    operator,
+    session,
 )
-from tests.utils.utils import get_superuser_token_headers
 
 PREFIX = f"{settings.API_V1_STR}/data"
 WINDOW = {"mode": "fixed", "start": S, "end": E}
-#: Synced to the Start and continuous, but never read past `S + 5 h`.
-LAGGING = {"head_read_at": S + 5 * HOUR}
-
-
-@pytest.fixture
-def operator(client: TestClient) -> dict[str, str]:
-    return get_superuser_token_headers(client)
-
-
-@pytest.fixture
-def session() -> Iterator[Session]:
-    with Session(engine) as s:
-        yield s
+#: The fixtures, shared with the live check's tests rather than copied.
+__all__ = ["operator", "session"]
 
 
 def _gate(choice: str, **lists: list[str]) -> dict[str, Any]:
@@ -103,7 +92,7 @@ def test_a_skip_records_the_servers_reasons_with_skipped_first(
     client: TestClient, operator: dict[str, str], session: Session, kind: str
 ) -> None:
     """The client names what it skipped; the reasons are the server's own."""
-    _channel(session, "cg_lag", WHOLE[:2], **LAGGING)
+    _channel(session, "cg_end", WHOLE[:2], **UNREAD_END)
     _channel(session, "cg_whole", WHOLE)
 
     record = _record(
@@ -111,8 +100,8 @@ def test_a_skip_records_the_servers_reasons_with_skipped_first(
             client,
             operator,
             kind,
-            ["cg_lag", "cg_whole"],
-            _gate("skipped", skipped=["cg_lag"]),
+            ["cg_end", "cg_whole"],
+            _gate("skipped", skipped=["cg_end"]),
         )
     )
 
@@ -121,7 +110,7 @@ def test_a_skip_records_the_servers_reasons_with_skipped_first(
     assert record["channelCount"] == 2
     ((lag,),) = [record["channels"]]
     assert (lag["name"], lag["reasons"], lag["reason"]) == (
-        "cg_lag",
+        "cg_end",
         ["skipped", "end"],
         "skipped",
     )
@@ -136,7 +125,8 @@ def test_a_skip_records_the_servers_reasons_with_skipped_first(
     ("choice", "lists", "shown"),
     [
         ("synced", {}, "end"),
-        ("continued_early", {"timedOut": ["cg_lag"]}, "timed_out"),
+        ("continued_early", {"timedOut": ["cg_end"]}, "timed_out"),
+        ("timed_out", {"timedOut": ["cg_end"]}, "timed_out"),
         ("nothing_to_sync", {}, "end"),
     ],
 )
@@ -149,9 +139,9 @@ def test_each_choice_is_read_back_as_sent_over_the_servers_check(
     lists: dict[str, list[str]],
     shown: str,
 ) -> None:
-    _channel(session, "cg_lag", WHOLE[:2], **LAGGING)
+    _channel(session, "cg_end", WHOLE[:2], **UNREAD_END)
 
-    record = _record(_open(client, operator, kind, ["cg_lag"], _gate(choice, **lists)))
+    record = _record(_open(client, operator, kind, ["cg_end"], _gate(choice, **lists)))
 
     assert record is not None
     assert record["choice"] == choice
@@ -172,17 +162,43 @@ def test_complete_only_names_its_left_out_channels_on_a_complete_window(
             operator,
             kind,
             ["cg_whole"],
-            _gate("complete_only", leftOut=["cg_lag", "cg_frozen"]),
+            _gate("complete_only", leftOut=["cg_end", "cg_frozen"]),
         )
     )
 
     assert record is not None
     assert (record["choice"], record["leftOut"]) == (
         "complete_only",
-        ["cg_lag", "cg_frozen"],
+        ["cg_end", "cg_frozen"],
     )
     assert (record["channels"], record["incompleteCount"]) == ([], 0)
     assert (record["unprovenPosts"], record["fixable"]) == (0, False)
+
+
+@pytest.mark.parametrize("kind", KINDS)
+def test_left_out_channels_are_out_of_the_scope_whatever_the_browser_sent(
+    client: TestClient, operator: dict[str, str], session: Session, kind: str
+) -> None:
+    """ "Complete only" runs at once, before the narrowed selection renders,
+    so the Scope it sends may still name what it left out.
+
+    **Mutation:** drop the narrowing in `freeze` and the Scope keeps cg_end.
+    """
+    _channel(session, "cg_whole", WHOLE)
+    _channel(session, "cg_end", WHOLE[:2], **UNREAD_END)
+
+    artifact = _open(
+        client,
+        operator,
+        kind,
+        ["cg_whole", "cg_end"],
+        _gate("complete_only", leftOut=["cg_end"]),
+    )
+
+    assert artifact["scope"]["channels"] == ["cg_whole"]
+    record = _record(artifact)
+    assert record is not None
+    assert (record["channels"], record["leftOut"]) == ([], ["cg_end"])
 
 
 def test_the_reasons_are_the_servers_whatever_the_client_skipped(
@@ -191,7 +207,7 @@ def test_the_reasons_are_the_servers_whatever_the_client_skipped(
     """A skip names a Channel; it never makes a Complete one Incomplete, and a
     Channel the client said nothing of keeps the reasons the server found."""
     _channel(session, "cg_whole", WHOLE)
-    _channel(session, "cg_frozen", WHOLE[:2], group={"is_frozen": True}, **LAGGING)
+    _channel(session, "cg_frozen", WHOLE[:2], group={"is_frozen": True}, **UNREAD_END)
 
     record = _record(
         _open(
@@ -217,21 +233,21 @@ def test_a_skip_changes_no_shared_row(
     client: TestClient, operator: dict[str, str], session: Session
 ) -> None:
     """Not the Channel, its sync state, its sync logs or its failure count."""
-    _channel(session, "cg_lag", WHOLE[:2], **LAGGING)
+    _channel(session, "cg_end", WHOLE[:2], **UNREAD_END)
 
     def shared() -> tuple[Any, ...]:
         session.expire_all()
-        channel = session.exec(select(Channel).where(Channel.name == "cg_lag")).one()
+        channel = session.exec(select(Channel).where(Channel.name == "cg_end")).one()
         return (
             channel.model_dump(),
-            session.exec(select(SyncLog).where(SyncLog.channel_name == "cg_lag")).all(),
+            session.exec(select(SyncLog).where(SyncLog.channel_name == "cg_end")).all(),
             session.exec(
-                select(PostSyncState).where(col(PostSyncState.channel_name) == "cg_lag")
+                select(PostSyncState).where(col(PostSyncState.channel_name) == "cg_end")
             ).all(),
         )
 
     before = shared()
-    _open(client, operator, "summary", ["cg_lag"], _gate("skipped", skipped=["cg_lag"]))
+    _open(client, operator, "summary", ["cg_end"], _gate("skipped", skipped=["cg_end"]))
 
     assert shared() == before
 
@@ -241,9 +257,9 @@ def test_an_artifact_made_without_the_gate_reads_not_checked(
     client: TestClient, operator: dict[str, str], session: Session, kind: str
 ) -> None:
     """`null`, never an empty record: not checked is not Complete."""
-    _channel(session, "cg_lag", WHOLE[:2], **LAGGING)
+    _channel(session, "cg_end", WHOLE[:2], **UNREAD_END)
 
-    artifact = _open(client, operator, kind, ["cg_lag"], None)
+    artifact = _open(client, operator, kind, ["cg_end"], None)
 
     assert "completeness" in artifact["scope"]
     assert _record(artifact) is None
@@ -283,9 +299,9 @@ def test_the_window_freezes_at_the_gates_moment_never_later_than_now(
 def test_historys_list_carries_only_the_pills_fields(
     client: TestClient, operator: dict[str, str], session: Session
 ) -> None:
-    _channel(session, "cg_lag", WHOLE[:2], **LAGGING)
-    _open(client, operator, "summary", ["cg_lag"], _gate("skipped", skipped=["cg_lag"]))
-    _open(client, operator, "tag", ["cg_lag"], None)
+    _channel(session, "cg_end", WHOLE[:2], **UNREAD_END)
+    _open(client, operator, "summary", ["cg_end"], _gate("skipped", skipped=["cg_end"]))
+    _open(client, operator, "tag", ["cg_end"], None)
 
     listed = client.get(f"{PREFIX}/artifacts", headers=operator)
     assert listed.status_code == 200, listed.text
@@ -297,30 +313,9 @@ def test_historys_list_carries_only_the_pills_fields(
             "unprovenFloor": marks["summary"]["unprovenFloor"],
             "fixable": True,
             "incompleteCount": 1,
+            "channelCount": 1,
+            # The popover's breakdown: the Incomplete by the reason each shows.
+            "counts": {"skipped": 1},
         },
         "tag": None,
     }
-
-
-def test_the_gate_checks_again_at_its_own_moment(
-    client: TestClient, operator: dict[str, str], session: Session
-) -> None:
-    """After its sync the gate asks the live check about the window as it froze
-    at the click, so the toast counts what the record will hold."""
-    _channel(session, "cg_whole", WHOLE)
-    clicked = NOW - 10 * 60_000
-    live = {"mode": "live", "durationMinutes": 60, "endGapMinutes": 0}
-
-    response = client.post(
-        f"{PREFIX}/posts/window-check",
-        headers=operator,
-        json={"channelNames": ["cg_whole"], "window": live, "frozenAt": clicked},
-    )
-
-    assert response.status_code == 200, response.text
-    body = response.json()
-    assert (body["frozenAt"], body["end"], body["start"]) == (
-        clicked,
-        clicked,
-        clicked - HOUR,
-    )

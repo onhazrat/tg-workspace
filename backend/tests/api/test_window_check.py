@@ -24,13 +24,20 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session, col, delete
+from sqlmodel import Session, col, delete, select
 
 from app import crud
 from app.core.config import settings
 from app.core.db import engine
 from app.models import User, UserUpdate
-from app.models_tg import ChannelSettingGroup, Post, PostSyncState, SyncLog
+from app.models_tg import (
+    Channel,
+    ChannelSettingGroup,
+    Post,
+    PostSyncState,
+    SyncJob,
+    SyncLog,
+)
 from app.services.follows import get_operator_user_id
 from app.services.telegram_web import UNAVAILABLE_WEB_VIEW_MESSAGE
 from tests.utils.setting_groups import add_test_channel
@@ -93,14 +100,21 @@ def _gap(session: Session, name: str, *ids: int) -> None:
     session.commit()
 
 
-def _log(session: Session, name: str, status: str, error: str | None = None) -> None:
+def _log(
+    session: Session,
+    name: str,
+    status: str,
+    error: str | None = None,
+    *,
+    at: int = NOW - HOUR,
+) -> None:
     session.add(
         SyncLog(
             id=str(uuid.uuid4()),
             channel_name=name,
             status=status,
             error=error,
-            timestamp=NOW - HOUR,
+            timestamp=at,
         )
     )
     session.commit()
@@ -112,12 +126,14 @@ def _check(
     *names: str,
     start: int = S,
     end: int = E,
+    frozen_at: int | None = None,
 ) -> dict[str, Any]:
     response = client.post(
         URL,
         json={
             "channelNames": list(names),
             "window": {"mode": "fixed", "start": start, "end": end},
+            "frozenAt": frozen_at,
         },
         headers=headers,
     )
@@ -205,14 +221,14 @@ def test_an_id_neither_held_nor_a_confirmed_gap_is_a_hole(
 # --- the reasons no test names -----------------------------------------------
 
 #: Synced to the Start and continuous, but never read past `S + 5 h`.
-LAGGING = {"head_read_at": S + 5 * HOUR}
+UNREAD_END = {"head_read_at": S + 5 * HOUR}
 
 
 def test_a_failed_last_sync_is_shown_first_with_its_error(
     client: TestClient, operator: dict[str, str], session: Session
 ) -> None:
     """Only on an Incomplete Channel: a Complete one's failure changes nothing."""
-    _channel(session, "cw_failed", WHOLE[:2], **LAGGING)
+    _channel(session, "cw_failed", WHOLE[:2], **UNREAD_END)
     _channel(session, "cw_fine", WHOLE)
     _log(session, "cw_failed", "failed", "proxy down")
     _log(session, "cw_fine", "failed", "proxy down")
@@ -225,10 +241,27 @@ def test_a_failed_last_sync_is_shown_first_with_its_error(
     assert _verdict(body, "cw_fine")["reasons"] == []
 
 
+def test_a_sync_that_failed_after_the_frozen_moment_shows_failed(
+    client: TestClient, operator: dict[str, str], session: Session
+) -> None:
+    """The gate waits past its click, so the last sync is read up to now:
+    one it waited on that failed shows its error (story 39).
+
+    **Mutation:** read the logs only up to the frozen moment and it reads "end".
+    """
+    _channel(session, "cw_waited", WHOLE[:2], **UNREAD_END)
+    _log(session, "cw_waited", "failed", "proxy down", at=NOW - MINUTE)
+
+    body = _check(client, operator, "cw_waited", frozen_at=NOW - 30 * MINUTE)
+
+    verdict = _verdict(body, "cw_waited")
+    assert (verdict["reason"], verdict["error"]) == ("failed", "proxy down")
+
+
 def test_a_frozen_channel_is_incomplete_and_no_sync_can_fix_it(
     client: TestClient, operator: dict[str, str], session: Session
 ) -> None:
-    _channel(session, "cw_frozen", WHOLE[:2], group={"is_frozen": True}, **LAGGING)
+    _channel(session, "cw_frozen", WHOLE[:2], group={"is_frozen": True}, **UNREAD_END)
 
     verdict = _verdict(_check(client, operator, "cw_frozen"), "cw_frozen")
 
@@ -243,9 +276,9 @@ def test_unavailable_from_its_group_or_its_last_error_replaces_failed(
         "cw_marked",
         WHOLE[:2],
         group={"is_unavailable_on_web_view": True},
-        **LAGGING,
+        **UNREAD_END,
     )
-    _channel(session, "cw_gone", WHOLE[:2], **LAGGING)
+    _channel(session, "cw_gone", WHOLE[:2], **UNREAD_END)
     _log(session, "cw_gone", "failed", UNAVAILABLE_WEB_VIEW_MESSAGE)
 
     body = _check(client, operator, "cw_marked", "cw_gone")
@@ -286,7 +319,7 @@ def test_lag_is_behind_until_its_next_scheduled_sync_is_past_due(
     behind: bool,
 ) -> None:
     """Both keep the reason; Behind is a grouping, not a reason."""
-    _channel(session, "cw_due", WHOLE[:2], next_regular_sync_at=next_due, **LAGGING)
+    _channel(session, "cw_due", WHOLE[:2], next_regular_sync_at=next_due, **UNREAD_END)
 
     verdict = _verdict(_check(client, operator, "cw_due"), "cw_due")
 
@@ -301,7 +334,7 @@ def test_lag_with_another_problem_is_never_behind(
         "cw_both",
         [(1, S - HOUR), (3, S + HOUR)],
         next_regular_sync_at=NOW + HOUR,
-        **LAGGING,
+        **UNREAD_END,
     )
 
     verdict = _verdict(_check(client, operator, "cw_both"), "cw_both")
@@ -405,7 +438,7 @@ def test_another_accounts_channels_and_settings_never_reach_the_check(
     nothing about a Channel both follow."""
     other_id, _ = other
     _channel(session, "cw_theirs", HOLED, user_id=other_id)
-    _channel(session, "cw_shared", WHOLE[:2], **LAGGING)
+    _channel(session, "cw_shared", WHOLE[:2], **UNREAD_END)
     _channel(session, "cw_shared", user_id=other_id, group={"is_frozen": True})
 
     body = _check(client, operator, "cw_theirs", "cw_shared")
@@ -413,3 +446,96 @@ def test_another_accounts_channels_and_settings_never_reach_the_check(
     assert [c["name"] for c in body["channels"]] == ["cw_shared"]
     assert _verdict(body, "cw_shared")["reasons"] == ["end"]
     assert body["heldPosts"] == 1
+
+
+# --- syncs in flight -------------------------------------------------------------
+
+
+def _syncing(
+    session: Session, owner: uuid.UUID, started: int, *names: str, done: str = ""
+) -> None:
+    """A sync job of `owner`'s, running since `started`, still syncing `names`
+    and already done with `done`."""
+    entries = [
+        {
+            "channelId": session.exec(
+                select(Channel.id).where(Channel.name == n)
+            ).one(),
+            "channelName": n,
+            "status": "success" if n == done else "running",
+        }
+        for n in (*names, *([done] if done else []))
+    ]
+    session.add(
+        SyncJob(
+            id=str(uuid.uuid4()),
+            user_id=owner,
+            status="running",
+            channels=entries,
+            created_at=started,
+        )
+    )
+    session.commit()
+
+
+@pytest.mark.parametrize(
+    ("head_read_at", "again"),
+    [
+        # Read at or after its start: its own read, before E. It cannot pass.
+        pytest.param(E - 10 * MINUTE, True, id="read its head before E"),
+        # An earlier sync's read: this one's is still to come, after E.
+        pytest.param(E - 40 * MINUTE, False, id="head still to read"),
+    ],
+)
+def test_any_accounts_sync_in_flight_is_answered_per_channel(
+    client: TestClient,
+    operator: dict[str, str],
+    session: Session,
+    other: tuple[uuid.UUID, dict[str, str]],
+    head_read_at: int,
+    again: bool,
+) -> None:
+    """The gate joins it, or queues another behind it (CW-03's rule, asked
+    in one place). A Channel the job already finished is not in flight.
+
+    **Mutation:** judge by when the job started, not by the head read, and
+    "read its head before E" is answered False.
+    """
+    started = E - 30 * MINUTE
+    _channel(session, "cw_flying", WHOLE[:2], head_read_at=head_read_at)
+    _channel(session, "cw_landed", WHOLE[:2], head_read_at=head_read_at)
+    _syncing(session, other[0], started, "cw_flying", done="cw_landed")
+
+    body = _check(client, operator, "cw_flying", "cw_landed")
+
+    flying = _verdict(body, "cw_flying")
+    assert (flying["syncingSince"], flying["syncAgain"]) == (started, again)
+    landed = _verdict(body, "cw_landed")
+    assert (landed["syncingSince"], landed["syncAgain"]) == (None, False)
+
+
+# --- the gate's own moment ----------------------------------------------
+
+
+def test_the_gate_checks_again_at_its_own_moment(
+    client: TestClient, operator: dict[str, str], session: Session
+) -> None:
+    """After its sync the gate asks the live check about the window as it froze
+    at the click, so the toast counts what the record will hold."""
+    _channel(session, "cg_whole", WHOLE)
+    clicked = NOW - 10 * 60_000
+    live = {"mode": "live", "durationMinutes": 60, "endGapMinutes": 0}
+
+    response = client.post(
+        URL,
+        headers=operator,
+        json={"channelNames": ["cg_whole"], "window": live, "frozenAt": clicked},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert (body["frozenAt"], body["end"], body["start"]) == (
+        clicked,
+        clicked,
+        clicked - HOUR,
+    )

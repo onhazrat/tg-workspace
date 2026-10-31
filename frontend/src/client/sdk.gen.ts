@@ -943,7 +943,7 @@ export const dataLookupPostsRoute = <ThrowOnError extends boolean = true>(option
  *
  * Which of these Channels the workspace can prove it holds every Post of,
  * from the window's Start to its End or now, whichever is earlier, and why
- * not. Reads what is held; never syncs.
+ * not. Reads what is held and which syncs are still running; never syncs.
  */
 export const dataWindowCheck = <ThrowOnError extends boolean = true>(options: Options<DataWindowCheckData, ThrowOnError>): RequestResult<DataWindowCheckResponses, DataWindowCheckErrors, ThrowOnError, 'data'> => (options.client ?? client).post<DataWindowCheckResponses, DataWindowCheckErrors, ThrowOnError, 'data'>({
     responseStyle: 'data',

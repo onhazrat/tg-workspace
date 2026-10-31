@@ -2146,7 +2146,7 @@
       "post": {
         "tags": ["data"],
         "summary": "Window Check",
-        "description": "Which of these Channels the workspace can prove it holds every Post of,\nfrom the window's Start to its End or now, whichever is earlier, and why\nnot. Reads what is held; never syncs.",
+        "description": "Which of these Channels the workspace can prove it holds every Post of,\nfrom the window's Start to its End or now, whichever is earlier, and why\nnot. Reads what is held and which syncs are still running; never syncs.",
         "operationId": "data-window_check",
         "requestBody": {
           "content": {
@@ -8680,7 +8680,16 @@
             "title": "Paceperhour"
           },
           "heldPosts": { "type": "integer", "title": "Heldposts" },
-          "unprovenPosts": { "type": "number", "title": "Unprovenposts" }
+          "unprovenPosts": { "type": "number", "title": "Unprovenposts" },
+          "syncingSince": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Syncingsince"
+          },
+          "syncAgain": {
+            "type": "boolean",
+            "title": "Syncagain",
+            "default": false
+          }
         },
         "type": "object",
         "required": [
@@ -8973,11 +8982,32 @@
           "unprovenFloor": { "type": "boolean", "title": "Unprovenfloor" },
           "fixable": { "type": "boolean", "title": "Fixable" },
           "incompleteCount": { "type": "integer", "title": "Incompletecount" },
+          "channelCount": { "type": "integer", "title": "Channelcount" },
+          "counts": {
+            "additionalProperties": { "type": "integer" },
+            "propertyNames": {
+              "enum": [
+                "skipped",
+                "failed",
+                "timed_out",
+                "refused",
+                "end",
+                "hole",
+                "start",
+                "retention",
+                "frozen",
+                "unavailable"
+              ]
+            },
+            "type": "object",
+            "title": "Counts"
+          },
           "choice": {
             "type": "string",
             "enum": [
               "synced",
               "continued_early",
+              "timed_out",
               "skipped",
               "complete_only",
               "nothing_to_sync",
@@ -8988,7 +9018,6 @@
           "frozenAt": { "type": "integer", "title": "Frozenat" },
           "start": { "type": "integer", "title": "Start" },
           "end": { "type": "integer", "title": "End" },
-          "channelCount": { "type": "integer", "title": "Channelcount" },
           "heldPosts": { "type": "integer", "title": "Heldposts" },
           "channels": {
             "items": { "$ref": "#/components/schemas/ChannelVerdict" },
@@ -9007,11 +9036,11 @@
           "unprovenFloor",
           "fixable",
           "incompleteCount",
+          "channelCount",
           "choice",
           "frozenAt",
           "start",
           "end",
-          "channelCount",
           "heldPosts",
           "channels",
           "leftOut"
@@ -9024,14 +9053,35 @@
           "unprovenPosts": { "type": "integer", "title": "Unprovenposts" },
           "unprovenFloor": { "type": "boolean", "title": "Unprovenfloor" },
           "fixable": { "type": "boolean", "title": "Fixable" },
-          "incompleteCount": { "type": "integer", "title": "Incompletecount" }
+          "incompleteCount": { "type": "integer", "title": "Incompletecount" },
+          "channelCount": { "type": "integer", "title": "Channelcount" },
+          "counts": {
+            "additionalProperties": { "type": "integer" },
+            "propertyNames": {
+              "enum": [
+                "skipped",
+                "failed",
+                "timed_out",
+                "refused",
+                "end",
+                "hole",
+                "start",
+                "retention",
+                "frozen",
+                "unavailable"
+              ]
+            },
+            "type": "object",
+            "title": "Counts"
+          }
         },
         "type": "object",
         "required": [
           "unprovenPosts",
           "unprovenFloor",
           "fixable",
-          "incompleteCount"
+          "incompleteCount",
+          "channelCount"
         ],
         "title": "CompletenessMark",
         "description": "What History's pill shows of an Artifact's window."
@@ -11785,6 +11835,7 @@
             "enum": [
               "synced",
               "continued_early",
+              "timed_out",
               "skipped",
               "complete_only",
               "nothing_to_sync",
@@ -15155,6 +15206,16 @@
               { "type": "null" }
             ],
             "title": "Syncmode"
+          },
+          "walkBackTo": {
+            "anyOf": [
+              {
+                "additionalProperties": { "type": "integer" },
+                "type": "object"
+              },
+              { "type": "null" }
+            ],
+            "title": "Walkbackto"
           }
         },
         "type": "object",

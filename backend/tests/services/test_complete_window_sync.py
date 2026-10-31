@@ -17,28 +17,29 @@ import types
 import uuid
 from collections.abc import Iterator
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 import sqlalchemy as sa
+from fastapi.testclient import TestClient
 from sqlmodel import Session, col, delete, select
 
+from app.api.routes import jobs as jobs_route
 from app.core.config import settings
 from app.core.db import engine
 from app.models import User
-from app.models_tg import Channel, Post, PostSyncState
+from app.models_tg import Channel, Post, PostSyncState, Summary, SyncJob
 from app.services import sync_orchestrator
-from app.services.scraper_jobs import ChannelSyncState, SyncJobState
+from app.services.follows import get_operator_user_id
+from app.services.scraper_jobs import WALK_BACK_KEY, ChannelSyncState, SyncJobState
 from app.services.sync_orchestrator import _apply_scrape_page, _ChannelSyncCtx
 from tests.utils.setting_groups import add_test_channel
 from tests.utils.user import create_random_user
+from tests.utils.utils import get_superuser_token_headers
 
-MIGRATION_PATH = (
-    pathlib.Path(__file__).resolve().parents[2]
-    / "app"
-    / "alembic"
-    / "versions"
-    / "d6f2b8a4c013_clear_stored_confirmed_gaps_cw_01.py"
-)
+VERSIONS = pathlib.Path(__file__).resolve().parents[2] / "app" / "alembic" / "versions"
+MIGRATION_PATH = VERSIONS / "d6f2b8a4c013_clear_stored_confirmed_gaps_cw_01.py"
+CUT_SHORT_PATH = VERSIONS / "c5e1a7f3b902_cut_short_summaries_cw_01.py"
 
 
 @pytest.fixture
@@ -174,8 +175,8 @@ def test_the_head_read_moment_is_when_the_newest_page_was_read(
     assert row.last_updated > fetched_at[1]
 
 
-def _load_migration() -> types.ModuleType:
-    spec = importlib.util.spec_from_file_location("gap_clear", MIGRATION_PATH)
+def _load_migration(path: pathlib.Path = MIGRATION_PATH) -> types.ModuleType:
+    spec = importlib.util.spec_from_file_location(path.stem, path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -253,3 +254,65 @@ def test_a_walk_back_pages_past_held_posts_to_the_start(
         select(Post.post_id).where(Post.channel_name == channel.name)
     ).all()
     assert sorted(held) == [20, 60, 61, 98, 99, 100]
+
+
+def test_the_cut_short_rename_moves_the_flag_and_nothing_else(
+    session: Session, user: User
+) -> None:
+    """`incomplete` becomes `cutShort` with its value; a row without it, and
+    every other key, is left as it was.
+
+    **Mutation:** drop the `?` guard and the row without the flag gains a
+    `cutShort: null`.
+    """
+    rows = {
+        "flagged": {"incomplete": True, "status": "done"},
+        "cleared": {"incomplete": False},
+        "plain": {"status": "done"},
+    }
+    for key, extra in rows.items():
+        session.add(
+            Summary(id=f"cs-{key}-{user.id}", user_id=user.id, text="t", extra=extra)
+        )
+    session.commit()
+
+    session.execute(sa.text(_load_migration(CUT_SHORT_PATH).RENAME_SQL))
+    session.commit()
+
+    session.expire_all()
+    after = {
+        key: (session.get(Summary, f"cs-{key}-{user.id}") or Summary()).extra
+        for key in rows
+    }
+    assert after == {
+        "flagged": {"cutShort": True, "status": "done"},
+        "cleared": {"cutShort": False},
+        "plain": {"status": "done"},
+    }
+
+
+def test_the_gates_sync_walks_back_where_it_asks(
+    client: TestClient, session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The gate's sync of a Channel short of its window's Start walks back to
+    the Start, as the successor's does (ADR-043).
+
+    **Mutation:** drop `walkBackTo` from the route and the job's Channel
+    carries no walk back.
+    """
+    owner = get_operator_user_id(session)
+    assert owner is not None
+    handle = f"cw{uuid.uuid4().hex[:10]}"
+    channel = add_test_channel(session, handle, name=handle, user_id=owner)
+    monkeypatch.setattr(jobs_route, "enqueue_sync_job", AsyncMock())
+
+    response = client.post(
+        f"{settings.API_V1_STR}/jobs/sync",
+        json={"channelIds": [channel.id], "walkBackTo": {channel.id: 1_000}},
+        headers=get_superuser_token_headers(client),
+    )
+
+    assert response.status_code == 200, response.text
+    job = session.get(SyncJob, response.json()["jobId"])
+    assert job is not None
+    assert [c["metadata"] for c in job.channels] == [{WALK_BACK_KEY: 1_000}]
