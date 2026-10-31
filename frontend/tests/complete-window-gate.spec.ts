@@ -191,6 +191,8 @@ test("the review, and Enter syncs and continues", async ({ page }) => {
   await expect(gate(page)).toContainText("No sync can fix these · 1")
   await expect(syncButton(page)).toHaveText(/Sync 1 · \d+s/)
 
+  // Enter reaches the Sync button: it holds the focus as the review opens.
+  await expect(syncButton(page)).toBeFocused()
   await page.keyboard.press("Enter")
   await expect.poll(() => w.sync.starts.length).toBe(1)
   expect(w.sync.starts[0].channelIds).toHaveLength(1)

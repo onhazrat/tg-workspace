@@ -212,6 +212,8 @@ test("a Live window's minute rolling asks again without dimming the line", async
   await selectTwo(page)
   await page.locator("#tour-tab-posts").click()
   await expect(banner(page)).toContainText("~11 Posts (10%)")
+  // Settled first: the selection's own check is not what this is about.
+  await expect(banner(page)).not.toHaveAttribute("aria-busy", "true")
 
   state.hold = true
   const asked = state.bodies.length
