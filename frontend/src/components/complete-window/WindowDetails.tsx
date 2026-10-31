@@ -8,25 +8,26 @@ import {
   incompleteOf,
   initiallyHidden,
   isolated,
-  REASON_LABEL,
-  REASON_TONE,
+  REASONS,
   type Reason,
   rowGroups,
   shortfall,
   span,
   stamp,
   stretchGap,
+  type Tone,
   toggled,
   type Verdict,
   type WindowCheck,
 } from "@/lib/complete-window/window-check"
+import { HoverPopover } from "./HoverPopover"
 
 // Charts colour what is missing, never why: three gap kinds from the dataviz
 // palette, validated in both themes; routine lag a quieter step of the end
 // gap's blue; a covered stretch the neutral track; what no sync can fix
 // hatched, so it reads without colour.
-const TRACK = "bg-[#f0efec] dark:bg-[#383835]"
-const GAP: Record<Gap, { label: string; className: string }> = {
+export const TRACK = "bg-[#f0efec] dark:bg-[#383835]"
+export const GAP: Record<Gap, { label: string; className: string }> = {
   hole: { label: "Hole", className: "bg-[#eb6834] dark:bg-[#d95926]" },
   start: {
     label: "Short history",
@@ -47,9 +48,9 @@ const HATCH = {
   backgroundImage:
     "repeating-linear-gradient(135deg, currentColor 0 2px, transparent 2px 5px)",
 }
-const gapStyle = (g: Gap) => (g === "stuck" ? HATCH : undefined)
+export const gapStyle = (g: Gap) => (g === "stuck" ? HATCH : undefined)
 
-export const TONE: Record<"red" | "amber" | "slate", string> = {
+export const TONE: Record<Tone, string> = {
   red: "bg-red-500/10 text-red-700 dark:text-red-300 border-red-500/30",
   amber:
     "bg-amber-500/10 text-amber-800 dark:text-amber-200 border-amber-500/30",
@@ -66,18 +67,28 @@ function Swatch({ gap }: { gap: Gap }) {
   )
 }
 
-function ReasonChip({ reason, title }: { reason: Reason; title?: string }) {
+/** A reason's chip; with an error, the error opens on hover or tap. */
+export function ReasonChip({
+  reason,
+  error,
+}: {
+  reason: Reason
+  error?: string | null
+}) {
+  const chip = `inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${TONE[REASONS[reason].tone]}`
+  if (!error) return <span className={chip}>{REASONS[reason].label}</span>
   return (
-    <span
-      title={title}
-      className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${TONE[REASON_TONE[reason]]} ${title ? "cursor-help underline decoration-dotted" : ""}`}
+    <HoverPopover
+      testId="reason-error"
+      className={`${chip} cursor-help underline decoration-dotted`}
+      trigger={REASONS[reason].label}
     >
-      {REASON_LABEL[reason]}
-    </span>
+      <p className="text-[12px]">{error}</p>
+    </HoverPopover>
   )
 }
 
-/** A row's chips, minus what its words already say; a failure's error on hover. */
+/** A row's chips, minus what its words already say; a failure's error opens. */
 export function Chips({ c }: { c: Verdict }) {
   const worded: Reason[] = shortfall(c) ? ["end", "hole", "start"] : []
   return (
@@ -88,7 +99,7 @@ export function Chips({ c }: { c: Verdict }) {
           <ReasonChip
             key={r}
             reason={r}
-            title={r === "failed" ? (c.error ?? undefined) : undefined}
+            error={r === "failed" ? c.error : null}
           />
         ))}
     </>
@@ -187,7 +198,7 @@ function Timeline({ check, rows }: { check: WindowCheck; rows: Verdict[] }) {
             ))}
           </div>
           <span className="ml-auto min-w-0 max-w-full text-[11px] text-app-ink/60 sm:w-64 sm:shrink-0 sm:truncate">
-            {shortfall(c) || (c.reason ? REASON_LABEL[c.reason] : "complete")}
+            {shortfall(c) || (c.reason ? REASONS[c.reason].label : "complete")}
           </span>
         </div>
       ))}
@@ -302,7 +313,7 @@ export function WindowDetails({ check }: { check: WindowCheck }) {
       </div>
       {shown.length === 0 ? (
         <p className="text-[12px] text-app-ink/50">
-          Every kind is hidden: turn one back on in the legend above.
+          Every kind is hidden. Turn one back on in the legend above.
         </p>
       ) : (
         <>

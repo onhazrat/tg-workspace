@@ -1,4 +1,6 @@
 import type { Page } from "@playwright/test"
+import type { ChannelVerdict } from "../src/client"
+import { verdict as base } from "../src/lib/complete-window/verdict-fixtures"
 import { expect, test } from "./fixtures.ts"
 import { seedTestChannel } from "./utils/seed-channel"
 import {
@@ -19,29 +21,18 @@ import {
 const HOUR = 3_600_000
 type Body = { channelNames: string[]; window: unknown }
 
-function verdict(name: string, over: Record<string, unknown>) {
-  return {
-    name,
-    reasons: [],
-    reason: null,
+const verdict = (name: string, over: Partial<ChannelVerdict> = {}) =>
+  base(name, {
     lastSync: Date.now() - HOUR,
     headReadAt: Date.now() - HOUR,
-    error: null,
-    stretches: [],
-    missingIds: 0,
-    syncable: true,
-    behind: false,
-    pacePerHour: 1,
     heldPosts: 50,
-    unprovenPosts: 0,
     ...over,
-  }
-}
+  })
 
 function incomplete(names: string[], end: number) {
   const [lag, cold] = names
   const endGap = (hours: number) => [
-    { kind: "end", from: end - hours * HOUR, to: end },
+    { kind: "end" as const, from: end - hours * HOUR, to: end },
   ]
   return [
     verdict(lag, {
@@ -77,7 +68,7 @@ async function mockCheck(page: Page) {
         start: end - 24 * HOUR,
         end,
         channels: state.synced
-          ? names.map((n) => verdict(n, {}))
+          ? names.map((n) => verdict(n))
           : incomplete(names, end),
         heldPosts: 100,
         unprovenPosts: state.synced ? 0 : 11,
@@ -170,10 +161,10 @@ test("Details: legend toggles, double-click isolates, Visualize", async ({
   await expect(rows(page)).toHaveCount(1)
   await expect(rows(page).first()).toContainText(`@${cold}`)
   await expect(rows(page).first()).toContainText("9 h behind, ~9 posts")
-  await expect(rows(page).first().getByText("Sync failed")).toHaveAttribute(
-    "title",
-    "proxy down",
-  )
+  // The failure's error opens on a click or a tap, not only on hover.
+  await rows(page).first().getByTestId("reason-error").click()
+  await expect(page.getByText("proxy down")).toBeVisible()
+  await page.keyboard.press("Escape")
 
   const behind = banner(page).getByRole("button", { name: /End gap, behind/ })
   await behind.click()
@@ -210,6 +201,24 @@ test("the Posts tab shows the line, dimmed only while an edit is checked", async
   await expect(banner(page)).toContainText("Updating…")
   await expect.poll(() => state.bodies.length).toBeGreaterThan(asked)
   await expect(banner(page)).not.toHaveAttribute("aria-busy", "true")
+})
+
+test("a Live window's minute rolling asks again without dimming the line", async ({
+  page,
+}) => {
+  // Story 7: only an edit dims it, never the minute.
+  await page.clock.install()
+  const state = await mockCheck(page)
+  await selectTwo(page)
+  await page.locator("#tour-tab-posts").click()
+  await expect(banner(page)).toContainText("~11 Posts (10%)")
+
+  state.hold = true
+  const asked = state.bodies.length
+  await page.clock.fastForward("01:01")
+  await expect.poll(() => state.bodies.length).toBeGreaterThan(asked)
+  await expect(banner(page)).not.toHaveAttribute("aria-busy", "true")
+  await expect(banner(page)).not.toContainText("Updating…")
 })
 
 test.describe("on a phone", () => {

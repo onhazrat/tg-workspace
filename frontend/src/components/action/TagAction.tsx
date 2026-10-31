@@ -32,7 +32,8 @@ export const TagAction: React.FC = () => {
   // `/ai/tag/prompt` resolves no Key, so Copy and Paste stay live with none.
   const noKey = useSelectedAiKeyId() === null
   const [pasteOpen, setPasteOpen] = useState(false)
-  const gated = useGated()
+  const generateGated = useGated("tags", generateTags)
+  const copyGated = useGated("tags-prompt", copyTagPrompt)
 
   return (
     <>
@@ -56,7 +57,7 @@ export const TagAction: React.FC = () => {
             <ActionIconButton
               icon={Copy}
               label="Copy tag prompt"
-              onClick={gated("tags-prompt", copyTagPrompt)}
+              onClick={copyGated}
             />
             <ActionIconButton
               icon={ClipboardPaste}
@@ -68,7 +69,7 @@ export const TagAction: React.FC = () => {
         }
         primary={
           <TgButton
-            onClick={gated("tags", generateTags)}
+            onClick={generateGated}
             disabled={noKey}
             title={noKey ? "Add an AI key above to run this." : undefined}
             loading={isGenerating}

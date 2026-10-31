@@ -1625,10 +1625,18 @@
       "value": 50
     },
     {
+      "comment": "How often the gate asks whether a sync it joined has finished.",
+      "expression": "2_000",
+      "file": "frontend/src/lib/complete-window/gate-flow.ts",
+      "line": 139,
+      "name": "POLL_MS",
+      "value": 2000
+    },
+    {
       "comment": "ADR-043's wait for a person; \"Continue now\" ends it sooner.",
       "expression": "5 * 60_000",
       "file": "frontend/src/lib/complete-window/gate.ts",
-      "line": 38,
+      "line": 30,
       "name": "DEADLINE_MS",
       "value": 300000
     },
@@ -1636,7 +1644,7 @@
       "comment": "Untouched, the gate syncs and continues by itself after this.",
       "expression": "30",
       "file": "frontend/src/lib/complete-window/gate.ts",
-      "line": 40,
+      "line": 32,
       "name": "AUTO_SYNC_SECONDS",
       "value": 30
     },
@@ -1924,7 +1932,7 @@
       "comment": "",
       "expression": "10 * 60 * 1000",
       "file": "frontend/src/lib/sync/run-server-sync.ts",
-      "line": 63,
+      "line": 66,
       "name": "AUTO_SYNC_PAUSE_MS",
       "value": 600000
     }

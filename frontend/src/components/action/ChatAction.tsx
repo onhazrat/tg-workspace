@@ -35,7 +35,6 @@ export const ChatAction: React.FC = () => {
     setActionDraft: setDraft,
   } = useChatContext()
   const { embeddingsEnabled } = useSettings()
-  const gated = useGated()
   const { isOffline } = useApiStatus()
   const button = startChatButton({
     draft,
@@ -69,6 +68,7 @@ export const ChatAction: React.FC = () => {
       sessionId: null,
     })
   }
+  const startGated = useGated("chat", startChat)
 
   return (
     <ActionRow
@@ -99,7 +99,7 @@ export const ChatAction: React.FC = () => {
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault()
-                if (draft.trim() && !isChatting) gated("chat", startChat)()
+                if (draft.trim() && !isChatting) startGated()
               }
             }}
             placeholder="Ask about trends, topics, or the channels in scope…"
@@ -110,7 +110,7 @@ export const ChatAction: React.FC = () => {
       primary={
         <TgButton
           data-testid="action-start-chat"
-          onClick={gated("chat", startChat)}
+          onClick={startGated}
           disabled={button.disabled}
           title={button.title}
           loading={isChatting}

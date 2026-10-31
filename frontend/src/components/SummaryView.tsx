@@ -4,7 +4,7 @@ import { useMemo, useState } from "react"
 import ReactMarkdown from "react-markdown"
 import { toast } from "sonner"
 import { ArtifactScopeLine } from "@/components/ArtifactScopeLine"
-import { runGated } from "@/components/complete-window/Gate"
+import { useRunGated } from "@/components/complete-window/Gate"
 import { GoToActionEmptyState } from "@/components/history/GoToActionEmptyState"
 import { usePostsViewEdits } from "@/contexts/PostsViewContext"
 import { useAiKeys } from "@/hooks/useAiKeys"
@@ -50,6 +50,7 @@ export const SummaryView: React.FC = () => {
   const summariesHistory = useSummariesHistory()
   const loadHistory = useInvalidateSummaries()
   const { currentSummaryId, summarizing: runInFlight, setActiveTab } = useUI()
+  const runGated = useRunGated()
   // The run fills the new-Summary tab; another Summary's tab is not generating.
   const summarizing = generatesOnTab({
     summarizing: runInFlight,
@@ -128,7 +129,6 @@ export const SummaryView: React.FC = () => {
     }
     if (!currentSummary) {
       // A new Summary goes through the gate on the Action tab (CW-02).
-      setActiveTab("action")
       runGated("summary")
       return
     }

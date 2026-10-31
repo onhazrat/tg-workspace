@@ -6,6 +6,10 @@
 import { mkdirSync, writeFileSync } from "node:fs"
 import { createRequire } from "node:module"
 import { test as base, type Page } from "@playwright/test"
+import {
+  verdict,
+  windowCheck,
+} from "../src/lib/complete-window/verdict-fixtures"
 
 export { expect } from "@playwright/test"
 
@@ -33,31 +37,10 @@ async function completeWindows(page: Page) {
       channelNames: string[]
     }
     const end = Date.now()
-    await route.fulfill({
-      json: {
-        frozenAt: end,
-        start: end - 3_600_000,
-        end,
-        channels: channelNames.map((name) => ({
-          name,
-          reasons: [],
-          reason: null,
-          lastSync: end,
-          headReadAt: end,
-          error: null,
-          stretches: [],
-          missingIds: 0,
-          syncable: true,
-          behind: false,
-          pacePerHour: null,
-          heldPosts: 0,
-          unprovenPosts: 0,
-        })),
-        heldPosts: 0,
-        unprovenPosts: 0,
-        unprovenFloor: false,
-      },
-    })
+    const channels = channelNames.map((name) =>
+      verdict(name, { lastSync: end, headReadAt: end, heldPosts: 0 }),
+    )
+    await route.fulfill({ json: windowCheck(channels, { end }) })
   })
 }
 

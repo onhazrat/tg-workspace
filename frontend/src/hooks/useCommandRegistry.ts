@@ -2,7 +2,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { getRouteApi } from "@tanstack/react-router"
 import { useCallback, useMemo } from "react"
 import { useCommandPaletteContext } from "@/components/CommandPaletteProvider"
-import { runGated } from "@/components/complete-window/Gate"
+import { useRunGated } from "@/components/complete-window/Gate"
 import { useSettingsRegistry } from "@/components/settings-page/registry"
 import { useAI } from "@/contexts/AIContext"
 import { useChatContext } from "@/contexts/ChatContext"
@@ -112,6 +112,7 @@ export function useCommandRegistry(): {
   const { view: postsView } = usePostsViewState()
   const postsEdits = usePostsViewEdits()
   const { setSummary, completePendingSummary } = useAI()
+  const runGated = useRunGated()
   const { setChatMessages } = useChatContext()
   const { getEffectiveGlobalStartTime } = useSettings()
   const { isOffline } = useApiStatus()
@@ -182,14 +183,8 @@ export function useCommandRegistry(): {
       starredOnly,
       setStarredOnly,
       // Through the gate on the Action tab, as its buttons are (CW-02).
-      handleSummarize: async () => {
-        workspaceTabs.openTab("action")
-        runGated("summary")
-      },
-      copySummaryPrompt: async () => {
-        workspaceTabs.openTab("action")
-        runGated("summary-prompt")
-      },
+      handleSummarize: async () => runGated("summary"),
+      copySummaryPrompt: async () => runGated("summary-prompt"),
       completePendingSummary,
       loadHistory,
       databaseTables: [...SERVER_TABLE_NAMES],
@@ -221,6 +216,7 @@ export function useCommandRegistry(): {
       palette,
       postsView,
       postsEdits,
+      runGated,
       selectedChannels,
       openSetting,
       setActiveTab,

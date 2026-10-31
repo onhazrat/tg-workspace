@@ -21,32 +21,55 @@ export type Reason = NonNullable<Verdict["reason"]>
 const MINUTE = 60_000
 const HOUR = 60 * MINUTE
 
-export const REASON_LABEL: Record<Reason, string> = {
-  skipped: "Skipped by you",
-  failed: "Sync failed",
-  timed_out: "Timed out",
-  refused: "Refused",
-  end: "Not synced to the end",
-  hole: "Hole in the window",
-  start: "History short of the start",
-  retention: "Before the retention cutoff",
-  frozen: "Frozen",
-  unavailable: "Unavailable",
+/** Red is something went wrong, amber is not yet, slate is no sync can help. */
+export type Tone = "red" | "amber" | "slate"
+
+/**
+ * Each reason's label, tone and word in the one-line phrase (singular,
+ * plural), keyed in the server's order: what a person can act on first.
+ */
+export const REASONS: Record<
+  Reason,
+  { label: string; tone: Tone; word: [string, string] }
+> = {
+  skipped: {
+    label: "Skipped by you",
+    tone: "amber",
+    word: ["skipped", "skipped"],
+  },
+  failed: { label: "Sync failed", tone: "red", word: ["failed", "failed"] },
+  timed_out: {
+    label: "Timed out",
+    tone: "red",
+    word: ["timed out", "timed out"],
+  },
+  refused: { label: "Refused", tone: "red", word: ["refused", "refused"] },
+  end: {
+    label: "Not synced to the end",
+    tone: "amber",
+    word: ["overdue", "overdue"],
+  },
+  hole: { label: "Hole in the window", tone: "amber", word: ["hole", "holes"] },
+  start: {
+    label: "History short of the start",
+    tone: "amber",
+    word: ["short history", "short histories"],
+  },
+  retention: {
+    label: "Before the retention cutoff",
+    tone: "slate",
+    word: ["past retention", "past retention"],
+  },
+  frozen: { label: "Frozen", tone: "slate", word: ["frozen", "frozen"] },
+  unavailable: {
+    label: "Unavailable",
+    tone: "slate",
+    word: ["unavailable", "unavailable"],
+  },
 }
 
-/** Red is something went wrong, amber is not yet, slate is no sync can help. */
-export const REASON_TONE: Record<Reason, "red" | "amber" | "slate"> = {
-  skipped: "amber",
-  failed: "red",
-  timed_out: "red",
-  refused: "red",
-  end: "amber",
-  hole: "amber",
-  start: "amber",
-  retention: "slate",
-  frozen: "slate",
-  unavailable: "slate",
-}
+/** The server's order (`REASON_ORDER`), which the generated schema pins. */
+export const REASON_ORDER = Object.keys(REASONS) as Reason[]
 
 /** How much of the window a Channel cannot vouch for, in ms. */
 export const unprovenMs = (c: Verdict, kinds?: UnprovenStretch["kind"][]) =>
@@ -80,6 +103,10 @@ export function byFix(incomplete: Verdict[]) {
 
 /** What a Channel needs looking at for; "behind" when it only lags. */
 export type Kind = Reason | "behind"
+/**
+ * The one-line phrase's order, not the reasons': what no sync can fix comes
+ * before a hole, and the end last, since lag is the routine kind.
+ */
 const KIND_ORDER: Reason[] = [
   "skipped",
   "failed",
@@ -97,19 +124,6 @@ export function kindOf(c: Verdict): Kind {
   if (!c.syncable && c.reasons.includes("frozen")) return "frozen"
   return KIND_ORDER.find((r) => c.reasons.includes(r)) ?? "end"
 }
-const KIND_WORD: Record<Reason, [string, string]> = {
-  skipped: ["skipped", "skipped"],
-  failed: ["failed", "failed"],
-  timed_out: ["timed out", "timed out"],
-  refused: ["refused", "refused"],
-  frozen: ["frozen", "frozen"],
-  unavailable: ["unavailable", "unavailable"],
-  retention: ["past retention", "past retention"],
-  hole: ["hole", "holes"],
-  start: ["short history", "short histories"],
-  end: ["overdue", "overdue"],
-}
-
 /** The longest lag among the Behind Channels, in ms. */
 export const behindLag = (incomplete: Verdict[]) =>
   Math.max(
@@ -128,7 +142,7 @@ export function measure(incomplete: Verdict[]): string {
     .filter((k) => counts.has(k))
     .map((k) => {
       const n = counts.get(k) ?? 0
-      return `${n} ${KIND_WORD[k][n === 1 ? 0 : 1]}`
+      return `${n} ${REASONS[k].word[n === 1 ? 0 : 1]}`
     })
   const behind = incomplete.filter((c) => c.behind).length
   if (behind) parts.push(`last ${span(behindLag(incomplete))} on ${behind}`)

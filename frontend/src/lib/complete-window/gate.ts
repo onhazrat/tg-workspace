@@ -1,20 +1,12 @@
 /**
  * The gate's rules (ADR-043, CW-02): what it says, what each control does to
  * the list, and what the action records. Every Action-tab button that freezes
- * a Scope goes through it; the component only shows the state this module
- * computes.
+ * a Scope goes through it; the flow (`gate-flow.ts`) runs these, and the
+ * component only shows the state the flow keeps.
  */
 
 import type { GateOutcome } from "@/client"
-import type { BannerSync } from "./banner-sync"
-import {
-  byFix,
-  incompleteOf,
-  measure,
-  type Reason,
-  type Verdict,
-  type WindowCheck,
-} from "./window-check"
+import { incompleteOf, type Verdict, type WindowCheck } from "./window-check"
 
 /** Every Action-tab button that freezes a Scope. */
 export type ActionKind =
@@ -39,7 +31,7 @@ export const DEADLINE_MS = 5 * 60_000
 /** Untouched, the gate syncs and continues by itself after this. */
 export const AUTO_SYNC_SECONDS = 30
 
-export type Choice = GateOutcome["choice"]
+export type GateChoice = GateOutcome["choice"]
 
 /**
  * The outcome the next submission sends, taken once: the gate sets it just
@@ -67,27 +59,20 @@ export function gateTitle(incomplete: Verdict[]): string {
   return behind ? `${head}, ${lag}` : head
 }
 
-/** A verdict with `reason` shown first, as the record will hold it. */
-export function withReason(v: Verdict, reason: Reason): Verdict {
-  return {
-    ...v,
-    reasons: [reason, ...v.reasons.filter((r) => r !== reason)],
-    reason,
-  }
-}
-
 /** What the check frozen at the click asks of the gate. */
-export function verdictOf(check: WindowCheck): Choice | "review" {
+export function verdictOf(check: WindowCheck): GateChoice | "review" {
   const incomplete = incompleteOf(check)
   if (incomplete.length === 0) return "complete"
   return incomplete.some((c) => c.syncable) ? "review" : "nothing_to_sync"
 }
 
-/** The Channels a sync can fix: the gate's Sync count. */
+/** The Incomplete Channels a sync can fix. */
+export const fixableOf = (check: WindowCheck | undefined) =>
+  incompleteOf(check).filter((c) => c.syncable)
+
+/** Their names: the gate's Sync count. */
 export const fixableNames = (check: WindowCheck | undefined) =>
-  incompleteOf(check)
-    .filter((c) => c.syncable)
-    .map((c) => c.name)
+  fixableOf(check).map((c) => c.name)
 
 /** Unfreeze is offered on a frozen row Telegram still serves. */
 export const canUnfreeze = (c: Verdict) =>
@@ -106,22 +91,49 @@ export function leaveOut(check: WindowCheck, names: string[]): WindowCheck {
 }
 
 /**
- * How the gate's Sync covers each Channel: join a banner sync that started at
- * or after E (its head read passes), sync again after one that started before
- * E (its head read cannot), and sync the rest now.
+ * A check as the gate shows it after its edits: Left out gone, and an
+ * unfrozen row unfrozen even when the check read it before the move landed.
  */
-export function syncPlan(
-  wanted: string[],
-  banner: BannerSync | null,
-  e: number,
-) {
-  const inFlight = (n: string) => !!banner?.names.has(n)
-  const late = !!banner && banner.startedAt >= e
+export function withEdits(
+  check: WindowCheck,
+  edits: { leftOut: string[]; unfrozen: string[] },
+): WindowCheck {
+  const thawed = new Set(edits.unfrozen)
+  const kept = leaveOut(check, edits.leftOut)
   return {
-    join: wanted.filter((n) => inFlight(n) && late),
-    after: wanted.filter((n) => inFlight(n) && !late),
-    now: wanted.filter((n) => !inFlight(n)),
+    ...kept,
+    channels: kept.channels.map((c) =>
+      thawed.has(c.name) && c.reasons.includes("frozen") ? unfrozen(c) : c,
+    ),
   }
+}
+
+const names = (list: Verdict[]) => list.map((c) => c.name)
+
+/**
+ * How the gate's Sync covers each Channel, from the check's own answer about
+ * the syncs in flight (any Account's): join one that will read its head after
+ * E, queue another behind one that already read it before E, and sync the
+ * rest at once.
+ */
+export function syncPlan(wanted: Verdict[]) {
+  return {
+    join: names(wanted.filter((c) => c.syncingSince != null && !c.syncAgain)),
+    after: names(wanted.filter((c) => c.syncAgain)),
+    atOnce: names(wanted.filter((c) => c.syncingSince == null)),
+  }
+}
+
+/**
+ * The Channels whose sync walks back to the window's Start, past the Posts
+ * it holds: those short of the Start or holed.
+ */
+export function walkBack(wanted: Verdict[], start: number) {
+  return Object.fromEntries(
+    wanted
+      .filter((c) => c.reasons.includes("start") || c.reasons.includes("hole"))
+      .map((c) => [c.name, start]),
+  )
 }
 
 /** "Synced 165: 160 now complete, 5 still not". */
@@ -132,63 +144,50 @@ export function syncedSaid(wanted: string[], still: Verdict[]): string {
   return `Synced ${wanted.length}: ${fixed} now complete${rest ? `, ${rest} still not` : ""}`
 }
 
-export type Lists = { timedOut?: string[]; leftOut?: string[] }
+/** The Channels each choice names in the record. */
+export type OutcomeNames = { timedOut?: string[]; leftOut?: string[] }
 
 /**
  * What the record says each choice did to the Channels a sync could fix;
  * `prior` is what Leave out already took out.
  */
 export function outcomeOf(
-  choice: Choice,
+  choice: GateChoice,
   frozenAt: number,
   check: WindowCheck | undefined,
-  lists: Lists = {},
+  named: OutcomeNames = {},
   prior: string[] = [],
 ): GateOutcome {
   return {
     choice,
     frozenAt,
     skipped: choice === "skipped" ? fixableNames(check) : [],
-    timedOut: lists.timedOut ?? [],
-    leftOut: [...prior, ...(lists.leftOut ?? [])],
+    timedOut: named.timedOut ?? [],
+    leftOut: [...prior, ...(named.leftOut ?? [])],
   }
 }
 
-/**
- * The toast as the action runs: what the sync did, and what the window still
- * lacks; nothing when there is nothing to say.
- */
-export function outcomeToast(
-  kind: ActionKind,
-  choice: Choice,
-  check: WindowCheck | undefined,
-  said?: string,
-): { level: "warning" | "success"; text: string } | null {
-  const incomplete = choice === "complete_only" ? [] : incompleteOf(check)
-  const lead = said ? `${said}.` : ""
-  if (incomplete.length)
-    return {
-      level: "warning",
-      text: `${lead ? `${lead} ` : ""}${ACTION_VERB[kind]} runs on an Incomplete window: ${measure(incomplete)}.`,
-    }
-  return lead ? { level: "success", text: lead } : null
-}
+/** How the gate's wait ended: every sync done, "Continue now", or the deadline. */
+export type WaitEnd = "synced" | "continued" | "deadline"
 
 /**
- * How the gate's sync ended: synced, or continued early (by a person or the
- * deadline) with what is still Incomplete of it timed out.
+ * The choice the wait records, and the Channels it times out: only those a
+ * sync was still syncing when it ended. One whose sync finished keeps its
+ * real reason, Incomplete or not.
  */
-export function afterWait(done: boolean, wanted: string[], still: Verdict[]) {
-  // ponytail: every fixable Channel still Incomplete when the wait ends is
-  // timed out, finished or not; track each Channel's end if that misleads.
-  const timedOut = done
-    ? []
-    : still.filter((c) => wanted.includes(c.name)).map((c) => c.name)
-  return { choice: (done ? "synced" : "continued_early") as Choice, timedOut }
-}
-
-/** The rows, grouped as the gate shows them. */
-export function gateGroups(check: WindowCheck | undefined) {
-  const { problems, behind, stuck } = byFix(incompleteOf(check))
-  return { problems, behind, stuck }
+export function afterWait(end: WaitEnd, wanted: string[], again: WindowCheck) {
+  const waited = new Set(wanted)
+  const timedOut =
+    end === "synced"
+      ? []
+      : incompleteOf(again)
+          .filter((c) => waited.has(c.name) && c.syncingSince != null)
+          .map((c) => c.name)
+  const choice: GateChoice =
+    end === "synced"
+      ? "synced"
+      : end === "deadline"
+        ? "timed_out"
+        : "continued_early"
+  return { choice, timedOut }
 }

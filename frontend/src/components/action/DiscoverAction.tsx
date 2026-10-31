@@ -15,7 +15,7 @@ import { useDiscoverGenerate } from "@/hooks/useDiscoverGenerate"
 export const DiscoverAction: React.FC = () => {
   const { isOffline } = useApiStatus()
   const { generate, isGenerating, channelCount } = useDiscoverGenerate()
-  const gated = useGated()
+  const generateGated = useGated("discover", generate)
   const button = discoverButton({ isGenerating, isOffline, channelCount })
 
   return (
@@ -27,7 +27,7 @@ export const DiscoverAction: React.FC = () => {
         <TgButton
           data-testid="action-generate-report"
           disabled={button.disabled}
-          onClick={gated("discover", generate)}
+          onClick={generateGated}
         >
           <Compass size={13} />
           {button.label}

@@ -1083,6 +1083,7 @@ CONSTANT_TOPICS: dict[str, str] = {
     "frontend/src/lib/citations/find-citation.ts": "ai",
     "frontend/src/lib/commands/rank-commands.ts": "appearance",
     "frontend/src/lib/commands/search-filters.ts": "appearance",
+    "frontend/src/lib/complete-window/gate-flow.ts": "sync",
     "frontend/src/lib/complete-window/gate.ts": "sync",
     "frontend/src/lib/complete-window/window-check.ts": "sync",
     "frontend/src/lib/data-freshness.ts": "server",

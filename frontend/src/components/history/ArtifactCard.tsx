@@ -79,7 +79,7 @@ export const ArtifactCard: React.FC<ArtifactCardProps> = ({
         <KindLabel artifact={artifact} />
         <StatusBadge artifact={artifact} />
         <FlagChips artifact={artifact} />
-        <CompletenessPill mark={artifact.scope?.completeness} />
+        <CompletenessPill scope={artifact.scope} />
         <PublishChip artifact={artifact} target={actions.publishTarget} />
         <span className="ml-auto shrink-0 text-app-ink/50">
           <RelativeTime timestamp={artifact.timestamp} />

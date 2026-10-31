@@ -6,10 +6,8 @@ import { useData } from "@/contexts/DataContext"
 import { useSync } from "@/contexts/SyncContext"
 import { useWindowCheck } from "@/hooks/useWindowCheck"
 import { setBannerSync, useBannerSync } from "@/lib/complete-window/banner-sync"
-import {
-  incompleteOf,
-  type WindowCheck,
-} from "@/lib/complete-window/window-check"
+import { fixableNames } from "@/lib/complete-window/gate"
+import type { WindowCheck } from "@/lib/complete-window/window-check"
 import { WindowBanner } from "./WindowBanner"
 
 /**
@@ -27,11 +25,7 @@ function SyncNow({ check }: { check: WindowCheck }) {
         {running.names.size}…
       </span>
     )
-  const fixable = new Set(
-    incompleteOf(check)
-      .filter((c) => c.syncable)
-      .map((c) => c.name),
-  )
+  const fixable = new Set(fixableNames(check))
   const targets = channels.filter((c) => fixable.has(c.name))
   if (targets.length === 0) return null
   const start = () => {
@@ -43,11 +37,7 @@ function SyncNow({ check }: { check: WindowCheck }) {
         toast.error("The sync stopped. Checking the window again.")
       },
     )
-    setBannerSync({
-      names: new Set(targets.map((c) => c.name)),
-      startedAt: Date.now(),
-      job,
-    })
+    setBannerSync({ names: new Set(targets.map((c) => c.name)) })
     // The sync's own end refetches every Posts read, this check included.
     void job.then(() => setBannerSync(null))
   }

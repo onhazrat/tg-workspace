@@ -39,7 +39,6 @@ export const SummaryAction: React.FC = () => {
   const { scrapingChannels } = useSync()
   const { handleSummarize, copySummaryPrompt } = useAI()
   const [copyingPrompt, setCopyingPrompt] = useState(false)
-  const gated = useGated()
 
   const postsInScopeCounts = useScopedPostCounts()
   const hasPostsInScope = Object.values(postsInScopeCounts).some((n) => n > 0)
@@ -65,6 +64,8 @@ export const SummaryAction: React.FC = () => {
       setCopyingPrompt(false)
     }
   }
+  const copyGated = useGated("summary-prompt", handleCopyPrompt)
+  const summarizeGated = useGated("summary", handleSummarize)
 
   return (
     <ActionRow
@@ -76,14 +77,14 @@ export const SummaryAction: React.FC = () => {
           icon={Copy}
           label="Copy summary prompt"
           hint="Copies the prompt to your clipboard and creates a history entry awaiting the external AI response."
-          onClick={gated("summary-prompt", handleCopyPrompt)}
+          onClick={copyGated}
           disabled={actionsDisabled}
           loading={copyingPrompt}
         />
       }
       primary={
         <TgButton
-          onClick={gated("summary", handleSummarize)}
+          onClick={summarizeGated}
           disabled={actionsDisabled || noKey}
           title={noKey ? "Add an AI key above to run this." : undefined}
           loading={summarizing}

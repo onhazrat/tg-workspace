@@ -3,7 +3,7 @@
  * rows' grouping and order, and the legend's toggles.
  */
 import { describe, expect, test } from "bun:test"
-
+import { verdict as base } from "./verdict-fixtures"
 import {
   initiallyHidden,
   isolated,
@@ -19,24 +19,8 @@ import {
 const HOUR = 3_600_000
 const E = Date.UTC(2026, 9, 30, 9, 7)
 
-function verdict(name: string, over: Partial<Verdict> = {}): Verdict {
-  return {
-    name,
-    reasons: [],
-    reason: null,
-    lastSync: E - HOUR,
-    headReadAt: E - HOUR,
-    error: null,
-    stretches: [],
-    missingIds: 0,
-    syncable: true,
-    behind: false,
-    pacePerHour: 1,
-    heldPosts: 10,
-    unprovenPosts: 0,
-    ...over,
-  }
-}
+const verdict = (name: string, over: Partial<Verdict> = {}) =>
+  base(name, { lastSync: E - HOUR, headReadAt: E - HOUR, ...over })
 
 const lagging = (name: string, hours: number, over: Partial<Verdict> = {}) =>
   verdict(name, {

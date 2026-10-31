@@ -5,26 +5,18 @@
 import { describe, expect, test } from "bun:test"
 
 import { nowPhrase, offersRegenerate, pillPhrase } from "./record"
+import { verdict } from "./verdict-fixtures"
 import type { Verdict } from "./window-check"
 
-function v(name: string, over: Partial<Verdict> = {}): Verdict {
-  return {
-    name,
+const v = (name: string, over: Partial<Verdict> = {}) =>
+  verdict(name, {
     reasons: ["hole"],
     reason: "hole",
-    lastSync: null,
-    headReadAt: null,
-    error: null,
-    stretches: [],
     missingIds: 2,
-    syncable: true,
-    behind: false,
-    pacePerHour: 1,
     heldPosts: 3,
     unprovenPosts: 2,
     ...over,
-  }
-}
+  })
 const frozen = v("ice", {
   reasons: ["frozen"],
   reason: "frozen",
@@ -35,6 +27,8 @@ const mark = (unprovenPosts: number, unprovenFloor = false) => ({
   unprovenFloor,
   fixable: true,
   incompleteCount: 1,
+  channelCount: 3,
+  counts: {},
 })
 
 describe("History's pill", () => {
