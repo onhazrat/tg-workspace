@@ -31,6 +31,7 @@ from typing import Any, Literal, cast
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from app.schemas.scope import FrozenScope
+from app.schemas.window_check import Completeness
 from app.services.network import TELEGRAM_MARKUP, parse_telegram_entities, utf16_len
 from app.services.telegram_web import telegram_channel_post_url, telegram_web_base_url
 
@@ -181,6 +182,37 @@ def metadata_text(rows: list[MetadataRow], omitted: Collection[str] = ()) -> str
     return "\n".join(
         [METADATA_HEADING, *(r.line for r in rows if r.key not in omitted)]
     )
+
+
+def unproven_line(scope: FrozenScope | None) -> str | None:
+    """What a scheduled post's window lacked (CW-03, ADR-043).
+
+    Its Unproven Posts and the Incomplete Channels that are not Behind, most
+    first: "~40 Posts unproven (2%): @a, @b +3". None on a Complete window,
+    one never checked, or one where only Behind Channels remain.
+    """
+    record = scope.completeness if scope else None
+    if not isinstance(record, Completeness):
+        return None
+    named = sorted(
+        (v for v in record.channels if not v.behind), key=lambda v: -v.unproven_posts
+    )
+    if not named:
+        return None
+    names = ", ".join(f"@{v.name}" for v in named[:2])
+    more = f" +{len(named) - 2}" if len(named) > 2 else ""
+    return f"{_unproven_posts(record)}: {names}{more}"
+
+
+def _unproven_posts(record: Completeness) -> str:
+    """The gate's `postsPhrase`, as a metadata line opens."""
+    n, floor = record.unproven_posts, record.unproven_floor
+    if n == 0:
+        return "Unproven Posts unknown" if floor else "No Unproven Posts expected"
+    share = n / (record.held_posts + n) * 100
+    shown = "<1" if share < 1 else str(int(share + 0.5))
+    noun = "Post" if n == 1 else "Posts"
+    return f"~{n:,}{'+' if floor else ''} {noun} unproven ({shown}%)"
 
 
 def default_metadata(

@@ -513,6 +513,7 @@ async def _auto_publish(
             destination_id=chat_dest_id,
             include_metadata=extra.get("sendMetadata") is True,
             metadata_in_first_part=extra.get("metadataInFirstPart") is True,
+            scheduled=True,
         )
     except DestinationNotFound as exc:
         logger.warning(

@@ -940,7 +940,7 @@
       "comment": "Telegram's `sendMessage` text limit, after entity parsing.",
       "expression": "4096",
       "file": "backend/app/services/publication_parts.py",
-      "line": 38,
+      "line": 39,
       "name": "TELEGRAM_MESSAGE_LIMIT",
       "value": 4096
     },

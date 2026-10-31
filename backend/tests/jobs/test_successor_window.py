@@ -25,8 +25,15 @@ from sqlmodel import Session, col, delete
 from app.core.db import engine
 from app.jobs import auto_summary
 from app.models import User
-from app.models_tg import Channel, Post, Summary, SyncJob
-from app.services import scraper_jobs
+from app.models_tg import (
+    BotCredential,
+    Channel,
+    ChatDestination,
+    Post,
+    Summary,
+    SyncJob,
+)
+from app.services import publications, scraper_jobs
 from app.services.scraper_jobs import SyncJobState, has_active_sync_job
 from app.services.summaries import get_summary
 from tests.utils.scope import stored_scope
@@ -273,3 +280,127 @@ def test_a_sync_refused_by_a_ceiling_is_recorded_refused(
     assert record["choice"] == "synced"
     (verdict,) = record["channels"]
     assert verdict["reasons"] == ["refused", "end"]
+
+
+# The metadata line a scheduled successor's auto-publish carries.
+
+
+def _verdict(name: str, unproven: float, *, behind: bool = False) -> dict[str, Any]:
+    return {
+        "name": name,
+        "reasons": ["end"],
+        "reason": "end",
+        "lastSync": None,
+        "headReadAt": None,
+        "error": None,
+        "stretches": [{"kind": "end", "from": START, "to": E}],
+        "missingIds": 0,
+        "syncable": True,
+        "behind": behind,
+        "pacePerHour": unproven,
+        "heldPosts": 10,
+        "unprovenPosts": unproven,
+    }
+
+
+def _published(
+    session: Session,
+    user: User,
+    monkeypatch: pytest.MonkeyPatch,
+    channels: list[dict[str, Any]],
+) -> str:
+    """Auto-publish a successor whose record holds `channels` as Incomplete,
+    with metadata sent; answers the text Telegram would get."""
+    names = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot"]
+    unproven = round(sum(c["unprovenPosts"] for c in channels))
+    completeness = {
+        "choice": "continued_early",
+        "frozenAt": NOW,
+        "start": START,
+        "end": E,
+        "channelCount": len(names),
+        "heldPosts": 2000 - unproven,
+        "channels": channels,
+        "leftOut": [],
+        "unprovenPosts": unproven,
+        "unprovenFloor": False,
+        "fixable": bool(channels),
+        "incompleteCount": len(channels),
+    }
+    session.add(
+        BotCredential(
+            id=f"bot-{user.id}", user_id=user.id, name="b", token_encrypted="enc:x"
+        )
+    )
+    session.add(
+        ChatDestination(id=f"dest-{user.id}", user_id=user.id, name="d", chat_id="1")
+    )
+    summary = Summary(
+        id=f"sum-{uuid.uuid4().hex[:8]}",
+        user_id=user.id,
+        text="body",
+        scope=stored_scope(
+            channels=names, start=START, end=E, completeness=completeness
+        ),
+        language="English",
+        model="m",
+        post_count=0,
+        timestamp=NOW,
+        extra={
+            "autoPublish": True,
+            "publishBotId": f"bot-{user.id}",
+            "publishChatId": f"dest-{user.id}",
+            "sendMetadata": True,
+        },
+    )
+    session.add(summary)
+    session.commit()
+    sent: list[str] = []
+
+    async def send_parts(*_a: Any, parts: list[str], **_kw: Any) -> dict[str, Any]:
+        sent.extend(parts)
+        return {"success": True, "results": [], "telemetry": []}
+
+    monkeypatch.setattr(publications, "send_parts", send_parts)
+    asyncio.run(auto_summary._auto_publish(session, summary, owner_id=user.id))
+    assert sent, "nothing was published"
+    return "\n".join(sent)
+
+
+def test_the_metadata_line_names_the_incomplete_channels_not_behind(
+    session: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """**Mutation:** name Behind Channels too and "+4" replaces "+3"."""
+    text = _published(
+        session,
+        user,
+        monkeypatch,
+        [
+            _verdict("charlie", 4),
+            _verdict("alpha", 20),
+            _verdict("foxtrot", 0.4, behind=True),
+            _verdict("bravo", 10),
+            _verdict("delta", 3),
+            _verdict("echo", 2.6),
+        ],
+    )
+
+    assert "\n~40 Posts unproven (2%): @alpha, @bravo +3" in text
+
+
+def test_no_metadata_line_when_only_behind_channels_remain(
+    session: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    text = _published(session, user, monkeypatch, [_verdict("alpha", 12, behind=True)])
+
+    assert "Analysis Metadata" in text
+    assert "unproven" not in text.lower()
+
+
+def test_no_metadata_line_on_a_complete_window(
+    session: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    text = _published(session, user, monkeypatch, [])
+
+    assert "Analysis Metadata" in text
+    assert "unproven" not in text.lower()
