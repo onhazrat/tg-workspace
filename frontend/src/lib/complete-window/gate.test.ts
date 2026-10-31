@@ -11,6 +11,7 @@ import {
   gateTitle,
   leaveOut,
   outcomeOf,
+  rowProgress,
   setGateOutcome,
   syncedSaid,
   syncPlan,
@@ -111,6 +112,29 @@ describe("the Sync over the syncs in flight", () => {
       v("lag"),
     ]
     expect(walkBack(wanted, E - 9)).toEqual({ short: E - 9, holed: E - 9 })
+  })
+})
+
+describe("each row while the gate syncs", () => {
+  const at = { own: true, scraping: false, seen: false, now: E }
+  test("its own sync spins, then says synced; queued before it starts", () => {
+    expect(rowProgress(v("a"), { ...at, scraping: true })).toEqual({
+      spin: true,
+      text: "",
+    })
+    expect(rowProgress(v("a"), at)?.text).toBe("queued")
+    expect(rowProgress(v("a"), { ...at, seen: true })?.text).toBe("synced")
+  })
+
+  test("another's sync says when it started, and whether one follows", () => {
+    const flying = v("b", { syncingSince: E - 2 * 60_000 })
+    expect(rowProgress(flying, { ...at, own: false })?.text).toBe(
+      "syncing, started 2 min ago",
+    )
+    expect(
+      rowProgress({ ...flying, syncAgain: true }, { ...at, own: false })?.text,
+    ).toBe("syncing, started 2 min ago, another to follow")
+    expect(rowProgress(v("c"), { ...at, own: false })).toBeNull()
   })
 })
 

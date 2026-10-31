@@ -6,7 +6,12 @@
  */
 
 import type { GateOutcome } from "@/client"
-import { incompleteOf, type Verdict, type WindowCheck } from "./window-check"
+import {
+  incompleteOf,
+  span,
+  type Verdict,
+  type WindowCheck,
+} from "./window-check"
 
 /** Every Action-tab button that freezes a Scope. */
 export type ActionKind =
@@ -152,6 +157,25 @@ export function syncedSaid(wanted: string[], still: Verdict[]): string {
   const fixed = wanted.filter((n) => !left.has(n)).length
   const rest = wanted.length - fixed
   return `Synced ${wanted.length}: ${fixed} now complete${rest ? `, ${rest} still not` : ""}`
+}
+
+/**
+ * What a row says while the gate syncs, or while a sync in flight it will
+ * join runs: a spinner for its own sync, "syncing, started 2 min ago" for
+ * another's, then "queued" or "synced"; nothing when neither applies.
+ */
+export function rowProgress(
+  c: Verdict,
+  at: { own: boolean; scraping: boolean; seen: boolean; now: number },
+): { spin: boolean; text: string } | null {
+  if (at.scraping) return { spin: true, text: "" }
+  if (c.syncingSince != null)
+    return {
+      spin: true,
+      text: `syncing, started ${span(at.now - c.syncingSince)} ago${c.syncAgain ? ", another to follow" : ""}`,
+    }
+  if (!at.own) return null
+  return { spin: false, text: at.seen ? "synced" : "queued" }
 }
 
 /** The Channels each choice names in the record. */

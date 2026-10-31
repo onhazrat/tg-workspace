@@ -28,6 +28,7 @@ import {
   canUnfreeze,
   fixableNames,
   gateTitle,
+  rowProgress,
 } from "@/lib/complete-window/gate"
 import {
   continueGate,
@@ -145,22 +146,19 @@ function useGateIO(): GateIO {
 function RowStatus({ c, syncing }: { c: Verdict; syncing: boolean }) {
   const { scrapingChannels } = useSync()
   const seen = useRef(false)
-  if (syncing && scrapingChannels.has(c.name)) {
-    seen.current = true
-    return <Loader2 size={13} className="animate-spin text-app-ink/50" />
-  }
-  if (c.syncingSince != null)
-    return (
-      <span className="inline-flex items-center gap-1 text-[11px] text-app-ink/50">
-        <Loader2 size={11} className="animate-spin" /> syncing, started{" "}
-        {span(Date.now() - c.syncingSince)} ago
-        {c.syncAgain && ", another to follow"}
-      </span>
-    )
-  if (!syncing) return null
+  const scraping = syncing && scrapingChannels.has(c.name)
+  seen.current ||= scraping
+  const progress = rowProgress(c, {
+    own: syncing,
+    scraping,
+    seen: seen.current,
+    now: Date.now(),
+  })
+  if (!progress) return null
   return (
-    <span className="text-[11px] text-app-ink/40">
-      {seen.current ? "synced" : "queued"}
+    <span className="inline-flex items-center gap-1 text-[11px] text-app-ink/50">
+      {progress.spin && <Loader2 size={11} className="animate-spin" />}
+      {progress.text}
     </span>
   )
 }
