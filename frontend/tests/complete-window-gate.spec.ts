@@ -228,24 +228,30 @@ test("the countdown fills the button, and untouched it syncs at 30 s", async ({
   await expect(button(page, "Continue now")).toBeVisible()
 })
 
-test("an edit stops the countdown; Leave out, then continue without syncing", async ({
-  page,
-}) => {
+test("an edit stops the countdown for good", async ({ page }) => {
   await page.clock.install()
   const w = await world(page)
   await generate(page)
   await expect(syncButton(page)).toHaveText(/· \d+s/)
 
   await button(page, "Leave out").click()
-  await expect(
-    page.getByText(`Left @${w.cold} out of the selection.`),
-  ).toBeVisible()
-  await expect(gate(page)).not.toContainText("No sync can fix these")
   await expect(syncButton(page)).toHaveText("Sync 1")
   await pauseClock(page)
   await page.clock.fastForward(31_000)
   await expect(syncButton(page)).toHaveText("Sync 1")
   expect(w.sync.starts).toHaveLength(0)
+})
+
+// On the real clock: a report sent from a page clock run ahead would end its
+// window in the server's future.
+test("Leave out, then continue without syncing", async ({ page }) => {
+  const w = await world(page)
+  await generate(page)
+  await button(page, "Leave out").click()
+  await expect(
+    page.getByText(`Left @${w.cold} out of the selection.`),
+  ).toBeVisible()
+  await expect(gate(page)).not.toContainText("No sync can fix these")
 
   await button(page, "Continue without syncing").click()
   await expect.poll(() => w.frozen.length).toBe(1)
