@@ -136,6 +136,11 @@ test.describe("command palette keyboard", () => {
     await channelHandle.press("Enter")
 
     await expect(page.getByTestId("command-palette")).toBeVisible()
+    // The grid is virtualized: Channels other specs in this shard left behind
+    // can push a new one past the rendered rows, so narrow the grid to it.
+    await page.keyboard.press("Escape")
+    await expect(page.getByTestId("command-palette")).not.toBeVisible()
+    await page.getByPlaceholder("Search channels...").fill(channelName)
     await expect(
       page.locator("#tour-channel-grid").getByText(`@${channelName}`),
     ).toBeVisible({
