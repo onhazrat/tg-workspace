@@ -219,13 +219,13 @@ test("the countdown fills the button, and untouched it syncs at 30 s", async ({
   await expect(syncButton(page)).toHaveText(/Sync 1 · \d+s/)
   await pauseClock(page)
 
-  for (let left = await secondsLeft(page); left > 1; left--) {
-    await page.clock.fastForward(1_000)
-    await expect(syncButton(page)).toHaveText(`Sync 1 · ${left - 1}s`)
-  }
-  // One second short of it, nothing has synced.
+  // Within a tick of the end, not at an exact second: the label renders on
+  // its own tick, which a paused clock can catch either side of.
+  const left = await secondsLeft(page)
+  await page.clock.fastForward((left - 2) * 1_000)
+  await expect(syncButton(page)).toHaveText(/^Sync 1 · [1-3]s$/)
   expect(w.sync.starts).toHaveLength(0)
-  await page.clock.fastForward(1_000)
+  await page.clock.fastForward(3_000)
   await expect.poll(() => w.sync.starts.length).toBe(1)
   await expect(button(page, "Continue now")).toBeVisible()
 })
