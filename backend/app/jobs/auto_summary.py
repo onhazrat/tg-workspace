@@ -11,9 +11,11 @@ Attempt, visible in History, and the chain moves on from it.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 import uuid
+from collections.abc import Collection
 from typing import Any
 
 from sqlmodel import Session, col, select
@@ -24,8 +26,14 @@ from app.jobs.summary_generation import start_attempt
 from app.models_tg import Summary, utc_now
 from app.schemas.scope import FrozenScope
 from app.schemas.summaries import SummaryDerivation
+from app.schemas.window_check import (
+    ChannelVerdict,
+    Choice,
+    Completeness,
+    GateOutcome,
+)
+from app.services.analysis_window import server_now_ms
 from app.services.artifact_coverage import MISSING_POSTS_KEY
-from app.services.channel_setting_groups import channel_is_frozen, load_groups_by_id
 from app.services.follows import followed_channels_for
 from app.services.logs import upsert_publish_log
 from app.services.publications import (
@@ -33,7 +41,7 @@ from app.services.publications import (
     resolve_destination,
     send_publication,
 )
-from app.services.scraper_jobs import create_job, has_active_sync_job
+from app.services.scraper_jobs import channels_in_flight, create_job
 from app.services.summaries import (
     FAILED_STATUS,
     derived_scope,
@@ -41,7 +49,8 @@ from app.services.summaries import (
     submit_summary,
 )
 from app.services.sync_meta import touch_sync
-from app.services.sync_orchestrator import run_sync_job
+from app.services.sync_orchestrator import WALK_BACK_KEY, run_sync_job
+from app.services.window_check import check_window, freeze_record
 
 logger = logging.getLogger(__name__)
 
@@ -160,46 +169,144 @@ def _is_due(summary: Summary, now: int) -> bool:
     return now >= target_time
 
 
-async def _sync_channels_for_summary(
-    session: Session,
-    channel_names: list[str],
-    end_ts: int,
-    owner_id: uuid.UUID,
-) -> None:
-    """Sync the stale channels this Summary reads, as the Summary's owner.
+#: How long a successor waits on its syncs before it freezes anyway: the
+#: gate's deadline (ADR-043). The syncs carry on behind it.
+SUCCESSOR_SYNC_DEADLINE_S = 300.0
+#: How often it asks whether a sync it joined has finished.
+IN_FLIGHT_POLL_S = 2.0
 
-    `owner_id` is non-optional because its only caller now has a narrowed one:
-    the `SyncJob` this creates is `USER_OWNED`, and `str(x) if x else None` was
-    the spelling that let the scheduler mint one nobody owns (ticket 21).
+#: Syncs a successor stopped waiting for, held so they run to their end.
+_left_running: set[asyncio.Future[Any]] = set()
+
+
+async def _landed(names: list[str]) -> None:
+    """Until no sync in flight is still syncing any of `names`."""
+    while names and channels_in_flight(names):
+        await asyncio.sleep(IN_FLIGHT_POLL_S)
+
+
+async def _sync_own(
+    names: list[str], *, walk_back: set[str], start: int, owner_id: uuid.UUID
+) -> list[str]:
+    """Sync `names` as the Summary's owner; answers those whose sync was refused.
+
+    `owner_id` is non-optional: the `SyncJob` this creates is `USER_OWNED`, and
+    `str(x) if x else None` was the spelling that let the scheduler mint one
+    nobody owns (ticket 21). A Channel in `walk_back` walks back to the Start.
     """
-    if has_active_sync_job():
-        return
-    # Paired with the follow since ticket 22: "is this channel frozen" is a
-    # question about this account's follow, not about the shared Channel.
-    operator_channels = {
-        channel.name: (channel, follow)
-        for channel, follow in followed_channels_for(session, user_id=owner_id)
-    }
-    groups_by_id = load_groups_by_id(session)
-    stale = []
-    for name in channel_names:
-        pair = operator_channels.get(name)
-        if pair is None:
-            continue
-        ch = pair[0]
-        if (
-            not channel_is_frozen(pair, groups_by_id)
-            and (ch.last_updated or 0) < end_ts
-        ):
-            stale.append(ch)
-    if not stale:
-        return
+    with Session(engine) as session:
+        ids = {
+            channel.name: channel.id
+            for channel, _ in followed_channels_for(session, user_id=owner_id)
+        }
+    entries = [(ids[n], n) for n in names if n in ids]
+    if not entries:
+        return []
     job = await create_job(
-        channel_entries=[(ch.id, ch.name) for ch in stale],
+        channel_entries=entries,
         source="Auto-Regenerate Summary (scheduler)",
         user_id=str(owner_id),
+        channel_meta_by_id={
+            cid: {WALK_BACK_KEY: start} for cid, n in entries if n in walk_back
+        },
     )
     await run_sync_job(job, owner_id)
+    # A Budget ceiling or a disabled Request kind skips a Channel's sync.
+    return [c.channel_name for c in job.channels.values() if c.status == "skipped"]
+
+
+def _sync_plan(names: list[str], e: int) -> tuple[list[str], list[str], list[str]]:
+    """The gate's `syncPlan`, server-side: join a sync in flight that started
+    at or after E, queue another behind one that started before it (its head
+    read cannot pass test 1), and sync the rest now."""
+    flight = channels_in_flight(names)
+    join = [n for n in names if n in flight and flight[n] >= e]
+    after = [n for n in names if n in flight and flight[n] < e]
+    now = [n for n in names if n not in flight]
+    return join, after, now
+
+
+async def _sync_window(
+    fixable: list[ChannelVerdict], *, start: int, e: int, owner_id: uuid.UUID
+) -> tuple[bool, list[str]]:
+    """Sync what a sync can repair, up to the deadline: whether it all
+    finished, and the Channels whose sync was refused."""
+    names = [v.name for v in fixable]
+    walk_back = {v.name for v in fixable if {"start", "hole"} & set(v.reasons)}
+    join, after, now = _sync_plan(names, e)
+    refused: list[str] = []
+
+    async def own(these: list[str]) -> None:
+        if these:
+            refused.extend(
+                await _sync_own(
+                    these, walk_back=walk_back, start=start, owner_id=owner_id
+                )
+            )
+
+    async def behind() -> None:
+        await _landed(after)
+        await own(after)
+
+    syncs = asyncio.ensure_future(asyncio.gather(_landed(join), own(now), behind()))
+    done, _ = await asyncio.wait({syncs}, timeout=SUCCESSOR_SYNC_DEADLINE_S)
+    if not done:
+        _left_running.add(syncs)
+        syncs.add_done_callback(_left_running.discard)
+    return bool(done), refused
+
+
+def _record(
+    scope: FrozenScope,
+    owner_id: uuid.UUID,
+    gate: GateOutcome,
+    refused: Collection[str] = (),
+) -> Completeness:
+    with Session(engine) as session:
+        return freeze_record(
+            session,
+            user_id=owner_id,
+            names=list(scope.channels),
+            start=scope.start,
+            end=scope.end,
+            gate=gate,
+            refused=refused,
+        )
+
+
+async def _complete_window(scope: FrozenScope, owner_id: uuid.UUID) -> Completeness:
+    """The successor's gate, unattended (CW-03, ADR-043).
+
+    It checks the window, syncs every Incomplete Channel a sync can repair,
+    whatever else is syncing on the deployment, waits up to the deadline and
+    freezes the record as a manual action does: `synced`, or with the
+    Channels still Incomplete timed out.
+    """
+    frozen_at = server_now_ms()
+    with Session(engine) as session:
+        check = check_window(
+            session,
+            user_id=owner_id,
+            names=list(scope.channels),
+            start=scope.start,
+            end=scope.end,
+            frozen_at=frozen_at,
+        )
+    incomplete = [v for v in check.channels if v.reasons]
+    fixable = [v for v in incomplete if v.syncable]
+    if not fixable:
+        choice: Choice = "nothing_to_sync" if incomplete else "complete"
+        return _record(scope, owner_id, GateOutcome(choice=choice, frozenAt=frozen_at))
+    done, refused = await _sync_window(
+        fixable, start=scope.start, e=min(scope.end, frozen_at), owner_id=owner_id
+    )
+    gate = GateOutcome(
+        choice="synced" if done else "continued_early",
+        frozenAt=frozen_at,
+        # Only those the record still finds Incomplete take it.
+        timedOut=[] if done else [v.name for v in fixable],
+    )
+    return _record(scope, owner_id, gate, refused)
 
 
 async def _regenerate_one(
@@ -225,9 +332,7 @@ async def _regenerate_one(
     # The successor's Scope, which `submit_summary` derives again from the
     # same function (AW-06): the Channels to sync, and the window it covers.
     derived = derived_scope(summary, "successor")
-    await _sync_channels_for_summary(
-        session, list(derived.channels), derived.end, owner_id
-    )
+    completeness = await _complete_window(derived, owner_id)
 
     new_id = str(int(time.time() * 1000))
     new_extra = {
@@ -275,6 +380,7 @@ async def _regenerate_one(
         language=summary.language,
         model=summary.model,
         extra=new_extra,
+        completeness=completeness,
     )
     touch_sync(session, "summaries")
     # An unattended regeneration is still the owner's Artifact, so it is

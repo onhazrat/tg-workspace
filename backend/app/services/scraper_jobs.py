@@ -740,6 +740,34 @@ def _held(sync_mode: str) -> bool:
     return not is_kind_enabled(kind_for_sync_mode(sync_mode))
 
 
+def channels_in_flight(names: list[str]) -> dict[str, int]:
+    """Which of `names` a sync job is still syncing, and when it started.
+
+    Any Account's job, since the corpus is shared (CW-03, ADR-043): a scheduled
+    successor joins one rather than syncing the Channel twice. Read from the
+    rows, at the flush interval's freshness; a held job keeps nobody busy.
+    With several, the latest start, the one most likely to read past E.
+    """
+    if not names:
+        return {}
+    wanted = set(names)
+    with Session(engine) as session:
+        rows = session.exec(
+            select(
+                SyncJobRow.created_at, SyncJobRow.sync_mode, SyncJobRow.channels
+            ).where(col(SyncJobRow.status).in_(("pending", "running")))
+        ).all()
+    found: dict[str, int] = {}
+    for started, mode, channels in rows:
+        if _held(mode):
+            continue
+        for ch in channels or []:
+            name = ch.get("channelName")
+            if name in wanted and ch.get("status") in ("pending", "running"):
+                found[name] = max(found.get(name, 0), started)
+    return found
+
+
 def has_active_sync_job() -> bool:
     """True when a sync job is pending or running — running *or still queued*.
 

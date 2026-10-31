@@ -32,6 +32,7 @@ Artifact freezes (CW-02). Refused is the scheduler's (CW-03).
 from __future__ import annotations
 
 import uuid
+from collections.abc import Collection
 from dataclasses import dataclass
 from typing import Any
 
@@ -467,11 +468,15 @@ def freeze_record(
     start: int,
     end: int,
     gate: GateOutcome,
+    refused: Collection[str] = (),
 ) -> Completeness:
     """The record an Artifact freezes (CW-02): the check run here, at the
     gate's moment, with the person's skips and the gate's timeouts laid over
     the server's own verdicts. Only a Channel this check finds Incomplete
-    takes one; the client's view of the check is never the record."""
+    takes one; the client's view of the check is never the record.
+
+    `refused` is the scheduler's (CW-03): Channels its own sync was refused,
+    by a Budget ceiling or a disabled Request kind. No client sends it."""
     check = check_window(
         session,
         user_id=user_id,
@@ -481,6 +486,7 @@ def freeze_record(
         frozen_at=gate.frozen_at,
     )
     said: dict[str, Reason] = dict.fromkeys(gate.timed_out, "timed_out")
+    said.update(dict.fromkeys(refused, "refused"))
     said.update(dict.fromkeys(gate.skipped, "skipped"))
     incomplete = [_overlaid(v, said.get(v.name)) for v in check.channels if v.reasons]
     return Completeness(

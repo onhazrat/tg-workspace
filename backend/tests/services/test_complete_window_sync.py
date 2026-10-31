@@ -200,3 +200,56 @@ def test_the_backfill_deletes_only_gaps_whose_post_is_stored(
 
     assert _gap_ids(session, channel.name) == [5]
     assert _gap_ids(session, other) == [4]
+
+
+def test_a_walk_back_pages_past_held_posts_to_the_start(
+    session: Session, channel: Channel, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A Channel the start or continuity test failed walks back to the Start
+    (CW-03), past the held Posts an ordinary sync stops at, and no further.
+
+    **Mutation:** ignore `WALK_BACK_KEY` and the walk stops on the first page.
+    """
+    now = int(time.time() * 1000)
+    for post_id in (98, 99):
+        session.add(Post(channel_name=channel.name, post_id=post_id, timestamp=now))
+    session.commit()
+    pages: dict[int | None, list[tuple[int, int]]] = {
+        None: [(98, now), (99, now), (100, now)],
+        98: [(60, now - 3_000_000), (61, now - 2_000_000)],
+        60: [(20, now - 9_000_000)],
+        20: [(5, now - 20_000_000)],
+    }
+    asked: list[int | None] = []
+
+    async def fetch(_ctx: Any, *, before_id: int | None, **_kw: Any) -> Any:
+        asked.append(before_id)
+        posts = pages[before_id]
+        return {
+            "posts": [{"id": i, "text": "p", "timestamp": ts} for i, ts in posts],
+            "latestId": 100,
+            "nextBeforeId": min(i for i, _ in posts),
+        }
+
+    monkeypatch.setattr(sync_orchestrator, "_fetch_one_page", fetch)
+    ch_state = ChannelSyncState(
+        channel_id=channel.id,
+        channel_name=channel.name,
+        metadata={sync_orchestrator.WALK_BACK_KEY: now - 5_000_000},
+    )
+    job = SyncJobState(
+        job_id="cw-walk-back",
+        source="test",
+        channels={channel.id: ch_state},
+        user_id=str(user.id),
+        sync_mode="auto",
+    )
+
+    asyncio.run(sync_orchestrator.sync_single_channel(job, ch_state, user_id=user.id))
+
+    assert asked == [None, 98, 60], "it stopped short of, or walked past, the Start"
+    session.expire_all()
+    held = session.exec(
+        select(Post.post_id).where(Post.channel_name == channel.name)
+    ).all()
+    assert sorted(held) == [20, 60, 61, 98, 99, 100]

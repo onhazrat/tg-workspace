@@ -23,6 +23,7 @@ from app.core import acting_owner
 from app.models_tg import Summary, SummaryPayload, utc_now
 from app.schemas.scope import FrozenScope, ScopeSubmission, scope_key
 from app.schemas.summaries import DerivationMode, SummaryDerivation
+from app.schemas.window_check import Completeness
 from app.services.artifact_coverage import MISSING_POSTS_KEY, freeze
 from app.services.serialization import to_snake
 from app.services.tenancy import (
@@ -516,6 +517,7 @@ def submit_summary(
     model: str | None = None,
     extra: dict[str, Any] | None = None,
     now_ms: int | None = None,
+    completeness: Completeness | None = None,
 ) -> dict[str, Any]:
     """Open a Summary by freezing the Scope it will be produced from.
 
@@ -541,6 +543,9 @@ def submit_summary(
     design writes no Scope at all, so the same chain recorded a complete Scope
     on the ticks a worker happened to run and nothing on the ticks a tab
     happened to be open.
+
+    `completeness` is the scheduler's record of a derived window (CW-03),
+    frozen after its own sync; a stated Scope freezes its record from `gate`.
     """
     if session.get(Summary, summary_id) is not None:
         raise HTTPException(status_code=409, detail="Summary already exists")
@@ -555,6 +560,7 @@ def submit_summary(
         # a cross-account read whichever way the flag is set.
         assert_owner_on_write(predecessor.user_id, user_id, detail=SUMMARY_NOT_FOUND)
         scope = derived_scope(predecessor, derived_from.mode)
+        scope.completeness = completeness
     elif submission is not None:
         scope = freeze(session, submission, user_id=user_id, now_ms=now_ms)
     else:

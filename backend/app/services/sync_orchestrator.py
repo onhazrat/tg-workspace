@@ -434,6 +434,29 @@ class _ChannelSyncCtx:
     scrape_cutoff_ms: int
     effective_start_time: int
     media_settings: dict[str, Any] = field(default_factory=dict)
+    #: Walk from the head back to here, past held Posts (`WALK_BACK_KEY`).
+    walk_back_to: int = 0
+
+
+#: A job Channel's metadata key: walk back to this moment (epoch ms), past the
+#: Posts an incremental pass stops at. A scheduled successor sets it on a
+#: Channel whose start or continuity test failed (CW-03, ADR-043).
+WALK_BACK_KEY = "walkBackTo"
+
+
+def _walk_back(ctx: _ChannelSyncCtx, metadata: Any) -> None:
+    """Turn `ctx` into a walk from the head back to `WALK_BACK_KEY`.
+
+    A backfill pass from the head: held Posts are skipped instead of ending
+    the walk, and the deeper backfill to the cutoff is the scheduler's own.
+    """
+    to = metadata.get(WALK_BACK_KEY) if isinstance(metadata, dict) else None
+    if not isinstance(to, int):
+        return
+    ctx.walk_back_to = to
+    ctx.needs_backfill = False
+    if ctx.retrieval_pass == "incremental":
+        ctx.retrieval_pass = "backfill"
 
 
 async def _cache_scraped_post_thumbs(
@@ -1070,10 +1093,11 @@ def _apply_scrape_page(
             return result
 
         oldest_ts = min((p.get("timestamp") or 0 for p in posts), default=0)
+        stop_at = max(ctx.scrape_cutoff_ms, ctx.walk_back_to)
         if (
             ctx.retrieval_pass in ("initial", "backfill")
-            and ctx.scrape_cutoff_ms > 0
-            and oldest_ts < ctx.scrape_cutoff_ms
+            and stop_at > 0
+            and oldest_ts < stop_at
         ):
             result.stop_sync = True
             session.commit()
@@ -2023,6 +2047,7 @@ async def _sync_claimed_channel(
         await touch_job(job, ch_state)
         return False
 
+    _walk_back(ctx, ch_state.metadata)
     walk = _ChannelWalk()
     due_reason = (
         ch_state.metadata.get("dueReason")
