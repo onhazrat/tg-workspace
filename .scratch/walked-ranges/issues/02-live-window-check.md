@@ -15,7 +15,7 @@ updates decisions.
 
 **Blocked by:** WR-01 (the check must answer one Channel cheaply).
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] The worker sends a notification carrying only the Channel's name when a walk applies a page that stored Posts or read the head, and when a Hole closes, on its own channel of the existing notification module.
 - [x] The API keeps one listening connection, fans out in process, and serves one Account-wide event stream of followed Channel names, gathered for up to a second; an unfollowed Channel never reaches a subscriber.
@@ -29,3 +29,4 @@ updates decisions.
 ## Comments
 
 - 2026-11-01: implemented on `claude/charming-sinoussi-3d3d4e`. Three departures, each because the check reads syncs in flight from the job row, which is flushed every 5 s: a Channel is also announced when the flush records its sync over, every Channel of a job once the job ends, and every Channel of a job a worker restart fails. Without them the gate waits on a landing nobody announces. The gate listens from its click to its finish, so review rows flip too, and its final full check after the wait stays (one 300 ms ask). Left out: a heartbeat, so a stream that dies silently (a laptop asleep) is not noticed until the page reloads.
+- 2026-11-01: merged into main in 7fc8becb (#257). Checked on staging after deploy: the banner updates about a second after a sync stores Posts. Open: none.
