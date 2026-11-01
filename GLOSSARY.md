@@ -58,9 +58,35 @@ _Avoid_: probe, probe row, map row
 An Operator's standing adjustment to how soon a Directory entry is fetched
 again, relative to the entries waiting beside it. Positive means sooner and
 negative means later; zero, the default, leaves the order the Directory chose.
-It changes nothing about how the entry is shown, and it stays until an Operator
-changes it, whatever the fetches in between find.
+It orders entries that are already waiting and never makes one due sooner; when
+an entry comes due is its Refresh target's business. It changes nothing about
+how the entry is shown, and it stays until an Operator changes it, whatever the
+fetches in between find.
 _Avoid_: pin, promotion, rank
+
+**Refresh**:
+Fetching a Directory entry again because its answer has grown old, keeping that
+answer until the new one arrives. A live entry comes due for one on its own; an
+Operator can also ask for one at any time.
+_Avoid_: re-probe, re-fetch, update
+
+**Recheck**:
+Fetching a Directory entry again because its answer is wrong, discarding that
+answer first. Only ever asked for; nothing comes due for a Recheck.
+_Avoid_: refresh, retry
+
+**Refresh target**:
+How many new Posts a Channel is expected to have published when its Directory
+entry comes due for a Refresh. Each entry may carry its own; one without uses
+the deployment's. The deployment's shortest and longest wait between Refreshes
+bound it either way.
+_Avoid_: N, threshold, refresh posts
+
+**Posting rate**:
+How many Posts a Channel publishes per week, measured from its Directory entry's
+sample up to the fetch that took the sample. A Channel that has gone quiet since
+its last Post therefore reads slower, not as busy as its last burst.
+_Avoid_: posts per week (outside the UI label), activity, frequency
 
 **Channel counters**:
 The five counts Telegram shows on a Channel's page: subscribers, photos,
