@@ -48,3 +48,11 @@ def test_a_change_replays_the_mutations_it_touches() -> None:
     assert mutate.selected([a, b], registry, ["backend/app/main.py"]) == []
     assert mutate.selected([a, b], registry, [registry]) == [a, b]
     assert mutate.selected([a, b], registry, []) == [a, b]
+
+
+def test_a_run_refused_the_test_database_is_neither_red_nor_green() -> None:
+    assert mutate.verdict(1) == "red"
+    assert mutate.verdict(0) == "green"
+    # A second pytest session stops before running anything (conftest.py);
+    # reading its exit as red would certify a guard nobody ran.
+    assert mutate.verdict(75) == "refused"

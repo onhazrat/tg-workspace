@@ -4,9 +4,8 @@ Reached from the root `CLAUDE.md` when a guard fails, and before you add, change
 or delete one.
 
 The rules in `backend/CLAUDE.md` and `frontend/CLAUDE.md` are not all equal.
-Prose decayed before: `CLAUDE.md` said *"never inline `BaseModel` in a route
-module"* from B1 onward, and three modules were violating it when the guards
-below were written.
+Prose decayed before: three route modules inlined `BaseModel` while
+`CLAUDE.md` forbade it.
 
 Each row names the invariant and where it is asserted. **The row is the pointer,
 not the summary.** Open the file for the full list of what it checks and why.
@@ -85,6 +84,7 @@ not the summary.** Open the file for the full list of what it checks and why.
 | `backend/tests/services/test_lane_selection.py` | the **real** enqueue picks the lane; the boundary is `>=`; zero is always best-effort and negative unlimited; a failed ledger read picks normal; no new path syncs outside the ladder | test |
 | `backend/tests/services/test_quota_ceilings.py` | a zero allowance degrades, a zero ceiling blocks; each number resolves apart; the refusal reaches the walk; an unreadable ledger refuses | test |
 | `backend/tests/deployment/test_tg_cleanup_inventory.py` | every `tg_*` table is truncated between tests or excused, in both directions | test |
+| `backend/tests/test_one_pytest_session_per_database.py` | one pytest session per test database | test |
 | `backend/tests/deployment/test_claude_md_budget.py` | the four agent docs stay in budget and cite no moved path; the root points at the other three; every `*Enforced:*` pointer is a row here; runs at commit | test |
 | `backend/tests/deployment/test_adr_index.py` | every ADR has a row in `docs/adr/README.md` and lives in `docs/adr/` | test |
 | `backend/tests/api/test_send_email_call_sites.py` | every `send_email` caller checks `emails_enabled` first | test |
