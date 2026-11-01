@@ -55,3 +55,4 @@ The locked migration decisions of June 2026 sit outside this series, in
 | [ADR-043](./ADR-043-complete-window.md) | An action runs on a Complete window or records why not; the old Incomplete becomes Cut short |
 | [ADR-044](./ADR-044-walked-ranges.md) | Continuity is a Walked range, not a confirmed gap per id; a sync repairs by jumping into Holes, superseding ADR-043's tests |
 | [ADR-045](./ADR-045-refresh-by-expected-new-posts.md) | A Directory entry comes due on its Refresh target, superseding part of ADR-014 and ADR-015 |
+| [ADR-046](./ADR-046-album-messages-are-posts.md) | Each message of an Album is its own Post, recording its Album by the first id |
