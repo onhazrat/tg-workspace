@@ -61,14 +61,19 @@ def main(argv: list[str]) -> int:
     if len(argv) < 2:
         sys.stderr.write(__doc__ or "")
         return 2
-    registry = Path(argv[1]).resolve().relative_to(REPO).as_posix()
-    every = json.loads((REPO / registry).read_text(encoding="utf-8"))
+    # Outside the repo (a scratchpad of one-off mutations) it is never a
+    # changed path, so its full path does as its name.
+    path = Path(argv[1]).resolve()
+    registry = (
+        path.relative_to(REPO).as_posix() if path.is_relative_to(REPO) else str(path)
+    )
+    every = json.loads(path.read_text(encoding="utf-8"))
     mutations = selected(every, registry, argv[2:])
     red: list[str] = []
     failed = False
     for m in mutations:
-        path = REPO / m["file"]
-        original = path.read_text(encoding="utf-8")
+        target = REPO / m["file"]
+        original = target.read_text(encoding="utf-8")
         try:
             text = mutated(original, m["old"], m["new"])
             cmd, cwd = command(m["test"])
@@ -76,11 +81,11 @@ def main(argv: list[str]) -> int:
             print(f"SKIPPED  {m['name']}: {error}")
             failed = True
             continue
-        path.write_text(text, encoding="utf-8")
+        target.write_text(text, encoding="utf-8")
         try:
             result = subprocess.run(cmd, cwd=REPO / cwd, capture_output=True)
         finally:
-            path.write_text(original, encoding="utf-8")
+            target.write_text(original, encoding="utf-8")
         if result.returncode:
             print(f"red      {m['name']}")
             red.append(m["name"])

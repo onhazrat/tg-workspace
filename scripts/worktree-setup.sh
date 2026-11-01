@@ -2,7 +2,8 @@
 # Prepare a git worktree of this repo for its test suites, or tear that down.
 #
 #   bash scripts/worktree-setup.sh             link the main checkout's .env, bun install,
-#                                               create and migrate app_test_<worktree> for
+#                                               point the git hooks at the main checkout's
+#                                               prek, create and migrate app_test_<worktree> for
 #                                               pytest and app_test_e2e_<worktree> (seeded)
 #                                               for Playwright, record them and the
 #                                               worktree's own ports in .env.worktree; add a
@@ -66,6 +67,14 @@ if [ ! -e "$root/.env" ]; then
 fi
 
 (cd "$root" && bun install --silent)
+# Every worktree shares one hooks directory, and `prek install` writes in the
+# path of the prek that ran it. Installed from a worktree, the hooks die with
+# that worktree (`exec: prek: not found`); the main checkout's outlives them.
+if [ -x "$main/.venv/bin/prek" ]; then
+  (cd "$main" && "$main/.venv/bin/prek" install -f -q)
+else
+  echo "No prek in $main/.venv, so the git hooks were not reinstalled: run uv sync there." >&2
+fi
 uv run --quiet python -W ignore::UserWarning -m scripts.worktree_db create "$db"
 POSTGRES_DB="$db" uv run --quiet alembic upgrade head
 # The dev `app` may sit at another worktree's migration head, so Playwright's

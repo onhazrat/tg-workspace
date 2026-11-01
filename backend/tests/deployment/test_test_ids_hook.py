@@ -73,3 +73,21 @@ def test_a_placeholder_after_the_prefix_holds_data() -> None:
 
 def test_an_id_built_in_the_spec_is_left_to_the_spec() -> None:
     assert _offenders("getByTestId(chart)\ngetByTestId(/^requests-spread-bar-/)") == []
+
+
+def test_a_new_untracked_component_counts_as_source(tmp_path: pathlib.Path) -> None:
+    """A commit adding a component and the spec naming its id must pass,
+    though the component is not tracked until the commit lands."""
+    import subprocess
+
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    (tmp_path / "tracked.tsx").write_text("x")
+    subprocess.run(["git", "add", "tracked.tsx"], cwd=tmp_path, check=True)
+    (tmp_path / "new-panel.tsx").write_text("x")
+    (tmp_path / ".gitignore").write_text("ignored.tsx\n")
+    (tmp_path / "ignored.tsx").write_text("x")
+    assert sorted(check_test_ids.listed(tmp_path)) == [
+        ".gitignore",
+        "new-panel.tsx",
+        "tracked.tsx",
+    ]

@@ -75,11 +75,19 @@ def offenders(specs: dict[str, str], source: str) -> list[str]:
     return found
 
 
-def main() -> int:
-    tracked = subprocess.run(
-        ["git", "ls-files"], cwd=REPO, capture_output=True, text=True, check=True
+def listed(repo: Path) -> list[str]:
+    """The files in `repo`, untracked ones too: a commit's new component renders ids."""
+    return subprocess.run(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=True,
     ).stdout.splitlines()
-    files = [p for p in tracked if (REPO / p).is_file()]
+
+
+def main() -> int:
+    files = [p for p in listed(REPO) if (REPO / p).is_file()]
 
     def read(path: str) -> str:
         return (REPO / path).read_text(encoding="utf-8", errors="replace")
