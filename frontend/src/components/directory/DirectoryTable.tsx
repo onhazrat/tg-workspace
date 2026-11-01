@@ -141,6 +141,7 @@ const COLUMN_TEXT: Record<ColumnKey, Omit<DirectoryColumn, "key">> = {
   sample_count: measureText("sample_count"),
   checked_at: momentText("checked_at"),
   refresh_due_at: momentText("refresh_due_at"),
+  refresh_target: measureText("refresh_target"),
   attempts: measureText("attempts"),
   last_error: {
     label: "Last error",
@@ -257,6 +258,7 @@ const CELLS: Record<DirectoryColumn["key"], (r: Row) => React.ReactNode> = {
   sample_count: (r) => r.sampleCount ?? "",
   checked_at: (r) => when(r.checkedAt),
   refresh_due_at: (r) => when(r.refreshDueAt),
+  refresh_target: (r) => r.refreshTarget ?? "",
   attempts: (r) => r.attempts ?? "",
   last_error: (r) => words(r.lastError),
   attempted_at: (r) => when(r.attemptedAt),
@@ -271,8 +273,24 @@ const CELLS: Record<DirectoryColumn["key"], (r: Row) => React.ReactNode> = {
   shared_children: (r) => count(r.sharedChildren),
 }
 
-export const cell = (key: DirectoryColumn["key"], r: Row): React.ReactNode =>
-  CELLS[key](r)
+/**
+ * What a column shows for a row. An entry with no Refresh target of its own
+ * shows the deployment's, greyed, when the caller knows it (DRP-02).
+ */
+export const cell = (
+  key: DirectoryColumn["key"],
+  r: Row,
+  refreshTarget?: number | null,
+): React.ReactNode =>
+  key === "refresh_target" &&
+  r.refreshTarget == null &&
+  refreshTarget != null ? (
+    <span data-deployment className="text-app-ink/35">
+      {refreshTarget}
+    </span>
+  ) : (
+    CELLS[key](r)
+  )
 
 function HeaderTick({
   rows,
@@ -527,6 +545,7 @@ export function DirectoryTable({
   highlight,
   cards = false,
   tagging,
+  refreshTarget,
 }: {
   rows: Row[]
   total: number
@@ -552,6 +571,8 @@ export function DirectoryTable({
   cards?: boolean
   /** Each row's Tag picker (DFP-04); none while the Tags have not loaded. */
   tagging?: Tagging
+  /** The deployment's Refresh target, for a `DATA_ADMIN` reader (DRP-02). */
+  refreshTarget?: number | null
 }) {
   const keyboard = useKeyboardMode()
   const sortedColumn = sort === "mine_last_days" ? "mine" : sort
@@ -583,6 +604,7 @@ export function DirectoryTable({
           onDismiss={onDismiss}
           onOpen={onOpen}
           tagging={tagging}
+          refreshTarget={refreshTarget}
         />
         {pages}
       </div>
@@ -641,7 +663,7 @@ export function DirectoryTable({
                 key={c.key}
                 className={`whitespace-nowrap px-2 font-mono text-app-ink/70 ${WORDS.has(c.key) ? "" : "text-right tabular-nums"} ${narrow(c.key)}`}
               >
-                {cell(c.key, r)}
+                {cell(c.key, r, refreshTarget)}
               </td>
             ))}
             <td className="whitespace-nowrap px-2 text-right">
@@ -698,6 +720,7 @@ function DirectoryCards({
   onDismiss,
   onOpen,
   tagging,
+  refreshTarget,
 }: {
   rows: Row[]
   columns: DirectoryColumn[]
@@ -708,6 +731,7 @@ function DirectoryCards({
   onDismiss: (handle: string, dismissed: boolean) => void
   onOpen: (handle: string) => void
   tagging?: Tagging
+  refreshTarget?: number | null
 }) {
   return (
     <ul className="divide-y divide-app-ink/5">
@@ -739,7 +763,7 @@ function DirectoryCards({
             <ChannelCell row={r} />
             <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-app-ink/60">
               {columns.map((c) => {
-                const value = cell(c.key, r)
+                const value = cell(c.key, r, refreshTarget)
                 return value ? (
                   <span key={c.key} data-measure className="whitespace-nowrap">
                     <span className="text-app-ink/40">{c.label}</span>{" "}

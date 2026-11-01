@@ -3050,7 +3050,46 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DirectoryBoostResponse"
+                  "$ref": "#/components/schemas/DirectoryChangedResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
+    "/api/v1/data/directory/refresh-target": {
+      "post": {
+        "tags": ["data"],
+        "summary": "Set Directory Refresh Target",
+        "description": "Set the Refresh target of the named Directory entries, or clear it.\n\nTheir due dates move at once, still within the deployment's shortest and\nlongest waits. A handle the Directory holds nothing about is skipped.",
+        "operationId": "data-set_directory_refresh_target",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DirectoryRefreshTargetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectoryChangedResponse"
                 }
               }
             }
@@ -9282,12 +9321,12 @@
         "title": "DirectoryBoostRequest",
         "description": "Set the Priority boost of the named entries, or add to it (DPF)."
       },
-      "DirectoryBoostResponse": {
+      "DirectoryChangedResponse": {
         "properties": { "changed": { "type": "integer", "title": "Changed" } },
         "type": "object",
         "required": ["changed"],
-        "title": "DirectoryBoostResponse",
-        "description": "How many of the named entries the Directory holds, and so changed."
+        "title": "DirectoryChangedResponse",
+        "description": "How many of the named entries the Directory holds, and so changed, by\na bulk write such as the Priority boost or the Refresh target."
       },
       "DirectoryCitedByCondition": {
         "properties": {
@@ -9398,6 +9437,7 @@
                 "sample_count",
                 "checked_at",
                 "refresh_due_at",
+                "refresh_target",
                 "attempts",
                 "last_error",
                 "attempted_at",
@@ -9446,6 +9486,7 @@
               "sample_count",
               "checked_at",
               "refresh_due_at",
+              "refresh_target",
               "attempts",
               "last_error",
               "attempted_at",
@@ -9582,7 +9623,8 @@
                   "telegram_chat_id",
                   "priority",
                   "priority_boost",
-                  "effective_priority"
+                  "effective_priority",
+                  "refresh_target"
                 ]
               },
               {
@@ -9724,6 +9766,14 @@
           "effectivePriority": {
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Effectivepriority"
+          },
+          "refreshTarget": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Refreshtarget"
+          },
+          "refreshDueAt": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Refreshdueat"
           }
         },
         "type": "object",
@@ -9937,6 +9987,7 @@
               "priority",
               "priority_boost",
               "effective_priority",
+              "refresh_target",
               "last_post_at",
               "created_at",
               "checked_at",
@@ -10075,6 +10126,7 @@
               "priority",
               "priority_boost",
               "effective_priority",
+              "refresh_target",
               "last_post_at",
               "created_at",
               "checked_at",
@@ -10149,6 +10201,7 @@
                 "sample_count",
                 "checked_at",
                 "refresh_due_at",
+                "refresh_target",
                 "attempts",
                 "last_error",
                 "attempted_at",
@@ -10186,7 +10239,11 @@
             "type": "array",
             "title": "Languages"
           },
-          "yoursSize": { "type": "integer", "title": "Yourssize" }
+          "yoursSize": { "type": "integer", "title": "Yourssize" },
+          "refreshTarget": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Refreshtarget"
+          }
         },
         "type": "object",
         "required": ["rows", "total", "languages", "yoursSize"],
@@ -10258,7 +10315,8 @@
               "telegram_chat_id",
               "priority",
               "priority_boost",
-              "effective_priority"
+              "effective_priority",
+              "refresh_target"
             ],
             "title": "Measure"
           },
@@ -10388,6 +10446,31 @@
         "title": "DirectoryRefreshProjectionResponse",
         "description": "What a Refresh target and waits would cost, beside what probing costs\nnow (ADR-045)."
       },
+      "DirectoryRefreshTargetRequest": {
+        "properties": {
+          "handles": {
+            "items": { "type": "string", "maxLength": 256, "minLength": 1 },
+            "type": "array",
+            "maxItems": 10000,
+            "title": "Handles"
+          },
+          "view": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/DirectoryViewRequest" },
+              { "type": "null" }
+            ]
+          },
+          "value": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Value"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["value"],
+        "title": "DirectoryRefreshTargetRequest",
+        "description": "Set the named entries' own Refresh target, or clear it."
+      },
       "DirectoryRowResponse": {
         "properties": {
           "handle": { "type": "string", "title": "Handle" },
@@ -10508,6 +10591,10 @@
           "refreshDueAt": {
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Refreshdueat"
+          },
+          "refreshTarget": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Refreshtarget"
           },
           "attempts": {
             "anyOf": [{ "type": "integer" }, { "type": "null" }],

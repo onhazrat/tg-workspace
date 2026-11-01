@@ -317,6 +317,8 @@ function DirectoryPanelReads({
   onFilter,
   tagging,
   onBoost,
+  onRefreshTarget,
+  refreshTarget,
 }: {
   handle: string
   request: DirectoryViewRequest
@@ -331,6 +333,8 @@ function DirectoryPanelReads({
   onFilter: (cond: DirectoryCond) => void
   tagging: Tagging
   onBoost?: (mode: BoostMode, value: number) => void
+  onRefreshTarget?: (value: number | null) => void
+  refreshTarget?: number | null
 }) {
   const path = { handle }
   const entry = useQuery({
@@ -373,6 +377,8 @@ function DirectoryPanelReads({
       onFilter={onFilter}
       tagging={tagging}
       onBoost={onBoost}
+      onRefreshTarget={onRefreshTarget}
+      refreshTarget={refreshTarget}
     />
   )
 }
@@ -523,6 +529,9 @@ export function DirectoryView() {
         onBoost={(handles, mode, value) =>
           void d.boost(held ? "all" : handles, mode, value)
         }
+        onRefreshTarget={(handles, value) =>
+          void d.setRefreshTarget(held ? "all" : handles, value)
+        }
       />
       <DirectoryTable
         rows={shown.rows}
@@ -543,6 +552,7 @@ export function DirectoryView() {
         highlight={highlight}
         cards={phone}
         tagging={tagging}
+        refreshTarget={list.data?.refreshTarget}
       />
       {d.open && (
         <DirectoryPanelReads
@@ -570,6 +580,10 @@ export function DirectoryView() {
           onBoost={(mode, value) =>
             d.open && void d.boost([d.open], mode, value)
           }
+          onRefreshTarget={(value) =>
+            d.open && void d.setRefreshTarget([d.open], value)
+          }
+          refreshTarget={list.data?.refreshTarget}
         />
       )}
     </div>

@@ -1076,6 +1076,7 @@ CONSTANT_TOPICS: dict[str, str] = {
     "frontend/src/components/directory/DirectoryBar.tsx": "directory",
     "frontend/src/components/directory/DirectoryBoost.tsx": "directory",
     "frontend/src/components/directory/DirectoryBulkBar.tsx": "directory",
+    "frontend/src/components/directory/DirectoryRefreshTarget.tsx": "directory",
     "frontend/src/components/directory/DirectorySamples.tsx": "directory",
     "frontend/src/components/directory/DirectoryTable.tsx": "directory",
     "frontend/src/components/history/ArtifactCardParts.tsx": "appearance",

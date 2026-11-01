@@ -39,6 +39,7 @@ const KEYS: Record<ColumnKey, true> = {
   sample_count: true,
   checked_at: true,
   refresh_due_at: true,
+  refresh_target: true,
   attempts: true,
   last_error: true,
   attempted_at: true,
@@ -67,6 +68,7 @@ export const INTERNAL_COLUMNS: ReadonlySet<ColumnKey> = new Set<ColumnKey>([
   "priority",
   "priority_boost",
   "effective_priority",
+  "refresh_target",
   "telegram_chat_id",
   "latest_id",
 ])

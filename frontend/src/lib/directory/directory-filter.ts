@@ -196,7 +196,7 @@ export const MOMENTS: Moment[] = [
   },
   {
     key: "refresh_due_at",
-    label: "Refresh due",
+    label: "Next refresh",
     description: "When the Directory will fetch it again",
     section: "Probe queue",
   },
@@ -339,6 +339,14 @@ export const MEASURES: Measure[] = [
     short: "Effective",
     description:
       "Priority minus the boost, which is the order the Directory fetches in, lower first",
+    section: "Probe queue",
+  },
+  {
+    key: "refresh_target",
+    label: "Refresh target",
+    short: "Target",
+    description:
+      "How many new Posts it may publish before the Directory fetches it again; greyed where it follows the deployment's",
     section: "Probe queue",
   },
   {

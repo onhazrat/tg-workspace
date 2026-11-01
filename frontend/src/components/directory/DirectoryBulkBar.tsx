@@ -7,6 +7,7 @@ import { MAX_TICK_ALL, type Whole } from "@/lib/directory/directory-view"
 import { bulkShortcut } from "@/lib/keyboard/key-list"
 import { needsBulkFollowConfirm } from "@/lib/posts/discover-selection"
 import { type BoostMode, DirectoryBoost } from "./DirectoryBoost"
+import { DirectoryRefreshTarget } from "./DirectoryRefreshTarget"
 import { TagPicker } from "./DirectoryTags"
 
 const SHOWN = 3
@@ -22,7 +23,7 @@ const count = (n: number) => n.toLocaleString("en-US")
  * A followed row ticks like any other, as a Seed (DFP-01), so Follow and
  * Dismiss act on the unfollowed Ticks only and say "of M" when that is fewer.
  * Tag and Untag act on every Tick, followed or not (DFP-04), as the Priority
- * boost does for a `DATA_ADMIN` reader (DPF).
+ * boost and the Refresh target do for a `DATA_ADMIN` reader (DPF, DRP-02).
  *
  * In All matching (`whole.state === "held"`) every action means the whole
  * view, so the handles the callbacks get are only the page's; the caller
@@ -38,6 +39,7 @@ export function DirectoryBulkBar({
   tagging,
   boostable = false,
   onBoost,
+  onRefreshTarget,
   whole,
   onTickAll,
 }: {
@@ -55,6 +57,8 @@ export function DirectoryBulkBar({
   boostable?: boolean
   /** Sets or adds to every Tick's Priority boost. */
   onBoost?: (handles: string[], mode: BoostMode, value: number) => void
+  /** Sets or clears every Tick's Refresh target; `null` clears. */
+  onRefreshTarget?: (handles: string[], value: number | null) => void
   whole?: Whole
   /** Ticks every match, or holds the view as All matching. */
   onTickAll?: () => void
@@ -110,6 +114,11 @@ export function DirectoryBulkBar({
         {boostable && onBoost && (
           <DirectoryBoost
             onBoost={(mode, value) => onBoost(ticked, mode, value)}
+          />
+        )}
+        {boostable && onRefreshTarget && (
+          <DirectoryRefreshTarget
+            onSet={(value) => onRefreshTarget(ticked, value)}
           />
         )}
         {tagging && (

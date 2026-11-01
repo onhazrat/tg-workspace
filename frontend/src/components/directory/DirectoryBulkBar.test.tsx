@@ -180,6 +180,35 @@ describe("the Priority boost (DPF)", () => {
     // A followed Tick is boosted too: the queue is not about who follows.
     expect(sent).toEqual([[["a", "b"], "set", 1]])
   })
+
+  test("the Refresh target sits beside it, set and cleared on every Tick (DRP-02)", () => {
+    const sent: [string[], number | null][] = []
+    const bar = (boostable: boolean) => (
+      <DirectoryBulkBar
+        ticks={new Set(["a", "b"])}
+        busy={false}
+        followed={new Set(["a"])}
+        onFollow={() => {}}
+        onDismiss={() => {}}
+        onClear={() => {}}
+        boostable={boostable}
+        onBoost={() => {}}
+        onRefreshTarget={(h, v) => sent.push([h, v])}
+      />
+    )
+    const view = render(bar(false))
+    expect(screen.queryByTestId("directory-refresh-target")).toBeNull()
+    view.rerender(bar(true))
+    fireEvent.change(screen.getByLabelText("Refresh target"), {
+      target: { value: "40" },
+    })
+    fireEvent.click(screen.getByRole("button", { name: "Set target" }))
+    fireEvent.click(screen.getByRole("button", { name: "Clear target" }))
+    expect(sent).toEqual([
+      [["a", "b"], 40],
+      [["a", "b"], null],
+    ])
+  })
 })
 
 describe("tick all that match (ADR-031)", () => {

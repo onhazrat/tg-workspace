@@ -95,7 +95,7 @@ describe("the Time bound editor", () => {
     expect(screen.queryByLabelText("End amount")).toBeNull()
     expect(screen.queryByLabelText("End direction")).toBeNull()
     expect(
-      screen.getByRole("group", { name: "Refresh due mode" }).textContent,
+      screen.getByRole("group", { name: "Next refresh mode" }).textContent,
     ).toBe("LiveFixedNo value")
   })
 

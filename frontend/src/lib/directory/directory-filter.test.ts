@@ -236,7 +236,7 @@ describe("Time bounds (DPF)", () => {
         start: 0,
         end: 2 * DAY,
       },
-      "Refresh due from now to in 2 days",
+      "Next refresh from now to in 2 days",
     ],
     [
       { type: "time", moment: "retry_after", mode: "fixed", none: true },
