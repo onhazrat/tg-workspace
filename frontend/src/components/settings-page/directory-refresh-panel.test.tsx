@@ -3,10 +3,14 @@ import { afterEach, describe, expect, mock, test } from "bun:test"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import {
   parsePolicy,
+  REFRESH_SETTING_IDS,
   type RefreshPolicy,
   RefreshPolicyForm,
+  savedPolicy,
+  savePolicy,
   writeOrder,
 } from "./directory-refresh-panel"
+import type { Row } from "./model"
 
 afterEach(cleanup)
 
@@ -92,5 +96,52 @@ describe("writeOrder", () => {
       "minDays",
       "maxDays",
     ])
+  })
+})
+
+/** The three registry rows, as the Settings page receives them. */
+const rows = (p: RefreshPolicy): Row[] =>
+  (Object.keys(REFRESH_SETTING_IDS) as (keyof RefreshPolicy)[]).map(
+    (field) => ({ id: REFRESH_SETTING_IDS[field], value: p[field] }) as Row,
+  )
+
+describe("savedPolicy", () => {
+  test("reads the three rows, and nothing until all three have loaded", () => {
+    expect(savedPolicy(rows(SAVED))).toEqual(SAVED)
+    expect(savedPolicy(rows(SAVED).slice(1))).toBeNull()
+    expect(savedPolicy([])).toBeNull()
+  })
+})
+
+describe("savePolicy", () => {
+  test("writes only the changed fields, in an order the server accepts", async () => {
+    const written: [string, number][] = []
+    await savePolicy(
+      rows(SAVED),
+      SAVED,
+      { target: 30, minDays: 1, maxDays: 2 },
+      async (row, value) => {
+        written.push([row.id, value])
+      },
+    )
+    expect(written).toEqual([
+      [REFRESH_SETTING_IDS.target, 30],
+      [REFRESH_SETTING_IDS.minDays, 1],
+      [REFRESH_SETTING_IDS.maxDays, 2],
+    ])
+  })
+
+  test("a refused write stops the rest", async () => {
+    const written: string[] = []
+    await savePolicy(
+      rows(SAVED),
+      SAVED,
+      { target: 30, minDays: 4, maxDays: 60 },
+      async (row) => {
+        written.push(row.id)
+        throw new Error("Refused")
+      },
+    )
+    expect(written).toEqual([REFRESH_SETTING_IDS.target])
   })
 })

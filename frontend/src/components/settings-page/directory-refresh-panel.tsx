@@ -20,6 +20,7 @@ import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { fmt } from "@/lib/requests/breakdown"
 import { extractErrorMessage } from "@/utils"
 import { FormError, fieldClass, Note } from "./kit"
+import type { Row } from "./model"
 import { useSettingsRegistry } from "./registry"
 
 export interface RefreshPolicy {
@@ -163,42 +164,55 @@ export function RefreshPolicyForm({
   )
 }
 
+/** The saved policy in the registry's rows, or `null` until all three load. */
+export function savedPolicy(rows: readonly Row[]): RefreshPolicy | null {
+  const values = FIELDS.map(
+    ({ field }) => rows.find((r) => r.id === REFRESH_SETTING_IDS[field])?.value,
+  )
+  if (values.some((value) => value == null)) return null
+  const [target, minDays, maxDays] = values.map(Number)
+  return { target, minDays, maxDays }
+}
+
+/** Writes each changed field through `save`, in `writeOrder`, and says how it went. */
+export async function savePolicy(
+  rows: readonly Row[],
+  saved: RefreshPolicy,
+  next: RefreshPolicy,
+  save: (row: Row, value: number) => Promise<unknown>,
+): Promise<void> {
+  try {
+    for (const field of writeOrder(saved, next)) {
+      const row = rows.find((r) => r.id === REFRESH_SETTING_IDS[field])
+      if (row) await save(row, next[field])
+    }
+    toast.success("Refresh settings saved; due dates moved.")
+  } catch (err) {
+    toast.error(extractErrorMessage(err))
+  }
+}
+
 export function DirectoryRefresh() {
   const registry = useSettingsRegistry()
-  const rowOf = (field: Field) =>
-    registry.rows.find((r) => r.id === REFRESH_SETTING_IDS[field])
-  const rows = FIELDS.map(({ field }) => rowOf(field))
-  const [target, minDays, maxDays] = rows.map((row) => Number(row?.value))
-  const saved = useMemo(
-    () => ({ target, minDays, maxDays }),
-    [target, minDays, maxDays],
-  )
+  // Keyed on the values: the registry's rows are rebuilt whenever a browser
+  // Setting changes, which must not reset a draft.
+  const key = JSON.stringify(savedPolicy(registry.rows))
+  const saved = useMemo(() => JSON.parse(key) as RefreshPolicy | null, [key])
   const [draft, setDraft] = useState<RefreshPolicy | null>(null)
   const asked = useDebouncedValue(draft, 400)
   const projection = useQuery({
-    queryKey: queryKeys.directoryRefreshProjection(asked ?? {}),
+    queryKey: queryKeys.directoryRefreshProjection(asked),
     queryFn: () =>
       dataProjectDirectoryRefresh({ query: asked as RefreshPolicy }),
     enabled: asked !== null,
   })
-  if (rows.some((row) => row === undefined)) return null
-  const onSave = async (next: RefreshPolicy) => {
-    try {
-      for (const field of writeOrder(saved, next)) {
-        const row = rowOf(field)
-        if (row) await registry.save(row, next[field])
-      }
-      toast.success("Refresh settings saved; due dates moved.")
-    } catch (err) {
-      toast.error(extractErrorMessage(err))
-    }
-  }
+  if (saved === null) return null
   return (
     <RefreshPolicyForm
       saved={saved}
-      projection={draft && asked === draft ? (projection.data ?? null) : null}
+      projection={asked === draft ? (projection.data ?? null) : null}
       onDraft={setDraft}
-      onSave={onSave}
+      onSave={(next) => savePolicy(registry.rows, saved, next, registry.save)}
     />
   )
 }
