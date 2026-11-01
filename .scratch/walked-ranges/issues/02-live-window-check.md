@@ -17,11 +17,15 @@ updates decisions.
 
 **Status:** ready-for-agent
 
-- [ ] The worker sends a notification carrying only the Channel's name when a walk applies a page that stored Posts or read the head, and when a Hole closes, on its own channel of the existing notification module.
-- [ ] The API keeps one listening connection, fans out in process, and serves one Account-wide event stream of followed Channel names, gathered for up to a second; an unfollowed Channel never reaches a subscriber.
-- [ ] The stream is a safe read open to View-as and answers for the viewed Account; it joins every route inventory and the View-as read-path inventory.
-- [ ] The browser subscribes while the Action or Posts tab is open, asks the check for the named Channels only, merges their verdicts into the cached answer, and recomputes held Posts, Unproven Posts and the floor from the verdicts.
-- [ ] The gate's wait for syncs it joined ends on events instead of a 2-second poll, and continues as soon as the last waited Channel lands.
-- [ ] On reconnect the browser asks the whole check once.
-- [ ] A Live window still asks again on its tick; a Fixed window never does.
-- [ ] Backend tests: an applied page produces an event for a follower and none for a non-follower; a burst is gathered; View-as answers for the viewed Account. Frontend unit tests: one Channel's verdict replaces its row and the totals follow; the gate flow ends on an event. Each guard is mutation-checked.
+- [x] The worker sends a notification carrying only the Channel's name when a walk applies a page that stored Posts or read the head, and when a Hole closes, on its own channel of the existing notification module.
+- [x] The API keeps one listening connection, fans out in process, and serves one Account-wide event stream of followed Channel names, gathered for up to a second; an unfollowed Channel never reaches a subscriber.
+- [x] The stream is a safe read open to View-as and answers for the viewed Account; it joins every route inventory and the View-as read-path inventory.
+- [x] The browser subscribes while the Action or Posts tab is open, asks the check for the named Channels only, merges their verdicts into the cached answer, and recomputes held Posts, Unproven Posts and the floor from the verdicts.
+- [x] The gate's wait for syncs it joined ends on events instead of a 2-second poll, and continues as soon as the last waited Channel lands.
+- [x] On reconnect the browser asks the whole check once.
+- [x] A Live window still asks again on its tick; a Fixed window never does.
+- [x] Backend tests: an applied page produces an event for a follower and none for a non-follower; a burst is gathered; View-as answers for the viewed Account. Frontend unit tests: one Channel's verdict replaces its row and the totals follow; the gate flow ends on an event. Each guard is mutation-checked.
+
+## Comments
+
+- 2026-11-01: implemented on `claude/charming-sinoussi-3d3d4e`. Three departures, each because the check reads syncs in flight from the job row, which is flushed every 5 s: a Channel is also announced when the flush records its sync over, every Channel of a job once the job ends, and every Channel of a job a worker restart fails. Without them the gate waits on a landing nobody announces. The gate listens from its click to its finish, so review rows flip too, and its final full check after the wait stays (one 300 ms ask). Left out: a heartbeat, so a stream that dies silently (a laptop asleep) is not noticed until the page reloads.

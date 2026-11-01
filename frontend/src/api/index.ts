@@ -37,7 +37,11 @@ export type {
   FollowJobStatus,
   SettingGroupWriteBody,
 } from "./data"
-export { dataApi, streamFollowJobEvents } from "./data"
+export {
+  dataApi,
+  streamChannelChanges,
+  streamFollowJobEvents,
+} from "./data"
 export type {
   JobStatusEntry,
   SyncJobChannelStatus,

@@ -42,6 +42,7 @@ import {
   useGateState,
   useRequested,
 } from "@/lib/complete-window/gate-flow"
+import { onChannelChanges } from "@/lib/complete-window/live"
 import {
   behindLag,
   byFix,
@@ -118,6 +119,7 @@ function useGateIO(): GateIO {
       })
     },
     synced: () => invalidatePostsReads(queryClient),
+    changes: onChannelChanges,
     narrow: (names) => {
       const before = new Set(selectedChannels)
       setSelectedChannels(

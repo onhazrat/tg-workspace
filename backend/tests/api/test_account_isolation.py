@@ -305,6 +305,11 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
         "two live accounts, a Channel only the other follows and a Channel "
         "both follow under the other's frozen group; test_window_check.py",
     ),
+    ("GET", f"{DATA}/posts/window-check/events"): (
+        Reason.COVERED_ELSEWHERE,
+        "a Channel only the other account follows never reaches the stream; "
+        "test_window_check_events.py. Not PROBED here: the stream never ends",
+    ),
     ("POST", f"{DATA}/posts/bulk"): (
         Reason.CORPUS,
         "raw ingest; creates no Channel and no Follow, so what it writes is "

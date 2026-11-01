@@ -33,6 +33,7 @@ from app.jobs.settings import (
     load_sync_settings,
 )
 from app.models_tg import Channel, Post, utc_now
+from app.services import channel_changes
 from app.services.async_db import run_db
 from app.services.channel_directory import record_sync_metadata
 from app.services.channel_photos import resolve_cached_photo_url
@@ -1476,6 +1477,15 @@ async def _walk_pass(
                 page_result.repeated_posts,
                 changed=page_result.changed,
             )
+
+        # The window check reads this page now (WR-02): its range, a Hole it
+        # closed, or the head-read moment.
+        if not page_result.sync_failed and (
+            before_id is None
+            or page_result.lowest_id is not None
+            or page_result.reached_channel_start
+        ):
+            await run_db(channel_changes.announce, ctx.channel_name)
 
         if page_result.reached_channel_start:
             walk.reached_channel_start = True

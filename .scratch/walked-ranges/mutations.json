@@ -1,0 +1,72 @@
+[
+  {
+    "name": "announce nothing when a page is applied",
+    "file": "backend/app/services/sync_orchestrator.py",
+    "old": "            await run_db(channel_changes.announce, ctx.channel_name)",
+    "new": "            pass",
+    "test": "backend/tests/api/test_window_check_events.py"
+  },
+  {
+    "name": "gather a burst for 0 seconds",
+    "file": "backend/app/services/channel_changes.py",
+    "old": "GATHER_SECONDS = 1.0",
+    "new": "GATHER_SECONDS = 0.0",
+    "test": "backend/tests/api/test_window_check_events.py"
+  },
+  {
+    "name": "announce no landed Channel at the job row's flush",
+    "file": "backend/app/services/scraper_jobs.py",
+    "old": "        session.commit()\n    _announce_landed(job)\n",
+    "new": "        session.commit()\n",
+    "test": "backend/tests/api/test_window_check_events.py"
+  },
+  {
+    "name": "announce only Channels whose own sync ended",
+    "file": "backend/app/services/scraper_jobs.py",
+    "old": "        if ended or ch.status in _TERMINAL_CHANNEL_STATUSES",
+    "new": "        if ch.status in _TERMINAL_CHANNEL_STATUSES",
+    "test": "backend/tests/api/test_window_check_events.py"
+  },
+  {
+    "name": "announce nothing after a restart's reconciliation",
+    "file": "backend/app/services/scraper_jobs.py",
+    "old": "        channel_changes.announce(name)\n    count = len(rows)",
+    "new": "        pass\n    count = len(rows)",
+    "test": "backend/tests/api/test_window_check_events.py"
+  },
+  {
+    "name": "filter the names by nobody's Follows",
+    "file": "backend/app/services/channel_changes.py",
+    "old": "                scoped_select(\n                    select(Channel.name).where(col(Channel.name).in_(list(names))),\n                    Channel,\n                    user_id,\n                )",
+    "new": "                select(Channel.name).where(col(Channel.name).in_(list(names)))",
+    "test": "backend/tests/api/test_window_check_events.py"
+  },
+  {
+    "name": "keep the cached row when a Channel's verdict arrives",
+    "file": "frontend/src/lib/complete-window/live.ts",
+    "old": "const channels = check.channels.map((c) => byName.get(c.name) ?? c)",
+    "new": "const channels = check.channels.map((c) => c)",
+    "test": "frontend/src/lib/complete-window/live.test.ts"
+  },
+  {
+    "name": "keep the cached floor",
+    "file": "frontend/src/lib/complete-window/live.ts",
+    "old": "    unprovenFloor: incomplete.some(",
+    "new": "    unprovenFloor: check.unprovenFloor || incomplete.some(",
+    "test": "frontend/src/lib/complete-window/live.test.ts"
+  },
+  {
+    "name": "the gate merges nothing on a change",
+    "file": "frontend/src/lib/complete-window/gate-flow.ts",
+    "old": "      setGate({ check: edited(merged(state.check, fresh)) })",
+    "new": "      void 0",
+    "test": "frontend/src/lib/complete-window/gate-flow.test.ts"
+  },
+  {
+    "name": "hear nothing on a reopened stream's first frame",
+    "file": "frontend/src/lib/complete-window/live.ts",
+    "old": "        else if (opened) hear(\"all\")",
+    "new": "        else if (opened) void 0",
+    "test": "frontend/src/lib/complete-window/live.test.ts"
+  }
+]

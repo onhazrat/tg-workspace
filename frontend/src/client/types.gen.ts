@@ -10987,6 +10987,20 @@ export type DataWindowCheckResponses = {
 
 export type DataWindowCheckResponse = DataWindowCheckResponses[keyof DataWindowCheckResponses];
 
+export type DataWindowCheckEventsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data/posts/window-check/events';
+};
+
+export type DataWindowCheckEventsResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
 export type DataBulkUpsertPostsRouteData = {
     /**
      * Body
