@@ -23,6 +23,8 @@ not the summary.** Open the file for the full list of what it checks and why.
 | `backend/tests/api/test_openapi_has_no_ticket_ids.py`, `scripts/check_client_ticket_ids.py` | no ticket id in OpenAPI `description`/`summary`; its hook reads the client | test, hook |
 | `scripts/check_code_refs.py` | every backticked path.py::name reference outside dated records names something defined, and no path names only a file the commit removes; at commit | hook |
 | `scripts/check_test_ids.py` | every literal test id a Playwright spec names is rendered by `frontend/src` | hook |
+| `scripts/check_glossary_words.py` | added code holds no GLOSSARY.md `_Checked_:` word | hook |
+| `scripts/check_mutation_checked.py` | a commit touching a guard here says `Mutation-checked:` | hook |
 | `scripts/generate_constants_catalog.py` | a module with a constant has a `CONSTANT_TOPICS` entry and no entry outlives its constant, at commit | pre-commit hook |
 | `backend/tests/services/test_service_kinds.py` | every service module declares one of the five kinds | test |
 | `backend/tests/api/test_route_inventory.py` | declared routes are actually mounted | test |
@@ -77,11 +79,11 @@ not the summary.** Open the file for the full list of what it checks and why.
 | `backend/tests/services/test_follow_always_has_a_group.py` | the migration rescues a follow still holding NULL before the drop; the scraper skips a group-less follow instead of raising; a chat-id collision freezes **every** follower; `run_db` keeps the ParamSpec that checks its call sites | test |
 | `backend/tests/services/test_quota_ledger.py` | one Request per fetch however many attempts; only what reached Telegram; concurrent meters stay apart; nothing prunes the ledger | test |
 | `backend/tests/services/test_request_accounting.py` | only Accounted work sets kind, Account, Budget or job (AST); each work value pays what its records mark Charged, one Account on both, once per exit; nesting raises | test |
-| `backend/tests/api/test_request_stats.py` | one Request per attempt that left, none for a full Lane; kind, Account, Lane, best-effort from the sync; pictures their own page; each Wasted cause; one chain across retry layers; tiers agree; the rollup replaces; Operator-only; kind other only under `expects_other` | test |
+| `backend/tests/api/test_request_stats.py` | one Request per attempt that left; who it was for; each Wasted cause; one chain across retry layers; the rollup replaces; kind other only under `expects_other` | test |
 | `backend/tests/api/test_request_kinds.py` | every Request kind but `other` has a switch, refused at `fetch_with_retry` before it records, charges or waits; each entry point refuses with one message; held work resumes on enable | test |
 | `backend/tests/api/test_quota_usage_route.py` | `GET /quota/me` reports the ledger for the caller and nobody else | test |
 | `backend/tests/services/test_lane_selection.py` | the **real** enqueue picks the lane; the boundary is `>=`; zero is always best-effort and negative unlimited; a failed ledger read picks normal; no new path syncs outside the ladder | test |
-| `backend/tests/services/test_quota_ceilings.py` | a zero allowance degrades, a zero ceiling blocks, a negative one never does; the three layers resolve each number apart; a lift reaches one account, Budget and **day**; the refusal reaches the walk, not only the enqueue; an unreadable ledger refuses | test |
+| `backend/tests/services/test_quota_ceilings.py` | a zero allowance degrades, a zero ceiling blocks; each number resolves apart; the refusal reaches the walk; an unreadable ledger refuses | test |
 | `backend/tests/deployment/test_tg_cleanup_inventory.py` | every `tg_*` table is truncated between tests or excused, in both directions | test |
 | `backend/tests/deployment/test_claude_md_budget.py` | the four agent docs stay in budget and cite no moved path; the root points at the other three; every `*Enforced:*` pointer is a row here; runs at commit | test |
 | `backend/tests/deployment/test_adr_index.py` | every ADR has a row in `docs/adr/README.md` and lives in `docs/adr/` | test |
