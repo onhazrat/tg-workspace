@@ -4,6 +4,8 @@ Self-hosted Telegram channel summarizer: it syncs posts from public `t.me`
 channels into PostgreSQL, then runs AI operations over a chosen slice of them.
 This file is the glossary. It holds no implementation detail — see `CLAUDE.md`
 for architecture and `docs/adr/` for decisions.
+A `_Checked_:` line names the avoided words that mean nothing else in this
+codebase; `scripts/check_glossary_words.py` fails a commit adding one to code.
 
 ## Language
 
@@ -311,6 +313,7 @@ or was refused, or the Account skipped it. Skipping is
 one Account's choice for one Artifact and says nothing about the Channel to
 anybody else.
 _Avoid_: stale, lagging, unsynced, unverified
+_Checked_: lagging
 
 **Complete window**:
 An Analysis window, as an action froze it, with no Incomplete Channel. One with
@@ -320,6 +323,7 @@ good, which Channels were Incomplete, why, and their Last sync at the time. An
 Artifact made before this was recorded is not checked, which is not the same
 as Complete.
 _Avoid_: fresh, full window, synced window
+_Checked_: synced window
 
 **Behind**:
 An Incomplete Channel whose only reason is not synced to the end, a sync can
@@ -328,6 +332,7 @@ routine lag that sync clears. Once that sync is past due, or none is due, it
 is **Overdue**. Both are still Incomplete Channels; the words only say which
 ones need a look.
 _Avoid_: stale, lagging, just synced
+_Checked_: lagging, just synced
 
 **Unproven Posts**:
 About how many Posts an Incomplete window may lack: a hole's missing post ids
@@ -336,6 +341,7 @@ always written with "~", and frozen with the Artifact as it was when the action
 started. A Channel with no known pace makes it a floor, written with "+", and
 never "none expected".
 _Avoid_: missing Posts (most of them may not exist), lost Posts
+_Checked_: lost Posts
 
 **Left out**:
 A Channel the person dropped from the Channel selection at an action's start,

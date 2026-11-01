@@ -36,6 +36,10 @@ async function outcome(): Promise<string> {
 beforeEach(() => {
   clientFetch = client.getConfig().fetch
   client.setConfig({ fetch: offline })
+  // No session unless a test signs in: another file may have left a token or
+  // a cached user behind.
+  window.localStorage.removeItem(TOKEN_STORAGE_KEY)
+  queryClient.removeQueries({ queryKey: ["currentUser"] })
 })
 
 afterEach(() => {
