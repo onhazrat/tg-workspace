@@ -384,6 +384,27 @@ describe("columns and sorting", () => {
     expect(calls.sort).toEqual(["bio", "photos"])
   })
 
+  test("Refresh target and Next refresh show and sort (DRP-02)", () => {
+    const calls = mount({
+      rows: [
+        row("alpha", { refreshTarget: 40, refreshDueAt: Date.now() + 3e8 }),
+        row("beta", { refreshTarget: null, refreshDueAt: null }),
+      ],
+      shown: ["refresh_target", "refresh_due_at"],
+      refreshTarget: 20,
+    })
+    const target = (handle: string) =>
+      screen.getByTestId(`directory-row-${handle}`).querySelectorAll("td")[2]
+    expect(target("alpha").textContent).toBe("40")
+    expect(target("alpha").querySelector("[data-deployment]")).toBeNull()
+    // The deployment's, greyed, where the entry has none of its own.
+    expect(target("beta").textContent).toBe("20")
+    expect(target("beta").querySelector("[data-deployment]")).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: "Target" }))
+    fireEvent.click(screen.getByRole("button", { name: "Next refresh" }))
+    expect(calls.sort).toEqual(["refresh_target", "refresh_due_at"])
+  })
+
   test("Cited by and Cites show their counts and sort by them", () => {
     const calls = mount({
       rows: [row("alpha", { citedBy: 1234, cites: 7 })],

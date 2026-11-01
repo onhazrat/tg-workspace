@@ -292,7 +292,7 @@
       "comment": "The most handles one paste may add (DADD).",
       "expression": "100000",
       "file": "backend/app/schemas/directory.py",
-      "line": 719,
+      "line": 735,
       "name": "MAX_ADDED_HANDLES",
       "value": 100000
     },
@@ -652,7 +652,7 @@
       "comment": "A middle Channel past this many links is an aggregator, not a taste: a source citing more than this many Channels, or a target cited by more.",
       "expression": "3000",
       "file": "backend/app/services/directory_reads.py",
-      "line": 715,
+      "line": 719,
       "name": "AGGREGATOR_LINKS",
       "value": 3000
     },
@@ -660,7 +660,7 @@
       "comment": "The most entries Tick all turns into Ticks; above it a view is All matching (ADR-031). The same number as the ticked Seeds a Condition takes.",
       "expression": "10000",
       "file": "backend/app/services/directory_reads.py",
-      "line": 1424,
+      "line": 1429,
       "name": "MAX_TICK_ALL",
       "value": 10000
     },
@@ -668,7 +668,7 @@
       "comment": "How many citing Posts \"Why it's here\" quotes; the rest are counted.",
       "expression": "20",
       "file": "backend/app/services/directory_reads.py",
-      "line": 1581,
+      "line": 1593,
       "name": "WHY_LIMIT",
       "value": 20
     },
@@ -676,7 +676,7 @@
       "comment": "How many shared Channels \"Why it's here\" names per relation; the rest are counted.",
       "expression": "5",
       "file": "backend/app/services/directory_reads.py",
-      "line": 1719,
+      "line": 1731,
       "name": "SHARED_LIMIT",
       "value": 5
     },
@@ -684,7 +684,7 @@
       "comment": "How many Channels each side of the panel's neighbour lists shows.",
       "expression": "10",
       "file": "backend/app/services/directory_reads.py",
-      "line": 1775,
+      "line": 1787,
       "name": "NEIGHBOURS_LIMIT",
       "value": 10
     },
@@ -1292,9 +1292,17 @@
       "comment": "",
       "expression": "3",
       "file": "frontend/src/components/directory/DirectoryBulkBar.tsx",
-      "line": 12,
+      "line": 13,
       "name": "SHOWN",
       "value": 3
+    },
+    {
+      "comment": "The server's largest Refresh target (`MAX_REFRESH_TARGET`).",
+      "expression": "1000",
+      "file": "frontend/src/components/directory/DirectoryRefreshTarget.tsx",
+      "line": 6,
+      "name": "MAX_REFRESH_TARGET",
+      "value": 1000
     },
     {
       "comment": "Posts shown before \"Show N more\".",
@@ -1484,7 +1492,7 @@
       "comment": "The whole Directory's size moves slowly; the server caches it as long.",
       "expression": "5 * 60_000",
       "file": "frontend/src/hooks/useDirectory.ts",
-      "line": 86,
+      "line": 87,
       "name": "SIZE_STALE_TIME",
       "value": 300000
     },
@@ -1740,7 +1748,7 @@
       "comment": "The default minimum shared count.",
       "expression": "2",
       "file": "frontend/src/lib/directory/directory-filter.ts",
-      "line": 464,
+      "line": 472,
       "name": "SHARED_MIN",
       "value": 2
     },

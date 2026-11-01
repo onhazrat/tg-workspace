@@ -40,6 +40,7 @@ describe("the picker", () => {
       "measure:priority",
       "measure:priority_boost",
       "measure:effective_priority",
+      "measure:refresh_target",
       "measure:telegram_chat_id",
       "measure:latest_id",
     ]

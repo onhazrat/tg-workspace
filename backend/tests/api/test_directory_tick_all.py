@@ -241,6 +241,7 @@ def test_untag_reaches_every_entry_the_view_matches(
         ("DELETE", TAGS, {"name": "x"}),
         ("POST", f"{API}/data/discover/ignored", {}),
         ("POST", f"{API}/data/directory/boost", {"mode": "set", "value": 1}),
+        ("POST", f"{API}/data/directory/refresh-target", {"value": 1}),
     ],
 )
 def test_a_write_names_handles_or_a_view_never_both_nor_neither(
@@ -311,3 +312,30 @@ def test_a_boost_past_the_range_changes_no_entry_the_view_matches(
     )
     assert r.status_code == 422, r.text
     assert _boosts()["ta_fa_two"] == 0
+
+
+TARGET = f"{API}/data/directory/refresh-target"
+
+
+def _targets() -> dict[str, int | None]:
+    with Session(engine) as session:
+        rows = session.exec(
+            select(DirectoryEntry).where(col(DirectoryEntry.handle).in_(ENTRIES))
+        ).all()
+        return {row.handle: row.refresh_target for row in rows}
+
+
+def test_a_refresh_target_reaches_every_entry_the_view_matches_and_clears(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    operator, other = accounts
+    body = {"view": persian(), "value": 40}
+    assert client.post(TARGET, headers=other, json=body).status_code == 403
+    r = client.post(TARGET, headers=operator, json=body)
+    assert r.status_code == 200, r.text
+    assert r.json()["changed"] == 3
+    assert _targets() == {h: 40 if h in PERSIAN else None for h in ENTRIES}
+
+    r = client.post(TARGET, headers=operator, json={"view": persian(), "value": None})
+    assert r.json()["changed"] == 3
+    assert _targets() == dict.fromkeys(ENTRIES)

@@ -146,6 +146,8 @@ DirectoryMeasure = Literal[
     "priority",
     "priority_boost",
     "effective_priority",
+    # The entry's own Refresh target (DRP-02); none sorts last.
+    "refresh_target",
 ]
 DIRECTORY_MEASURES: tuple[DirectoryMeasure, ...] = get_args(DirectoryMeasure)
 #: An entry's moments, each named by its column (DPF). A Time bound and the sort
@@ -220,6 +222,7 @@ DirectoryColumn = Literal[
     "sample_count",
     "checked_at",
     "refresh_due_at",
+    "refresh_target",
     "attempts",
     "last_error",
     "attempted_at",
@@ -248,6 +251,7 @@ INTERNAL_COLUMNS: frozenset[DirectoryColumn] = frozenset(
         "priority",
         "priority_boost",
         "effective_priority",
+        "refresh_target",
         "telegram_chat_id",
         "latest_id",
     }
@@ -1153,6 +1157,7 @@ _ENTRY_COLUMNS: dict[DirectoryColumn, tuple[str, ...]] = {
     "sample_count": ("sample_count",),
     "checked_at": ("checked_at",),
     "refresh_due_at": ("refresh_due_at",),
+    "refresh_target": ("refresh_target",),
     "attempts": ("attempts",),
     "last_error": ("last_error",),
     "attempted_at": ("attempted_at",),
@@ -1543,9 +1548,16 @@ _PANEL_COLUMNS: frozenset[DirectoryColumn] = frozenset(
 )
 #: And what it adds for a `DATA_ADMIN` reader: the kind, which only such a
 #: reader is shown anything but a Channel of, and the Priority boost it sets
-#: there (DPF).
+#: there (DPF), and the Refresh target it sets beside the boost, with the due
+#: date that target gives the entry (DRP-02).
 _PANEL_INTERNALS: frozenset[DirectoryColumn] = frozenset(
-    {"kind", "priority_boost", "effective_priority"}
+    {
+        "kind",
+        "priority_boost",
+        "effective_priority",
+        "refresh_target",
+        "refresh_due_at",
+    }
 )
 
 

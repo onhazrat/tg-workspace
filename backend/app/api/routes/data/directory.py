@@ -24,7 +24,7 @@ from app.schemas.directory import (
     DirectoryAddResponse,
     DirectoryBinResponse,
     DirectoryBoostRequest,
-    DirectoryBoostResponse,
+    DirectoryChangedResponse,
     DirectoryColumnDefaultsRequest,
     DirectoryColumnResponse,
     DirectoryCountRequest,
@@ -39,6 +39,7 @@ from app.schemas.directory import (
     DirectoryListResponse,
     DirectoryNeighboursResponse,
     DirectoryRefreshProjectionResponse,
+    DirectoryRefreshTargetRequest,
     DirectoryRowResponse,
     DirectorySamplePostResponse,
     DirectorySizeResponse,
@@ -49,10 +50,13 @@ from app.services import directory_reads
 from app.services.channel_directory import (
     BoostOutOfRange,
     RefreshPolicy,
+    RefreshTargetOutOfRange,
     add_named_handles,
     boost_entries,
     probe_map,
     project_refresh,
+    refresh_policy,
+    set_refresh_target,
 )
 from app.services.channel_directory_samples import sample_to_camel, samples_for
 from app.services.request_stats import average_daily_requests
@@ -135,9 +139,8 @@ def list_directory(
     With the view's total and its Language counts, both counted without the
     view's Language Conditions where the menu needs them.
     """
-    visible = directory_reads.visible_columns(
-        internals=sees_internals(session, current_user.id)
-    )
+    internals = sees_internals(session, current_user.id)
+    visible = directory_reads.visible_columns(internals=internals)
     page = directory_reads.list_page(
         session,
         view_of(session, current_user.id, body, body.sort),
@@ -156,6 +159,9 @@ def list_directory(
             for entry in page.languages
         ],
         yoursSize=page.yours_size,
+        # Set only for the reader who sees the column, so `exclude_unset`
+        # leaves it out for anybody else.
+        **({"refreshTarget": refresh_policy(session).target} if internals else {}),
     )
 
 
@@ -287,7 +293,7 @@ def boost_directory(
     body: DirectoryBoostRequest,
     session: SessionDep,
     _current_user: CurrentUser,
-) -> DirectoryBoostResponse:
+) -> DirectoryChangedResponse:
     """Set the Priority boost of the named Directory entries, or add to it.
 
     A positive boost fetches an entry sooner. A handle the Directory holds
@@ -303,7 +309,36 @@ def boost_directory(
         )
     except BoostOutOfRange as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return DirectoryBoostResponse(changed=changed)
+    return DirectoryChangedResponse(changed=changed)
+
+
+# ---- An entry's own Refresh target (DRP-02, ADR-045) --------------------------------
+#
+# Beside the boost and under its Permission: both tune the crawl entry by entry.
+# A write, so a View-as session is refused it with no entry here.
+
+
+@router.post(
+    "/directory/refresh-target",
+    dependencies=[Depends(require_permission(Permission.DATA_ADMIN))],
+)
+def set_directory_refresh_target(
+    body: DirectoryRefreshTargetRequest,
+    session: SessionDep,
+    _current_user: CurrentUser,
+) -> DirectoryChangedResponse:
+    """Set the Refresh target of the named Directory entries, or clear it.
+
+    Their due dates move at once, still within the deployment's shortest and
+    longest waits. A handle the Directory holds nothing about is skipped.
+    """
+    try:
+        changed = set_refresh_target(
+            session, targets(session, _current_user.id, body), body.value
+        )
+    except RefreshTargetOutOfRange as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return DirectoryChangedResponse(changed=changed)
 
 
 # ---- What a refresh policy costs (DRP-01, ADR-045) ---------------------------------
@@ -368,7 +403,7 @@ def add_directory_handles(
 # ---- The detail panel (DIR-03) -----------------------------------------------------
 
 
-# `exclude_unset` leaves the three `DATA_ADMIN` fields out for anybody else.
+# `exclude_unset` leaves the `DATA_ADMIN` fields out for anybody else.
 @router.get("/directory/{handle}/entry", response_model_exclude_unset=True)
 def get_directory_entry(
     handle: str,

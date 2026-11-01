@@ -94,7 +94,7 @@ from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal, NamedTuple, cast
 
-from sqlalchemy import Select, and_, func, literal, or_
+from sqlalchemy import ColumnElement, Select, and_, func, literal, or_
 from sqlalchemy import text as sa_text
 from sqlalchemy import update as sa_update
 from sqlmodel import Session, col, delete, select
@@ -863,22 +863,32 @@ def _schedule_refresh(
     row.refresh_due_at = now + wait
 
 
-#: `refresh_wait` in days, over an entry's stored columns.
-_WAIT_DAYS = """CASE
+def _wait_days(own_target: str) -> str:
+    """`refresh_wait` in days, over an entry's stored columns, with
+    `own_target` the SQL for its own Refresh target."""
+    return f"""CASE
     WHEN posts_per_week > 0 THEN least(greatest(
-        7.0 * coalesce(refresh_target, :target) / posts_per_week,
+        7.0 * coalesce({own_target}, :target) / posts_per_week,
         :min_days), :max_days)
     ELSE :max_days END"""
+
+
+def _due(own_target: str) -> str:
+    """The due date the policy gives an entry. It runs from `checked_at`, the
+    last conclusive answer, as the probe path's does, and `greatest` keeps a
+    failed refresh's backoff: only a failure leaves `retry_after` set on a live
+    entry."""
+    wait = _wait_days(own_target)
+    return f"greatest(checked_at + make_interval(secs => 86400 * {wait}), retry_after)"
+
+
+#: `refresh_wait` in days, over an entry's stored columns.
+_WAIT_DAYS = _wait_days("refresh_target")
 
 #: The entries `is_refreshable` answers for, with an answer to run from.
 _LIVE = "status = 'ok' AND kind <> ALL(:dead) AND checked_at IS NOT NULL"
 
-#: The due date the policy gives an entry. It runs from `checked_at`, the last
-#: conclusive answer, as the probe path's does, and `greatest` keeps a failed
-#: refresh's backoff: only a failure leaves `retry_after` set on a live entry.
-_DUE = (
-    f"greatest(checked_at + make_interval(secs => 86400 * {_WAIT_DAYS}), retry_after)"
-)
+_DUE = _due("refresh_target")
 
 #: Every refreshable entry moved to the policy, in one statement (ADR-045), so
 #: a settings change takes effect now rather than over the longest wait. An
@@ -893,6 +903,16 @@ _RECOMPUTE_DUE = sa_text(
       AND priority <> :recheck
       AND refresh_due_at IS DISTINCT FROM {_DUE}
     """
+)
+
+#: The due date an entry takes with `:own_target` as its own Refresh target
+#: (DRP-02), by the same rule and keeping an on-demand Refresh as the recompute
+#: does. Written beside the target in one `UPDATE`, because a view the write
+#: reads from may filter on either column and would match other rows a second
+#: time.
+_DUE_WITH_OWN_TARGET = sa_text(
+    f"CASE WHEN {_LIVE} AND priority <> :recheck THEN {_due(':own_target')}"
+    " ELSE refresh_due_at END"
 )
 
 
@@ -1062,6 +1082,17 @@ def refresh_entries(
     return refreshed
 
 
+def _reached(handles: Sequence[str] | Select[tuple[str]]) -> ColumnElement[bool]:
+    """The entries a bulk write names: handles, or a Directory view's statement
+    of them (ADR-031), so a view of a million entries never reaches Python."""
+    keys = (
+        handles
+        if isinstance(handles, Select)
+        else sorted({normalize_handle(h) for h in handles if h.strip()})
+    )
+    return col(DirectoryEntry.handle).in_(keys)
+
+
 class BoostOutOfRange(ValueError):
     """A Priority boost past `MAX_PRIORITY_BOOST` either way."""
 
@@ -1089,12 +1120,7 @@ def boost_entries(
     Directory view's matches, ADR-031); both shapes are one check and one
     `UPDATE`, so a view of a million entries never reaches Python.
     """
-    keys = (
-        handles
-        if isinstance(handles, Select)
-        else sorted({normalize_handle(h) for h in handles if h.strip()})
-    )
-    reached = col(DirectoryEntry.handle).in_(keys)
+    reached = _reached(handles)
     boosted = (
         literal(value) if mode == "set" else col(DirectoryEntry.priority_boost) + value
     )
@@ -1107,6 +1133,40 @@ def boost_entries(
         raise BoostOutOfRange(f"A Priority boost stays within ±{MAX_PRIORITY_BOOST:,}")
     changed = session.execute(
         sa_update(DirectoryEntry).where(reached).values(priority_boost=boosted)
+    )
+    session.commit()
+    return int(cast(Any, changed).rowcount)
+
+
+class RefreshTargetOutOfRange(ValueError):
+    """A Refresh target outside 1 to `MAX_REFRESH_TARGET`."""
+
+
+def set_refresh_target(
+    session: Session,
+    handles: Sequence[str] | Select[tuple[str]],
+    target: int | None,
+) -> int:
+    """Set each entry's own Refresh target, or clear it with `None` so the
+    entry follows the deployment's (DRP-02, ADR-045).
+
+    Mirrors `boost_entries`: a handle the Directory holds nothing about is
+    skipped, the value is checked before anything is written, and `handles`
+    may be a Directory view's statement. Returns how many entries changed.
+    The changed entries' due dates move at once, still clamped by the
+    deployment's waits; one made due on demand stays due, and a dead one keeps
+    no due date.
+    """
+    if target is not None and not 1 <= target <= MAX_REFRESH_TARGET:
+        raise RefreshTargetOutOfRange(
+            f"The Refresh target is 1 to {MAX_REFRESH_TARGET}."
+        )
+    changed = session.execute(
+        sa_update(DirectoryEntry)
+        .where(_reached(handles))
+        .values(refresh_target=target, refresh_due_at=_DUE_WITH_OWN_TARGET),
+        _policy_params(refresh_policy(session))
+        | {"recheck": RECHECK_PRIORITY, "own_target": target},
     )
     session.commit()
     return int(cast(Any, changed).rowcount)

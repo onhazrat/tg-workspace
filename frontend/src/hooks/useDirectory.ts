@@ -24,6 +24,7 @@ import {
   dataListDirectoryColumns,
   dataListDirectoryHandles,
   dataPutDirectoryColumns,
+  dataSetDirectoryRefreshTarget,
 } from "@/client"
 import type { ColumnsMenu } from "@/components/directory/DirectoryBar"
 import type { BoostMode } from "@/components/directory/DirectoryBoost"
@@ -418,6 +419,27 @@ export function useDirectory() {
   }
 
   /**
+   * Sets the Refresh target of `handles`, or clears it with `null` (DRP-02), a
+   * `DATA_ADMIN` write; `"all"` is every entry the view matches.
+   */
+  const setRefreshTarget = async (
+    handles: string[] | "all",
+    value: number | null,
+  ) => {
+    try {
+      const { changed } = await dataSetDirectoryRefreshTarget({
+        body: handles === "all" ? { view: request, value } : { handles, value },
+      })
+      toast.success(
+        `${value === null ? "Cleared the Refresh target of" : "Set the Refresh target of"} ${changed} ${changed === 1 ? "entry" : "entries"}`,
+      )
+      await queryClient.invalidateQueries({ queryKey: queryKeys.directory })
+    } catch (error) {
+      toast.error(errorText(error, "The Refresh target did not save."))
+    }
+  }
+
+  /**
    * Queues pasted handles for a fetch without following them (DADD), a
    * `DATA_ADMIN` write; null when it did not save, so the paste is kept.
    */
@@ -482,6 +504,7 @@ export function useDirectory() {
     following,
     follow,
     boost,
+    setRefreshTarget,
     addHandles,
     list,
     size: size.data?.size,

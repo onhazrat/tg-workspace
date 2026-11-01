@@ -660,6 +660,9 @@ class DirectoryRowResponse(BaseModel):
     checked_at: int | None = Field(None, alias="checkedAt")
     #: When the answer goes stale and the handle is due again, epoch ms.
     refresh_due_at: int | None = Field(None, alias="refreshDueAt")
+    #: Its own Refresh target; `null` follows the deployment's. `DATA_ADMIN`
+    #: only.
+    refresh_target: int | None = Field(None, alias="refreshTarget")
     #: Consecutive inconclusive fetches. `DATA_ADMIN` only, as are the rest.
     attempts: int | None = None
     last_error: str | None = Field(None, alias="lastError")
@@ -709,10 +712,23 @@ class DirectoryBoostRequest(DirectoryTargets):
     value: int = Field(ge=-MAX_PRIORITY_BOOST, le=MAX_PRIORITY_BOOST)
 
 
-class DirectoryBoostResponse(BaseModel):
-    """How many of the named entries the Directory holds, and so changed."""
+class DirectoryChangedResponse(BaseModel):
+    """How many of the named entries the Directory holds, and so changed, by
+    a bulk write such as the Priority boost or the Refresh target."""
 
     changed: int
+
+
+# DRP-02.
+class DirectoryRefreshTargetRequest(DirectoryTargets):
+    """Set the named entries' own Refresh target, or clear it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: 1 to 1000, checked by `set_refresh_target`; `null` clears it, so the
+    #: entry follows the deployment's again. Required, so a body that forgot it
+    #: never clears by default.
+    value: int | None
 
 
 #: The most handles one paste may add (DADD).
@@ -743,10 +759,14 @@ class DirectoryEntryResponse(_DirectoryEntryFields):
     the bio, which the list never carries."""
 
     bio: str | None
-    #: These three for a `DATA_ADMIN` reader only, absent otherwise (DPF).
+    #: These for a `DATA_ADMIN` reader only, absent otherwise (DPF, DRP-02).
     kind: str | None = None
     priority_boost: int | None = Field(None, alias="priorityBoost")
     effective_priority: int | None = Field(None, alias="effectivePriority")
+    #: Its own Refresh target; `null` follows the deployment's.
+    refresh_target: int | None = Field(None, alias="refreshTarget")
+    #: When it is next fetched, epoch ms; `null` for never.
+    refresh_due_at: int | None = Field(None, alias="refreshDueAt")
 
 
 class DirectoryTagSeeds(BaseModel):
@@ -893,6 +913,9 @@ class DirectoryListResponse(BaseModel):
     languages: list[DirectoryLanguageCountResponse]
     #: How many Channels "your channels" are; 0 means every "Yours" count is 0.
     yours_size: int = Field(alias="yoursSize")
+    #: The deployment's Refresh target, which an entry with none of its own
+    #: follows. For a `DATA_ADMIN` reader only, absent otherwise (DRP-02).
+    refresh_target: int | None = Field(None, alias="refreshTarget")
 
 
 class DirectoryCountResponse(BaseModel):

@@ -24,6 +24,7 @@ import {
 import type { TimeBound } from "@/lib/time-bound/bound"
 import { timeBoundWords } from "@/lib/time-bound/text"
 import { type BoostMode, DirectoryBoost } from "./DirectoryBoost"
+import { DirectoryRefreshTarget } from "./DirectoryRefreshTarget"
 import { DirectorySamples, FirstFew, PostText } from "./DirectorySamples"
 import { cell, columnOf, FollowCell } from "./DirectoryTable"
 import { TagBadges, TagPicker } from "./DirectoryTags"
@@ -362,6 +363,8 @@ export function DirectoryPanel({
   onFilter,
   tagging,
   onBoost,
+  onRefreshTarget,
+  refreshTarget,
 }: {
   handle: string
   entry: DirectoryEntryResponse | null | undefined
@@ -383,6 +386,11 @@ export function DirectoryPanel({
   /** Sets or adds to its Priority boost (DPF); shown only where the entry
    * carries one, which is for a `DATA_ADMIN` reader. */
   onBoost?: (mode: BoostMode, value: number) => void
+  /** Sets or clears its Refresh target (DRP-02); shown, like the boost, only
+   * where the entry carries one, set or `null`. */
+  onRefreshTarget?: (value: number | null) => void
+  /** The deployment's Refresh target, which an entry with none follows. */
+  refreshTarget?: number | null
 }) {
   return (
     <>
@@ -452,6 +460,26 @@ export function DirectoryPanel({
                   current={entry.priorityBoost}
                   effective={entry.effectivePriority ?? undefined}
                 />
+              </div>
+            )}
+            {onRefreshTarget && entry.refreshTarget !== undefined && (
+              <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+                <DirectoryRefreshTarget
+                  onSet={onRefreshTarget}
+                  current={entry.refreshTarget}
+                  deployment={refreshTarget}
+                />
+                <span
+                  data-testid="directory-next-refresh"
+                  className="text-xs text-app-ink/50"
+                >
+                  Next refresh{" "}
+                  {entry.refreshDueAt == null ? (
+                    "never"
+                  ) : (
+                    <RelativeTime timestamp={entry.refreshDueAt} />
+                  )}
+                </span>
               </div>
             )}
             <WhyHere handle={handle} why={why} citedWindow={citedWindow} />

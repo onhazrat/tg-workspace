@@ -1886,11 +1886,12 @@ export type DirectoryBoostRequest = {
 };
 
 /**
- * DirectoryBoostResponse
+ * DirectoryChangedResponse
  *
- * How many of the named entries the Directory holds, and so changed.
+ * How many of the named entries the Directory holds, and so changed, by
+ * a bulk write such as the Priority boost or the Refresh target.
  */
-export type DirectoryBoostResponse = {
+export type DirectoryChangedResponse = {
     /**
      * Changed
      */
@@ -1986,7 +1987,7 @@ export type DirectoryColumnDefaultsRequest = {
     /**
      * On
      */
-    on: Array<'language' | 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'last_post_at' | 'mine' | 'cited_by' | 'cites' | 'created_at' | 'photos' | 'videos' | 'files' | 'links' | 'status' | 'followable' | 'kind' | 'bio' | 'sample_count' | 'checked_at' | 'refresh_due_at' | 'attempts' | 'last_error' | 'attempted_at' | 'retry_after' | 'priority' | 'priority_boost' | 'effective_priority' | 'telegram_chat_id' | 'latest_id'>;
+    on: Array<'language' | 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'last_post_at' | 'mine' | 'cited_by' | 'cites' | 'created_at' | 'photos' | 'videos' | 'files' | 'links' | 'status' | 'followable' | 'kind' | 'bio' | 'sample_count' | 'checked_at' | 'refresh_due_at' | 'refresh_target' | 'attempts' | 'last_error' | 'attempted_at' | 'retry_after' | 'priority' | 'priority_boost' | 'effective_priority' | 'telegram_chat_id' | 'latest_id'>;
 };
 
 /**
@@ -1998,7 +1999,7 @@ export type DirectoryColumnResponse = {
     /**
      * Key
      */
-    key: 'language' | 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'last_post_at' | 'mine' | 'cited_by' | 'cites' | 'created_at' | 'photos' | 'videos' | 'files' | 'links' | 'status' | 'followable' | 'kind' | 'bio' | 'sample_count' | 'checked_at' | 'refresh_due_at' | 'attempts' | 'last_error' | 'attempted_at' | 'retry_after' | 'priority' | 'priority_boost' | 'effective_priority' | 'telegram_chat_id' | 'latest_id';
+    key: 'language' | 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'last_post_at' | 'mine' | 'cited_by' | 'cites' | 'created_at' | 'photos' | 'videos' | 'files' | 'links' | 'status' | 'followable' | 'kind' | 'bio' | 'sample_count' | 'checked_at' | 'refresh_due_at' | 'refresh_target' | 'attempts' | 'last_error' | 'attempted_at' | 'retry_after' | 'priority' | 'priority_boost' | 'effective_priority' | 'telegram_chat_id' | 'latest_id';
     /**
      * Default
      */
@@ -2079,7 +2080,7 @@ export type DirectoryDistributionRequest = {
     /**
      * Measure
      */
-    measure: 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'photos' | 'videos' | 'files' | 'links' | 'cited_by' | 'cites' | 'sample_count' | 'attempts' | 'latest_id' | 'telegram_chat_id' | 'priority' | 'priority_boost' | 'effective_priority' | 'last_post_at' | 'created_at' | 'checked_at' | 'attempted_at' | 'retry_after' | 'refresh_due_at';
+    measure: 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'photos' | 'videos' | 'files' | 'links' | 'cited_by' | 'cites' | 'sample_count' | 'attempts' | 'latest_id' | 'telegram_chat_id' | 'priority' | 'priority_boost' | 'effective_priority' | 'refresh_target' | 'last_post_at' | 'created_at' | 'checked_at' | 'attempted_at' | 'retry_after' | 'refresh_due_at';
 };
 
 /**
@@ -2225,6 +2226,14 @@ export type DirectoryEntryResponse = {
      * Effectivepriority
      */
     effectivePriority?: number | null;
+    /**
+     * Refreshtarget
+     */
+    refreshTarget?: number | null;
+    /**
+     * Refreshdueat
+     */
+    refreshDueAt?: number | null;
 };
 
 /**
@@ -2380,7 +2389,7 @@ export type DirectoryHandlesRequest = {
     /**
      * Sort
      */
-    sort?: 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'photos' | 'videos' | 'files' | 'links' | 'cited_by' | 'cites' | 'sample_count' | 'attempts' | 'latest_id' | 'telegram_chat_id' | 'priority' | 'priority_boost' | 'effective_priority' | 'last_post_at' | 'created_at' | 'checked_at' | 'attempted_at' | 'retry_after' | 'refresh_due_at' | 'language' | 'status' | 'kind' | 'followable' | 'bio' | 'last_error' | 'mine' | 'mine_last_days' | 'relevance' | 'shared_parents' | 'shared_children';
+    sort?: 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'photos' | 'videos' | 'files' | 'links' | 'cited_by' | 'cites' | 'sample_count' | 'attempts' | 'latest_id' | 'telegram_chat_id' | 'priority' | 'priority_boost' | 'effective_priority' | 'refresh_target' | 'last_post_at' | 'created_at' | 'checked_at' | 'attempted_at' | 'retry_after' | 'refresh_due_at' | 'language' | 'status' | 'kind' | 'followable' | 'bio' | 'last_error' | 'mine' | 'mine_last_days' | 'relevance' | 'shared_parents' | 'shared_children';
     /**
      * Descending
      */
@@ -2465,7 +2474,7 @@ export type DirectoryListRequest = {
     /**
      * Sort
      */
-    sort?: 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'photos' | 'videos' | 'files' | 'links' | 'cited_by' | 'cites' | 'sample_count' | 'attempts' | 'latest_id' | 'telegram_chat_id' | 'priority' | 'priority_boost' | 'effective_priority' | 'last_post_at' | 'created_at' | 'checked_at' | 'attempted_at' | 'retry_after' | 'refresh_due_at' | 'language' | 'status' | 'kind' | 'followable' | 'bio' | 'last_error' | 'mine' | 'mine_last_days' | 'relevance' | 'shared_parents' | 'shared_children';
+    sort?: 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'photos' | 'videos' | 'files' | 'links' | 'cited_by' | 'cites' | 'sample_count' | 'attempts' | 'latest_id' | 'telegram_chat_id' | 'priority' | 'priority_boost' | 'effective_priority' | 'refresh_target' | 'last_post_at' | 'created_at' | 'checked_at' | 'attempted_at' | 'retry_after' | 'refresh_due_at' | 'language' | 'status' | 'kind' | 'followable' | 'bio' | 'last_error' | 'mine' | 'mine_last_days' | 'relevance' | 'shared_parents' | 'shared_children';
     /**
      * Descending
      */
@@ -2489,7 +2498,7 @@ export type DirectoryListRequest = {
     /**
      * Columns
      */
-    columns: Array<'language' | 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'last_post_at' | 'mine' | 'cited_by' | 'cites' | 'created_at' | 'photos' | 'videos' | 'files' | 'links' | 'status' | 'followable' | 'kind' | 'bio' | 'sample_count' | 'checked_at' | 'refresh_due_at' | 'attempts' | 'last_error' | 'attempted_at' | 'retry_after' | 'priority' | 'priority_boost' | 'effective_priority' | 'telegram_chat_id' | 'latest_id'>;
+    columns: Array<'language' | 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'last_post_at' | 'mine' | 'cited_by' | 'cites' | 'created_at' | 'photos' | 'videos' | 'files' | 'links' | 'status' | 'followable' | 'kind' | 'bio' | 'sample_count' | 'checked_at' | 'refresh_due_at' | 'refresh_target' | 'attempts' | 'last_error' | 'attempted_at' | 'retry_after' | 'priority' | 'priority_boost' | 'effective_priority' | 'telegram_chat_id' | 'latest_id'>;
 };
 
 /**
@@ -2514,6 +2523,10 @@ export type DirectoryListResponse = {
      * Yourssize
      */
     yoursSize: number;
+    /**
+     * Refreshtarget
+     */
+    refreshTarget?: number | null;
 };
 
 /**
@@ -2562,7 +2575,7 @@ export type DirectoryMeasureCondition = {
     /**
      * Measure
      */
-    measure: 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'photos' | 'videos' | 'files' | 'links' | 'cited_by' | 'cites' | 'sample_count' | 'attempts' | 'latest_id' | 'telegram_chat_id' | 'priority' | 'priority_boost' | 'effective_priority';
+    measure: 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'photos' | 'videos' | 'files' | 'links' | 'cited_by' | 'cites' | 'sample_count' | 'attempts' | 'latest_id' | 'telegram_chat_id' | 'priority' | 'priority_boost' | 'effective_priority' | 'refresh_target';
     /**
      * Min
      */
@@ -2681,6 +2694,23 @@ export type DirectoryRefreshProjectionResponse = {
      * Measuredperday
      */
     measuredPerDay: number;
+};
+
+/**
+ * DirectoryRefreshTargetRequest
+ *
+ * Set the named entries' own Refresh target, or clear it.
+ */
+export type DirectoryRefreshTargetRequest = {
+    /**
+     * Handles
+     */
+    handles?: Array<string>;
+    view?: DirectoryViewRequest | null;
+    /**
+     * Value
+     */
+    value: number | null;
 };
 
 /**
@@ -2820,6 +2850,10 @@ export type DirectoryRowResponse = {
      * Refreshdueat
      */
     refreshDueAt?: number | null;
+    /**
+     * Refreshtarget
+     */
+    refreshTarget?: number | null;
     /**
      * Attempts
      */
@@ -11623,10 +11657,35 @@ export type DataBoostDirectoryResponses = {
     /**
      * Successful Response
      */
-    200: DirectoryBoostResponse;
+    200: DirectoryChangedResponse;
 };
 
 export type DataBoostDirectoryResponse = DataBoostDirectoryResponses[keyof DataBoostDirectoryResponses];
+
+export type DataSetDirectoryRefreshTargetData = {
+    body: DirectoryRefreshTargetRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data/directory/refresh-target';
+};
+
+export type DataSetDirectoryRefreshTargetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataSetDirectoryRefreshTargetError = DataSetDirectoryRefreshTargetErrors[keyof DataSetDirectoryRefreshTargetErrors];
+
+export type DataSetDirectoryRefreshTargetResponses = {
+    /**
+     * Successful Response
+     */
+    200: DirectoryChangedResponse;
+};
+
+export type DataSetDirectoryRefreshTargetResponse = DataSetDirectoryRefreshTargetResponses[keyof DataSetDirectoryRefreshTargetResponses];
 
 export type DataProjectDirectoryRefreshData = {
     body?: never;

@@ -356,3 +356,29 @@ describe("the Priority boost (DPF)", () => {
     expect(screen.queryByTestId("directory-boost")).toBeNull()
   })
 })
+
+describe("the Refresh target (DRP-02)", () => {
+  test("a DATA_ADMIN reader's entry shows its target and next refresh, and sets it", () => {
+    const sent: (number | null)[] = []
+    mount({
+      entry: entry({ refreshTarget: null, refreshDueAt: Date.now() + 3e8 }),
+      refreshTarget: 20,
+      onRefreshTarget: (value) => sent.push(value),
+    })
+    const control = screen.getByTestId("directory-refresh-target")
+    expect(control.textContent).toContain("20 (deployment's)")
+    expect(screen.getByTestId("directory-next-refresh").textContent).toContain(
+      "Next refresh",
+    )
+    fireEvent.change(screen.getByLabelText("Refresh target"), {
+      target: { value: "5" },
+    })
+    fireEvent.click(screen.getByRole("button", { name: "Set target" }))
+    expect(sent).toEqual([5])
+  })
+
+  test("anybody else's entry carries none, and the panel offers nothing", () => {
+    mount({ onRefreshTarget: () => {} })
+    expect(screen.queryByTestId("directory-refresh-target")).toBeNull()
+  })
+})
