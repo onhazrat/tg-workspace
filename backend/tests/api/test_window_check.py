@@ -25,7 +25,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import event
+from sqlalchemy import event, text
 from sqlmodel import Session, col, delete, select
 
 from app import crud
@@ -580,14 +580,20 @@ def test_the_check_reads_only_a_bounded_slice_of_posts(session: Session) -> None
     (ADR-044). On staging the old continuity read went through all 1.1 GB of
     Posts per request.
 
-    With sequential scans priced out, a read bounded only by Channel still
-    plans an index scan on `channel_name` alone, which is the regression this
-    catches on a table too small to show it.
+    The Channel holds 2,000 older Posts and the table is analysed, so the
+    planner prices a bounded read as it would on a real corpus: with four
+    Posts and no statistics, any index looks as cheap as any other. With
+    sequential scans priced out, a read bounded only by Channel plans an index
+    scan on `channel_name` alone, which is the regression this catches.
 
     **Mutation:** count held Posts with no time bound and the read is bounded
     by Channel alone.
     """
-    _channel(session, "cw_cost", HOLED, walks=HOLED_WALKS, head_read_at=E)
+    history = [(1000 + k, S - (k + 2) * HOUR) for k in range(2000)]
+    _channel(session, "cw_cost", HOLED + history, walks=HOLED_WALKS, head_read_at=E)
+    with engine.connect() as conn:
+        conn.execute(text("ANALYZE tg_posts"))
+        conn.commit()
     statements: list[tuple[str, Any]] = []
 
     def grab(_c: Any, _cur: Any, statement: str, params: Any, *_a: Any) -> None:
