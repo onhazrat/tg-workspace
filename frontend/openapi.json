@@ -2177,6 +2177,21 @@
         "security": [{ "OAuth2PasswordBearer": [] }]
       }
     },
+    "/api/v1/data/posts/window-check/events": {
+      "get": {
+        "tags": ["data"],
+        "summary": "Window Check Events",
+        "description": "Server-sent events: the names of followed Channels a sync just changed,\ngathered per second, so the page asks the window check for those alone.\nThe first frame names none and says the stream is open.",
+        "operationId": "data-window_check_events",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": { "application/json": { "schema": {} } }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
     "/api/v1/data/posts/bulk": {
       "post": {
         "tags": ["data"],

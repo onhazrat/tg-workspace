@@ -181,11 +181,12 @@ def test_the_split_did_not_change_the_route_count() -> None:
     **119** with TGU-02's `POST /tags/uses` and `POST /tags/order`, recording a
     Tag use and reading each Tag's order and counts on a tab; and **120**
     with CW-01's `POST /posts/window-check`, which Channels of a Scope are
-    Incomplete and why (ADR-043).
+    Incomplete and why (ADR-043); and **121** with WR-02's `GET
+    /posts/window-check/events`, the followed Channels a sync just changed.
     """
     data_routes = {
         (m, p) for m, p in _mounted_routes() if p.startswith("/api/v1/data/")
     }
-    assert len(data_routes) == 120, (
-        f"expected 120 /data endpoints, found {len(data_routes)}"
+    assert len(data_routes) == 121, (
+        f"expected 121 /data endpoints, found {len(data_routes)}"
     )

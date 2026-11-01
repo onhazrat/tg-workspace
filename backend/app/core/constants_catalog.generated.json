@@ -377,6 +377,14 @@
       "value": 1.0
     },
     {
+      "comment": "How long a burst is gathered into one frame (user story 44).",
+      "expression": "1.0",
+      "file": "backend/app/services/channel_changes.py",
+      "line": 35,
+      "name": "GATHER_SECONDS",
+      "value": 1.0
+    },
+    {
       "comment": "How long to wait before re-probing a handle that keeps failing. Doubles per consecutive failure and stops growing at a day: a handle that has failed eight times in a row is probably failing for a reason a tighter loop will not fix, and the sweep should not keep spending proxy lanes on it.",
       "expression": "15",
       "file": "backend/app/services/channel_directory.py",
@@ -996,7 +1004,7 @@
       "comment": "Rows per delete transaction in `prune_finished_jobs`. Bounds transaction length, not memory \u2014 see that function.",
       "expression": "1000",
       "file": "backend/app/services/scraper_jobs.py",
-      "line": 54,
+      "line": 55,
       "name": "SYNC_JOB_DELETE_BATCH",
       "value": 1000
     },
@@ -1004,7 +1012,7 @@
       "comment": "How many watched-but-not-run jobs this process keeps mirrored. Evicting one costs a row read to rebuild it, never correctness, so a modest cap is free insurance against the mirror becoming a leak: `GET /jobs/sync/{id}` seeds an entry for any job id a client asks about, and nothing about a finished job makes it fall out on its own.",
       "expression": "256",
       "file": "backend/app/services/scraper_jobs.py",
-      "line": 284,
+      "line": 309,
       "name": "MAX_MIRRORED_JOBS",
       "value": 256
     },
@@ -1012,7 +1020,7 @@
       "comment": "Same bound, same reason, for the cancellation flags. See `_get_cancel_event`.",
       "expression": "256",
       "file": "backend/app/services/scraper_jobs.py",
-      "line": 287,
+      "line": 312,
       "name": "MAX_TRACKED_CANCEL_EVENTS",
       "value": 256
     },
@@ -1092,7 +1100,7 @@
       "comment": "Pace reads the week before the head read; under an hour of it is no pace.",
       "expression": "7 * 24 * 3600000",
       "file": "backend/app/services/sync_orchestrator.py",
-      "line": 1105,
+      "line": 1106,
       "name": "PACE_WEEK_MS",
       "value": 604800000
     },
@@ -1100,7 +1108,7 @@
       "comment": "",
       "expression": "3600000",
       "file": "backend/app/services/sync_orchestrator.py",
-      "line": 1106,
+      "line": 1107,
       "name": "PACE_MIN_MS",
       "value": 3600000
     },
@@ -1108,7 +1116,7 @@
       "comment": "How long a coalesced request waits before giving up and reporting a skip. **Ticket 12 removed this constant's original reason and it still earns its place, on a different one.** Ticket 11 justified the bound by the waiter holding a slot in the worker's concurrency gate; ticket 12 made the permit releasable (`sync_queue.SyncSlot`), so a waiter now scrapes nobody's slot. What remains is that the waiter's *message* is claimed from PGMQ under a visibility timeout of about 2.4 hours: a waiter that outlasted it would have its own message redelivered and processed a second time while the first was still waiting. And a person is on the other end of the SSE stream, for whom an answer of \"still running\" beats an open connection. Fifteen minutes is a judgement, not a derivation, and worth naming as such: long enough that an ordinary sync -- seconds to a couple of minutes -- is always ridden rather than skipped, short enough to stay well inside the visibility timeout.",
       "expression": "900",
       "file": "backend/app/services/sync_orchestrator.py",
-      "line": 1595,
+      "line": 1605,
       "name": "COALESCE_MAX_WAIT_SECONDS",
       "value": 900
     },
@@ -1116,7 +1124,7 @@
       "comment": "How often a waiter re-checks the claim when no notification arrives. Small, because it is only reached when a ring was lost or the holder died, and both of those should resolve in seconds rather than at the next sweep.",
       "expression": "2.0",
       "file": "backend/app/services/sync_orchestrator.py",
-      "line": 1600,
+      "line": 1610,
       "name": "_COALESCE_POLL_SECONDS",
       "value": 2.0
     },
@@ -1532,7 +1540,7 @@
       "comment": "Edits settle first: dragging the window must not queue a check per step.",
       "expression": "500",
       "file": "frontend/src/hooks/useWindowCheck.ts",
-      "line": 11,
+      "line": 17,
       "name": "SETTLE_MS",
       "value": 500
     },
@@ -1641,14 +1649,6 @@
       "value": 50
     },
     {
-      "comment": "How often the gate asks whether a sync it joined has finished.",
-      "expression": "2_000",
-      "file": "frontend/src/lib/complete-window/gate-flow.ts",
-      "line": 139,
-      "name": "POLL_MS",
-      "value": 2000
-    },
-    {
       "comment": "ADR-043's wait for a person; \"Continue now\" ends it sooner.",
       "expression": "5 * 60_000",
       "file": "frontend/src/lib/complete-window/gate.ts",
@@ -1663,6 +1663,22 @@
       "line": 37,
       "name": "AUTO_SYNC_SECONDS",
       "value": 30
+    },
+    {
+      "comment": "",
+      "expression": "5_000",
+      "file": "frontend/src/lib/complete-window/live.ts",
+      "line": 43,
+      "name": "RECONNECT_MS",
+      "value": 5000
+    },
+    {
+      "comment": "How long the stream outlives its last listener, so a page that subscribes again at once (a Live tick, a new selection) keeps the same connection.",
+      "expression": "1_000",
+      "file": "frontend/src/lib/complete-window/live.ts",
+      "line": 48,
+      "name": "CLOSE_AFTER_MS",
+      "value": 1000
     },
     {
       "comment": "",
