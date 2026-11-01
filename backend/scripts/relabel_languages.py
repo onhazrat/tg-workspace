@@ -91,7 +91,10 @@ def _relabel_entries(session: Session, *, dry_run: bool, batch_size: int) -> int
         samples = samples_by_handle(session, [entry.handle for entry in entries])
         for entry in entries:
             # A sample is always read, so an entry with samples always has one.
-            entry.language = compute_sample_statistics(samples[entry.handle]).language
+            # Only the Language is read, so the fetch time is immaterial.
+            entry.language = compute_sample_statistics(
+                samples[entry.handle], fetched_at_ms=0
+            ).language
             session.add(entry)
             changed += 1
         _finish(session, dry_run=dry_run)

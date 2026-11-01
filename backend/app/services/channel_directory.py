@@ -50,20 +50,22 @@ everywhere it is joined.
 
 ## An answer expires; the map does not
 
-Ticket 03 made a conclusive answer stop being permanent. A **live** entry comes
-due again after `directoryRefreshDays` — deployment policy, a week by default —
-and that window is the Operator's primary rate control on outbound probe
-traffic: widening it is the response to Telegram pushing back, short of turning
-probing off. A **dead** verdict never comes due at all (`is_refreshable`), so
-bots, groups, personal accounts and private or deleted channels stop costing
-requests the moment they are answered once, however long the deployment runs.
+Ticket 03 made a conclusive answer stop being permanent, and ADR-045 decides
+when it expires. A **live** entry comes due once its Channel has likely
+published the Refresh target in new Posts since the fetch that last answered
+it: the target over its Posting rate, clamped to the shortest and longest wait
+(`refresh_wait`). All three are deployment policy and the Operator's rate
+control on outbound probe traffic. A **dead** verdict never comes due at all
+(`is_refreshable`), so bots, groups, personal accounts and private or deleted
+channels stop costing requests the moment they are answered once, however long
+the deployment runs.
 
 `refresh_due_at` is a second column and deliberately not `retry_after`. That one
 means "this fetch failed, back off"; this one means "this answer is old". Same
 type, opposite cause, and the one time they were conflated it produced the
 starvation `dequeue_handles` still documents.
 
-The refresh has two other writers besides the window. `record_sync_metadata` is
+The due date has two other writers besides a probe. `record_sync_metadata` is
 fed by the sync orchestrator from the page it already fetched, so a followed
 Channel stays current at zero extra requests; and `refresh_entries` marks an
 entry due on demand — a **refresh**, which keeps the answer it is replacing,
@@ -97,7 +99,11 @@ from sqlalchemy import text as sa_text
 from sqlalchemy import update as sa_update
 from sqlmodel import Session, col, delete, select
 
-from app.jobs.settings import load_directory_settings, load_reach_settings
+from app.jobs.settings import (
+    default_directory,
+    load_directory_settings,
+    load_reach_settings,
+)
 from app.models_tg import (
     DirectoryEntry,
     DirectorySearchDocument,
@@ -260,19 +266,88 @@ def _retry_deadline(attempts: int, *, now: datetime) -> datetime:
     return now + timedelta(minutes=minutes)
 
 
-def resolve_refresh_window(session: Session) -> timedelta | None:
-    """How long a live entry's answer stays current, or `None` for never.
+#: The largest Refresh target, deployment's or an entry's (ADR-045). A larger one
+#: lands on the longest wait anyway.
+MAX_REFRESH_TARGET = 1000
 
-    Read from the settings row rather than `config.py` directly, because the
-    window is the Operator's lever: widening it is the documented response to
-    Telegram pushing back, and a lever that needs a redeploy is not one. Zero
-    disables refreshing entirely, which is the same convention every retention
-    window in this deployment already uses.
-    """
-    days = load_directory_settings(session).get("directoryRefreshDays")
-    if not isinstance(days, int) or days <= 0:
+
+class RefreshPolicy(NamedTuple):
+    """When a live entry comes due (ADR-045): the deployment's Refresh target
+    and the shortest and longest wait, in days."""
+
+    target: int
+    min_days: int
+    max_days: int
+
+    def refusal(self) -> str | None:
+        """Why a save must not store this policy, or `None`. Every write door
+        asks: the Settings page's declarations bound each field alone, and the
+        older section route bounds none."""
+        if not 1 <= self.target <= MAX_REFRESH_TARGET:
+            return f"The Refresh target is 1 to {MAX_REFRESH_TARGET}."
+        if self.min_days < 1 or self.max_days < 1:
+            return "A wait between Refreshes is at least 1 day."
+        if self.min_days > self.max_days:
+            return "The shortest wait between Refreshes is at most the longest."
         return None
-    return timedelta(days=days)
+
+
+def refresh_policy_from(values: dict[str, Any]) -> RefreshPolicy:
+    """The policy in a `directory` settings section. A section missing a field
+    takes its default, so a validator can merge one edited field over what is
+    stored and ask the result for its `refusal`."""
+    merged = {**default_directory(), **values}
+    return RefreshPolicy(
+        int(merged["directoryRefreshTarget"]),
+        int(merged["directoryRefreshMinDays"]),
+        int(merged["directoryRefreshMaxDays"]),
+    )
+
+
+def refresh_policy(session: Session) -> RefreshPolicy:
+    """The policy in force, read from the settings row rather than `config.py`:
+    it is the Operator's lever, and a lever that needs a redeploy is not one.
+
+    A stored value out of bounds is read at the nearest bound. Before ADR-045 a
+    window of 0 meant "never refresh"; read as a wait of 0 it would mean
+    "refresh every tick", and nulled due dates would let retention take live
+    entries' samples.
+    """
+    stored = refresh_policy_from(load_directory_settings(session))
+    return RefreshPolicy(
+        min(max(stored.target, 1), MAX_REFRESH_TARGET),
+        max(stored.min_days, 1),
+        max(stored.max_days, 1),
+    )
+
+
+def refresh_policy_refusal(session: Session, changes: dict[str, Any]) -> str | None:
+    """Why `changes` to the `directory` section must not be saved, judged with
+    what is stored, or `None`. Every write door asks this before it writes and
+    calls `recompute_refresh_due` after."""
+    return refresh_policy_from(
+        {**load_directory_settings(session), **changes}
+    ).refusal()
+
+
+def refresh_wait(
+    policy: RefreshPolicy, posts_per_week: float | None, target: int | None = None
+) -> timedelta:
+    """How long a live entry's answer stays current.
+
+    `target` is the entry's own Refresh target, `None` for the deployment's.
+    **The clamp binds every entry, own targets included**: the shortest wait is
+    what keeps total traffic the Operator's choice rather than the corpus's,
+    and a target set on a whole Directory view must not undo it. No rate (too
+    few samples) waits the longest. Turning refreshing off is the Directory
+    probe Request kind's job (ADR-040), not a wait's.
+
+    `_WAIT_DAYS` is the same rule in SQL; the two must agree.
+    """
+    if not posts_per_week:
+        return timedelta(days=policy.max_days)
+    days = 7 * (target or policy.target) / posts_per_week
+    return timedelta(days=min(max(days, policy.min_days), policy.max_days))
 
 
 def is_refreshable(status: str, kind: str) -> bool:
@@ -609,7 +684,13 @@ def dequeue_handles(
                 col(DirectoryEntry.refresh_due_at) <= moment,
             ),
         )
-        .order_by(col(DirectoryEntry.effective_priority), col(DirectoryEntry.handle))
+        # Most overdue first among equals (ADR-045), so a backlog drains by
+        # how long each entry has waited and not by the alphabet.
+        .order_by(
+            col(DirectoryEntry.effective_priority),
+            col(DirectoryEntry.refresh_due_at),
+            col(DirectoryEntry.handle),
+        )
         .limit(limit)
     )
     return [row.handle for row in session.exec(statement).all()]
@@ -758,7 +839,7 @@ def _schedule_refresh(
     """Set when this answer goes stale, and where it will sit in the queue.
 
     Called only where a conclusive verdict has just been written. A dead one
-    gets `None` — never due — and a live one gets the window; both take
+    gets `None`, never due, and a live one `refresh_wait`; both take
     `REFRESH_PRIORITY`, because the rank a row is carrying belongs to whatever
     report or recheck first queued it and says nothing about how urgent a
     *refresh* is. Leaving it alone is what would put a rechecked handle at the
@@ -766,14 +847,101 @@ def _schedule_refresh(
 
     `provisional` is the first `unavailable` on a handle that was live, which
     stays due so the verdict can be confirmed rather than sealing a Channel on
-    one synthesized answer. See `record_probe_result`.
+    one synthesized answer. See `record_probe_result`. It waits the shortest:
+    the confirming fetch is about the verdict, not about new Posts.
     """
     row.priority = REFRESH_PRIORITY
-    window = resolve_refresh_window(session)
-    if window is None or not (provisional or is_refreshable(row.status, row.kind)):
+    if not (provisional or is_refreshable(row.status, row.kind)):
         row.refresh_due_at = None
         return
-    row.refresh_due_at = now + window
+    policy = refresh_policy(session)
+    wait = (
+        timedelta(days=policy.min_days)
+        if provisional
+        else refresh_wait(policy, row.posts_per_week, row.refresh_target)
+    )
+    row.refresh_due_at = now + wait
+
+
+#: `refresh_wait` in days, over an entry's stored columns.
+_WAIT_DAYS = """CASE
+    WHEN posts_per_week > 0 THEN least(greatest(
+        7.0 * coalesce(refresh_target, :target) / posts_per_week,
+        :min_days), :max_days)
+    ELSE :max_days END"""
+
+#: The entries `is_refreshable` answers for, with an answer to run from.
+_LIVE = "status = 'ok' AND kind <> ALL(:dead) AND checked_at IS NOT NULL"
+
+#: The due date the policy gives an entry. It runs from `checked_at`, the last
+#: conclusive answer, as the probe path's does, and `greatest` keeps a failed
+#: refresh's backoff: only a failure leaves `retry_after` set on a live entry.
+_DUE = (
+    f"greatest(checked_at + make_interval(secs => 86400 * {_WAIT_DAYS}), retry_after)"
+)
+
+#: Every refreshable entry moved to the policy, in one statement (ADR-045), so
+#: a settings change takes effect now rather than over the longest wait. An
+#: entry an Operator made due on demand keeps it (`RECHECK_PRIORITY`, as
+#: `record_sync_metadata` tells them apart). Only a row whose date moves is
+#: written: the Settings page saves one field per request, and the second and
+#: third writes of one save move few entries.
+_RECOMPUTE_DUE = sa_text(
+    f"""
+    UPDATE tg_channel_directory SET refresh_due_at = {_DUE}
+    WHERE {_LIVE}
+      AND priority <> :recheck
+      AND refresh_due_at IS DISTINCT FROM {_DUE}
+    """
+)
+
+
+def _policy_params(policy: RefreshPolicy) -> dict[str, Any]:
+    return {**policy._asdict(), "dead": sorted(DEAD_KINDS)}
+
+
+def recompute_refresh_due(session: Session) -> int:
+    """Move every refreshable entry's due date to the policy in force; return
+    how many moved. Commits."""
+    moved = session.execute(
+        _RECOMPUTE_DUE,
+        _policy_params(refresh_policy(session)) | {"recheck": RECHECK_PRIORITY},
+    )
+    session.commit()
+    return int(cast(Any, moved).rowcount)
+
+
+class RefreshProjection(NamedTuple):
+    """What a refresh policy would cost (ADR-045): Refreshes a day once every
+    live entry waits its turn, and how many entries sit at each bound."""
+
+    refreshes_per_day: float
+    at_min: int
+    at_max: int
+
+
+#: One Refresh per wait, summed over every live entry's stored columns. Never
+#: reads the samples: 1 to 3 s on staging warm.
+#:
+#: ponytail: followed Channels are counted too, though sync keeps their entries
+#: current and they never take a probe; about 330 entries on staging, so at
+#: most a few dozen Refreshes a day too many. Exclude them if that grows.
+_PROJECT_REFRESH = sa_text(
+    f"""
+    SELECT coalesce(sum(1.0 / wait), 0),
+           count(*) FILTER (WHERE wait <= :min_days),
+           count(*) FILTER (WHERE wait >= :max_days)
+    FROM (SELECT {_WAIT_DAYS} AS wait FROM tg_channel_directory WHERE {_LIVE}) live
+    """
+)
+
+
+def project_refresh(session: Session, policy: RefreshPolicy) -> RefreshProjection:
+    """The steady-state cost of `policy` over the Directory as it stands."""
+    per_day, at_min, at_max = session.execute(
+        _PROJECT_REFRESH, _policy_params(policy)
+    ).one()
+    return RefreshProjection(float(per_day), int(at_min), int(at_max))
 
 
 def record_sync_metadata(
@@ -1126,7 +1294,7 @@ def write_probe_verdict(
             # reaches this entry at its next probe and needs no sweep.
             _store_statistics(
                 row,
-                compute_sample_statistics(stored_samples),
+                compute_sample_statistics(stored_samples, fetched_at_ms=_ms(now)),
                 sample_reach(
                     stored_samples,
                     _ms(now),

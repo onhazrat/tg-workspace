@@ -120,6 +120,13 @@ def _recheck(session: Session) -> None:
 
 
 def _retention(session: Session) -> None:
+    # Retention collects only an entry that is no longer refreshed (ADR-045).
+    session.execute(
+        sa_text(
+            "UPDATE tg_channel_directory SET refresh_due_at = NULL "
+            "WHERE handle = 'ws_ru'"
+        )
+    )
     session.execute(
         sa_text(
             "UPDATE tg_channel_directory_samples SET captured_at = :old "

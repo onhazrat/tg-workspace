@@ -373,6 +373,12 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
         "queues DirectoryEntry rows, one Directory for every Account; the write "
         "is DATA_ADMIN-gated (test_directory_add.py)",
     ),
+    ("GET", f"{DATA}/directory/refresh-projection"): (
+        Reason.DEPLOYMENT_WIDE,
+        "prices the deployment's Refresh settings over every live DirectoryEntry, "
+        "one answer for every caller; SETTINGS_MANAGE-gated "
+        "(test_directory_refresh_routes.py)",
+    ),
     ("GET", f"{DATA}/directory/size"): (
         Reason.CORPUS,
         "one count over DirectoryEntry, the same for every caller",

@@ -27,6 +27,7 @@ and the one test that matters most here is the one where they part company.
 from __future__ import annotations
 
 import importlib
+from datetime import UTC
 from typing import Any
 
 import pytest
@@ -74,6 +75,15 @@ def _weekly(count: int, *, views: int | None = None) -> list[dict[str, Any]]:
     return out
 
 
+def _rate_at_fetch(session: Session, count: int) -> float:
+    """The Posting rate of `_weekly(count)` as the probe that stored it saw it:
+    `count` Posts over the time from the oldest to that fetch (ADR-045)."""
+    row = session.get(DirectoryEntry, HANDLE)
+    assert row is not None and row.checked_at is not None
+    fetched_ms = row.checked_at.replace(tzinfo=UTC).timestamp() * 1000
+    return count / ((fetched_ms - _ORIGIN) / _WEEK_MS)
+
+
 def _page(*, samples: list[dict[str, Any]], **extra: Any) -> dict[str, Any]:
     return {
         "isTelegramPage": True,
@@ -93,8 +103,9 @@ def test_a_conclusive_probe_stores_the_statistics_of_the_samples_it_stored() -> 
         )
 
         assert after["sampleCount"] == 5
-        # Five Posts a week apart span four weeks: one per week, not 1.25.
-        assert after["postsPerWeek"] == 1.0
+        # Five Posts over the time from the oldest to this fetch, not over the
+        # four weeks between the oldest and the newest.
+        assert after["postsPerWeek"] == pytest.approx(_rate_at_fetch(session, 5))
         # A year-old sample is Settled, so Reach is measured (REACH-04).
         assert after["reach"] == 1002
         assert after["reachEstimated"] is False
@@ -120,10 +131,11 @@ def test_an_inconclusive_fetch_leaves_them_alone() -> None:
     on this path — the same rule the verdict itself follows."""
     with Session(engine) as session:
         record_probe_result(session, HANDLE, _page(samples=_weekly(5, views=1000)))
+        rate = _rate_at_fetch(session, 5)
         after = record_probe_result(session, HANDLE, None, error="timeout")
 
         assert after["sampleCount"] == 5
-        assert after["postsPerWeek"] == 1.0
+        assert after["postsPerWeek"] == pytest.approx(rate)
 
 
 def test_an_unavailable_entry_keeps_its_statistics_and_loses_its_mix() -> None:
@@ -155,6 +167,7 @@ def test_an_unavailable_entry_keeps_its_statistics_and_loses_its_mix() -> None:
         )
         assert alive["mediaMix"] == {"photos": 1.0}
         assert alive["mediaDensity"] == 300 / 900
+        rate = _rate_at_fetch(session, 5)
 
         record_probe_result(session, HANDLE, GONE)
         after = record_probe_result(session, HANDLE, GONE)
@@ -163,7 +176,7 @@ def test_an_unavailable_entry_keeps_its_statistics_and_loses_its_mix() -> None:
         assert samples_for(session, HANDLE) == [], "the samples are still cleared"
 
         assert after["sampleCount"] == 5
-        assert after["postsPerWeek"] == 1.0
+        assert after["postsPerWeek"] == pytest.approx(rate)
         assert after["reach"] == 1002
         assert after["forwardShare"] == 0.0
         assert after["lastPostAt"] is not None
@@ -200,31 +213,43 @@ def test_a_recheck_discards_them_with_the_verdict() -> None:
         assert row.language is None
 
 
-def test_the_migration_backfill_agrees_with_the_transform() -> None:
+def test_the_migration_backfills_agree_with_the_transform() -> None:
     """The two implementations of one formula, pinned to each other.
 
-    The backfill restates the arithmetic in SQL rather than importing the
+    The backfills restate the arithmetic in SQL rather than importing the
     transform, because an applied revision has to keep meaning what it meant and
     an imported module is free to change underneath it. That duplication is
     deliberate, and this is what keeps it honest: seed samples, blank the
-    columns, run the migration's own statement, and require the answer the pure
-    transform gives.
+    columns, run the migrations' own statements in deploy order, and require
+    the answer the pure transform gives.
 
-    Its `median_views` leg is left out: REACH-04 renamed the column to `reach`
-    and replaced the rule, and `scripts/recompute_directory_reach.py` rewrites
-    every stored value, so the old median has no transform left to agree with.
-    The Language is out too, because the backfill does not compute it: the
-    detector lives in Python, and the next probe fills it in.
+    Two revisions, because ADR-045 redefined the Posting rate: ticket 02's
+    backfill wrote the old newest-to-oldest rate, and DRP-01 rebuilds every
+    stored rate from it. Run together they must give what a probe stores now.
+
+    Ticket 02's `median_views` leg is left out: REACH-04 renamed the column to
+    `reach` and replaced the rule, and `scripts/recompute_directory_reach.py`
+    rewrites every stored value, so the old median has no transform left to
+    agree with. The Language is out too, because the backfill does not compute
+    it: the detector lives in Python, and the next probe fills it in.
     """
     module = importlib.import_module(
         "app.alembic.versions.d1e2f3a4b5c6_directory_statistics"
     )
+    rebuild = importlib.import_module(
+        "app.alembic.versions.b5e9d3f7a2c8_directory_refresh_by_posts_drp_01"
+    ).REBUILD_RATE_SQL
     median_leg = "    median_views  = s.median_views,\n"
     assert median_leg in module._BACKFILL
     backfill = module._BACKFILL.replace(median_leg, "")
     with Session(engine) as session:
         record_probe_result(session, HANDLE, _page(samples=_weekly(10, views=500)))
-        expected = compute_sample_statistics(samples_for(session, HANDLE))
+        row = session.get(DirectoryEntry, HANDLE)
+        assert row is not None and row.checked_at is not None
+        expected = compute_sample_statistics(
+            samples_for(session, HANDLE),
+            fetched_at_ms=int(row.checked_at.replace(tzinfo=UTC).timestamp() * 1000),
+        )
 
         session.execute(
             sa_text(
@@ -233,10 +258,10 @@ def test_the_migration_backfill_agrees_with_the_transform() -> None:
             )
         )
         session.execute(sa_text(backfill))
+        session.execute(sa_text(rebuild))
         session.commit()
+        session.refresh(row)
 
-        row = session.get(DirectoryEntry, HANDLE)
-        assert row is not None
         assert row.sample_count == expected.sample_count
         assert row.last_post_at == expected.last_post_at
         assert row.posts_per_week == pytest.approx(expected.posts_per_week)

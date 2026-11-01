@@ -164,11 +164,15 @@ const CONFIGURATION: Row[] = [
   }),
 ]
 
-async function mockRegistry(page: Page, extra: Row[] = []): Promise<Mock> {
+async function mockRegistry(
+  page: Page,
+  extra: Row[] = [],
+  permissions: string[] = [],
+): Promise<Mock> {
   const mock: Mock = { puts: [] }
   await page.route("**/api/v1/settings/registry", (route) =>
     route.fulfill({
-      json: { topics: TOPICS, rows: [...ROWS, ...extra], permissions: [] },
+      json: { topics: TOPICS, rows: [...ROWS, ...extra], permissions },
     }),
   )
   await page.route(
@@ -179,7 +183,7 @@ async function mockRegistry(page: Page, extra: Row[] = []): Promise<Mock> {
       )
       const body = route.request().postDataJSON() as Record<string, unknown>
       mock.puts.push({ id, body })
-      const current = ROWS.find((r) => r.id === id) as Row
+      const current = [...ROWS, ...extra].find((r) => r.id === id) as Row
       if (body.value === 13) {
         return route.fulfill({
           status: 422,
@@ -529,4 +533,57 @@ test("loading the app writes no network settings back", async ({ page }) => {
   await loaded
   await page.waitForTimeout(1_000) // the save is debounced by 400ms
   expect(puts).toEqual([])
+})
+
+test("the Directory Refreshes panel prices an edit, debounced, and never on load", async ({
+  page,
+}) => {
+  // DRP-01, ADR-045. The projection scans every live entry, so it is asked
+  // once typing stops and not when the page opens.
+  const refresh = (name: string, value: number) =>
+    row(`directory.deployment.${name}`, { value, default: value, min: 1 })
+  const mock = await mockRegistry(
+    page,
+    [
+      refresh("refreshTarget", 20),
+      refresh("refreshMinDays", 4),
+      refresh("refreshMaxDays", 120),
+    ],
+    ["settings:manage"],
+  )
+  const asked: URLSearchParams[] = []
+  await page.route("**/api/v1/data/directory/refresh-projection**", (route) => {
+    asked.push(new URL(route.request().url()).searchParams)
+    return route.fulfill({
+      json: {
+        refreshesPerDay: 21_150.2,
+        atMin: 75_540,
+        atMax: 289_700,
+        measuredPerDay: 57_712,
+      },
+    })
+  })
+  await openSettings(page, "&setting=directory.deployment.refresh")
+  const panel = item(page, "directory.deployment.refresh")
+  await expect(panel.getByLabel("Refresh target")).toHaveValue("20")
+  await page.waitForTimeout(1_000)
+  expect(asked).toEqual([])
+
+  // Emptied first, which is no policy at all, then typed: "4" and "40" are
+  // both valid drafts, and only the one typing settled on is asked.
+  await panel.getByLabel("Refresh target").fill("")
+  await panel
+    .getByLabel("Refresh target")
+    .pressSequentially("40", { delay: 50 })
+  await expect(panel.getByTestId("refresh-projection")).toContainText(
+    "About 21,150 Refreshes a day",
+  )
+  expect(asked.map((q) => q.get("target"))).toEqual(["40"])
+
+  await panel.getByTestId("refresh-policy-save").click()
+  await expect
+    .poll(() => mock.puts)
+    .toEqual([
+      { id: "directory.deployment.refreshTarget", body: { value: 40 } },
+    ])
 })

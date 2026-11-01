@@ -22,12 +22,20 @@ from app.core.request_recording import RequestKind
 from app.jobs.settings import load_reach_settings, write_setting_field
 from app.schemas.settings_registry import SettingRow
 from app.services import rbac
+from app.services.channel_directory import (
+    recompute_refresh_due,
+    refresh_policy_refusal,
+)
 from app.services.reach import reach_settings_from
 from app.services.request_kinds import record_switch_time
 from app.services.setting_declarations import Declaration, declaration
 from app.services.settings_configuration import configuration_lock
 from app.services.settings_page import is_visible, lock_reason, row_for
-from app.services.settings_registry import REACH_KEY, REQUEST_KINDS_KEY
+from app.services.settings_registry import (
+    DIRECTORY_KEY,
+    REACH_KEY,
+    REQUEST_KINDS_KEY,
+)
 from app.services.sync_meta import touch_sync
 
 #: The 404 for an id nobody declared and for one the caller may not see alike,
@@ -62,8 +70,13 @@ def _type_refusal(decl: Declaration, value: Any) -> str | None:
 def write_refusal(session: Session, decl: Declaration, value: Any) -> str | None:
     """Why `value` cannot be stored for `decl`, in words the row can show."""
     refusal = _type_refusal(decl, value)
-    if refusal is not None or decl.key != REACH_KEY:
+    if refusal is not None:
         return refusal
+    # The Refresh settings are validated together, against what is stored.
+    if decl.key == DIRECTORY_KEY:
+        return refresh_policy_refusal(session, {decl.field: value})
+    if decl.key != REACH_KEY:
+        return None
     # The Reach settings are validated together, against what is stored.
     try:
         reach_settings_from({**load_reach_settings(session), decl.field: value})
@@ -107,4 +120,8 @@ def update_setting(
     )
     if decl.key == REQUEST_KINDS_KEY:
         record_switch_time(session, RequestKind(decl.field))
+    if decl.key == DIRECTORY_KEY:
+        # A changed target or wait moves every live entry's due date now, not
+        # over the next 120 days (ADR-045).
+        recompute_refresh_due(session)
     return row_for(session, user_id, decl)

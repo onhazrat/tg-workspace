@@ -142,15 +142,18 @@ def default_retention_prefs() -> dict[str, Any]:
 
 
 def default_directory() -> dict[str, Any]:
-    """The Channel Directory's refresh window (ticket 03).
+    """When a Channel Directory entry comes due again (ADR-045).
 
-    One field, and it is deliberately its own section rather than a fourth
-    entry in `retention`: retention deletes rows, this decides when to fetch
-    one again. Filing it beside `directorySampleRetentionDays` would put the
-    lever that controls outbound traffic in the blob an Operator opens to
-    reclaim disk.
+    Deliberately its own section rather than more of `retention`: retention
+    deletes rows, this decides when to fetch one again. Filing it beside
+    `directorySampleRetentionDays` would put the lever that controls outbound
+    traffic in the blob an Operator opens to reclaim disk.
     """
-    return {"directoryRefreshDays": settings.DIRECTORY_REFRESH_DAYS_DEFAULT}
+    return {
+        "directoryRefreshTarget": settings.DIRECTORY_REFRESH_TARGET_DEFAULT,
+        "directoryRefreshMinDays": settings.DIRECTORY_REFRESH_MIN_DAYS_DEFAULT,
+        "directoryRefreshMaxDays": settings.DIRECTORY_REFRESH_MAX_DAYS_DEFAULT,
+    }
 
 
 def default_media() -> dict[str, Any]:
@@ -329,7 +332,7 @@ def load_jobs_settings(session: Session) -> dict[str, Any]:
 
 
 def load_directory_settings(session: Session) -> dict[str, Any]:
-    """The Directory's refresh window, merged over its default (ticket 03)."""
+    """When Directory entries come due, merged over the defaults (ADR-045)."""
     return load_setting(session, DIRECTORY_KEY, default_directory())
 
 

@@ -360,18 +360,23 @@ class Settings(BaseSettings):
     # month is not evidence of what a Channel publishes now. 0 = keep forever.
     RETENTION_DIRECTORY_SAMPLE_DAYS_DEFAULT: int = 30
 
-    # The Channel Directory's refresh window (ticket 03).
+    # When a live Channel Directory entry comes due again (ADR-045).
     #
-    # How long a *live* entry's answer stays current before the handle becomes
-    # due for another fetch. Deployment policy rather than per-Account, because
-    # the Directory is corpus-wide — and it is the Operator's primary rate
-    # control: widening it is the lever when Telegram pushes back, short of
-    # turning probing off. A dead verdict is exempt and never comes due at all.
+    # An entry is due when its Channel has likely published the Refresh target
+    # in new Posts since the fetch that last answered it: the target over its
+    # Posting rate, clamped to the shortest and longest wait. Deployment policy
+    # rather than per-Account, because the Directory is corpus-wide, and the
+    # Operator's rate control on probe traffic: the shortest wait bounds what
+    # the busiest Channels cost, the longest still notices a dormant one going
+    # private. A dead verdict never comes due at all.
     #
     # Deliberately **not** the retry backoff above it in
     # `services/channel_directory.py`. That means "this fetch failed"; this
-    # means "this answer is old". 0 = never refresh.
-    DIRECTORY_REFRESH_DAYS_DEFAULT: int = 7
+    # means "this answer is old". To stop refreshing, disable the Directory
+    # probe Request kind.
+    DIRECTORY_REFRESH_TARGET_DEFAULT: int = 20
+    DIRECTORY_REFRESH_MIN_DAYS_DEFAULT: int = 4
+    DIRECTORY_REFRESH_MAX_DAYS_DEFAULT: int = 120
 
     # Discover handle probes
     #

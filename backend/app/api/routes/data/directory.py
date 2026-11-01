@@ -11,12 +11,14 @@ client.
 """
 
 from dataclasses import asdict
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.api.deps import CurrentUser, SessionDep, require_permission
 from app.api.directory_views import sees_internals, targets, view_of
 from app.core.permissions import Permission
+from app.core.request_recording import RequestKind
 from app.schemas.directory import (
     DirectoryAddRequest,
     DirectoryAddResponse,
@@ -36,6 +38,7 @@ from app.schemas.directory import (
     DirectoryListRequest,
     DirectoryListResponse,
     DirectoryNeighboursResponse,
+    DirectoryRefreshProjectionResponse,
     DirectoryRowResponse,
     DirectorySamplePostResponse,
     DirectorySizeResponse,
@@ -45,11 +48,14 @@ from app.schemas.directory import (
 from app.services import directory_reads
 from app.services.channel_directory import (
     BoostOutOfRange,
+    RefreshPolicy,
     add_named_handles,
     boost_entries,
     probe_map,
+    project_refresh,
 )
 from app.services.channel_directory_samples import sample_to_camel, samples_for
+from app.services.request_stats import average_daily_requests
 from app.services.settings_registry import DIRECTORY_COLUMNS_KEY
 from app.services.settings_store import replace_global_setting
 from app.services.telegram_web import normalize_handle
@@ -298,6 +304,44 @@ def boost_directory(
     except BoostOutOfRange as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return DirectoryBoostResponse(changed=changed)
+
+
+# ---- What a refresh policy costs (DRP-01, ADR-045) ---------------------------------
+#
+# Under the permission that sees the three settings it prices. A GET, so
+# View-as needs no entry for it.
+
+
+@router.get(
+    "/directory/refresh-projection",
+    dependencies=[Depends(require_permission(Permission.SETTINGS_MANAGE))],
+)
+def project_directory_refresh(
+    session: SessionDep,
+    _current_user: CurrentUser,
+    target: Annotated[int, Query(ge=1, le=1000)],
+    min_days: Annotated[int, Query(alias="minDays", ge=1)],
+    max_days: Annotated[int, Query(alias="maxDays", ge=1)],
+) -> DirectoryRefreshProjectionResponse:
+    """Refreshes a day these values would cost, and what probing fetched.
+
+    Reads every live entry, so the Settings page asks as values change and
+    never on load.
+    """
+    policy = RefreshPolicy(target, min_days, max_days)
+    refusal = policy.refusal()
+    if refusal is not None:
+        raise HTTPException(status_code=422, detail=refusal)
+    projected = project_refresh(session, policy)
+    return DirectoryRefreshProjectionResponse.model_validate(
+        projected._asdict()
+        | {
+            # The last week, which is what the plan sized the defaults against.
+            "measured_per_day": average_daily_requests(
+                session, RequestKind.PROBE, days=7
+            )
+        }
+    )
 
 
 # ---- Adding pasted handles (DADD) ---------------------------------------------------

@@ -17,7 +17,9 @@
 # What it takes, and why each is safe to take:
 #   entries     the source's row wherever the target has none or the source
 #               checked it more recently. Keyed by handle, so the newer verdict
-#               wins.
+#               wins. An entry the target already holds keeps its Priority boost
+#               and Refresh target: those are this deployment's Operator's
+#               choices, not facts about the handle (ADR-045).
 #   samples     those entries' samples, replacing the target's snapshot whole:
 #               a handle's samples are one snapshot, never mixed.
 #   references  all of the source's, skipping the ones the target has. Their
@@ -103,7 +105,8 @@ pull tg_post_references refs "copy (select $ref_cols from tg_post_references) to
 entry_set=$(target -c "select string_agg(format('%1\$I = excluded.%1\$I', column_name), ', ')
                        from information_schema.columns
                        where table_schema = 'public' and table_name = 'tg_channel_directory'
-                         and column_name <> 'handle' and is_generated = 'NEVER'")
+                         and column_name not in ('handle', 'priority_boost', 'refresh_target')
+                         and is_generated = 'NEVER'")
 
 log "merging"
 target <<SQL

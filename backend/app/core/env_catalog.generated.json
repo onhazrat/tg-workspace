@@ -142,8 +142,22 @@
       "sensitive": false
     },
     {
-      "default": 7,
-      "name": "DIRECTORY_REFRESH_DAYS_DEFAULT",
+      "default": 120,
+      "name": "DIRECTORY_REFRESH_MAX_DAYS_DEFAULT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 4,
+      "name": "DIRECTORY_REFRESH_MIN_DAYS_DEFAULT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 20,
+      "name": "DIRECTORY_REFRESH_TARGET_DEFAULT",
       "required": false,
       "scope": "backend_runtime",
       "sensitive": false

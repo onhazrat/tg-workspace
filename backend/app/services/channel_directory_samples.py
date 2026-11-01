@@ -34,8 +34,17 @@ verdict and its samples as one unit: half a probe stored is a row claiming
 ## Nothing is deleted because an account acted
 
 Following a Channel does not touch its samples. They simply stop being
-maintained — the real Posts are in `tg_posts` by then — and age out on the
-sample retention window like any other snapshot.
+maintained, since the real Posts are in `tg_posts` by then, and are replaced
+at the entry's next Refresh like any other snapshot.
+
+## Retention spares a live entry (ADR-045)
+
+The retention window collects samples only from entries that are no longer
+refreshable (no `refresh_due_at`). A live entry may wait up to the longest wait
+between Refreshes, 120 days by default, far past the 30-day window, and
+ADR-015 relies on its samples outliving that wait: its Posts stay searchable
+and its statistics stay explicable. Its one page is replaced by its next
+Refresh, so storage stays one page per live entry.
 """
 
 from __future__ import annotations
@@ -43,9 +52,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any, cast
 
-from sqlmodel import Session, col, delete, select
+from sqlmodel import Session, col, delete, exists, select
 
-from app.models_tg import DirectorySample, utc_now
+from app.models_tg import DirectoryEntry, DirectorySample, utc_now
 from app.services.directory_statistics import views_of
 
 #: Why the reads and writes here do not go through `scoped_select`.
@@ -118,10 +127,20 @@ def replace_samples(
     return stored
 
 
+def _expirable(cutoff: datetime) -> Any:
+    """Captured before `cutoff`, on an entry with no Refresh coming."""
+    live = exists().where(
+        col(DirectoryEntry.handle) == col(DirectorySample.handle),
+        col(DirectoryEntry.refresh_due_at).is_not(None),
+    )
+    return (col(DirectorySample.captured_at) < cutoff) & ~live
+
+
 def expire_samples_before(session: Session, cutoff: datetime) -> int:
     """Drop every sample captured before `cutoff`, and return how many.
 
-    The retention job's entry point. Measured on `captured_at` rather than the
+    The retention job's entry point; a live entry's samples are spared (see the
+    module docstring). Measured on `captured_at` rather than the
     Post's own date, so a Channel that went quiet years ago keeps the snapshot
     taken of it last week — the entry would otherwise lose its samples the
     moment it was worth reading.
@@ -131,9 +150,7 @@ def expire_samples_before(session: Session, cutoff: datetime) -> int:
 
     **Does not commit**, like everything else here.
     """
-    result = session.execute(
-        delete(DirectorySample).where(col(DirectorySample.captured_at) < cutoff)
-    )
+    result = session.execute(delete(DirectorySample).where(_expirable(cutoff)))
     return int(cast(Any, result).rowcount or 0)
 
 
@@ -181,9 +198,7 @@ def handles_captured_before(session: Session, cutoff: datetime) -> list[str]:
     """The handles `expire_samples_before(cutoff)` would take samples from."""
     return list(
         session.exec(
-            select(col(DirectorySample.handle))
-            .where(col(DirectorySample.captured_at) < cutoff)
-            .distinct()
+            select(col(DirectorySample.handle)).where(_expirable(cutoff)).distinct()
         ).all()
     )
 

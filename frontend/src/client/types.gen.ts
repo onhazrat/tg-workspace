@@ -2659,6 +2659,31 @@ export type DirectoryNeighboursResponse = {
 };
 
 /**
+ * DirectoryRefreshProjectionResponse
+ *
+ * What a Refresh target and waits would cost, beside what probing costs
+ * now (ADR-045).
+ */
+export type DirectoryRefreshProjectionResponse = {
+    /**
+     * Refreshesperday
+     */
+    refreshesPerDay: number;
+    /**
+     * Atmin
+     */
+    atMin: number;
+    /**
+     * Atmax
+     */
+    atMax: number;
+    /**
+     * Measuredperday
+     */
+    measuredPerDay: number;
+};
+
+/**
  * DirectoryRowResponse
  *
  * One Directory entry in the list: what every row needs, and the columns
@@ -11602,6 +11627,44 @@ export type DataBoostDirectoryResponses = {
 };
 
 export type DataBoostDirectoryResponse = DataBoostDirectoryResponses[keyof DataBoostDirectoryResponses];
+
+export type DataProjectDirectoryRefreshData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Target
+         */
+        target: number;
+        /**
+         * Mindays
+         */
+        minDays: number;
+        /**
+         * Maxdays
+         */
+        maxDays: number;
+    };
+    url: '/api/v1/data/directory/refresh-projection';
+};
+
+export type DataProjectDirectoryRefreshErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataProjectDirectoryRefreshError = DataProjectDirectoryRefreshErrors[keyof DataProjectDirectoryRefreshErrors];
+
+export type DataProjectDirectoryRefreshResponses = {
+    /**
+     * Successful Response
+     */
+    200: DirectoryRefreshProjectionResponse;
+};
+
+export type DataProjectDirectoryRefreshResponse = DataProjectDirectoryRefreshResponses[keyof DataProjectDirectoryRefreshResponses];
 
 export type DataAddDirectoryHandlesData = {
     body: DirectoryAddRequest;

@@ -3067,6 +3067,60 @@
         "security": [{ "OAuth2PasswordBearer": [] }]
       }
     },
+    "/api/v1/data/directory/refresh-projection": {
+      "get": {
+        "tags": ["data"],
+        "summary": "Project Directory Refresh",
+        "description": "Refreshes a day these values would cost, and what probing fetched.\n\nReads every live entry, so the Settings page asks as values change and\nnever on load.",
+        "operationId": "data-project_directory_refresh",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "target",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Target"
+            }
+          },
+          {
+            "name": "minDays",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "integer", "minimum": 1, "title": "Mindays" }
+          },
+          {
+            "name": "maxDays",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "integer", "minimum": 1, "title": "Maxdays" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectoryRefreshProjectionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/data/directory/add": {
       "post": {
         "tags": ["data"],
@@ -10321,6 +10375,18 @@
         "required": ["citedBy", "cites"],
         "title": "DirectoryNeighboursResponse",
         "description": "The Channels citing one most, and those it cites most."
+      },
+      "DirectoryRefreshProjectionResponse": {
+        "properties": {
+          "refreshesPerDay": { "type": "number", "title": "Refreshesperday" },
+          "atMin": { "type": "integer", "title": "Atmin" },
+          "atMax": { "type": "integer", "title": "Atmax" },
+          "measuredPerDay": { "type": "number", "title": "Measuredperday" }
+        },
+        "type": "object",
+        "required": ["refreshesPerDay", "atMin", "atMax", "measuredPerDay"],
+        "title": "DirectoryRefreshProjectionResponse",
+        "description": "What a Refresh target and waits would cost, beside what probing costs\nnow (ADR-045)."
       },
       "DirectoryRowResponse": {
         "properties": {

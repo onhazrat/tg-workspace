@@ -694,6 +694,20 @@ class LedgerDay:
     requests: int
 
 
+def average_daily_requests(session: Session, kind: RequestKind, *, days: int) -> float:
+    """Mean Requests a day of `kind` over the last `days` whole UTC days, from
+    the daily totals. Today is left out because it is not over."""
+    today = utc_now().date()
+    total = session.exec(
+        select(func.coalesce(func.sum(col(RequestDaily.requests)), 0)).where(
+            col(RequestDaily.kind) == kind.value,
+            col(RequestDaily.day) >= today - timedelta(days=days),
+            col(RequestDaily.day) < today,
+        )
+    ).one()
+    return int(total) / days
+
+
 def _recording_started(session: Session) -> date:
     """The first day with recorded Requests; today while none is rolled up."""
     first = session.exec(select(func.min(col(RequestDaily.day)))).one()

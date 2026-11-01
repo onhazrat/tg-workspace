@@ -1,6 +1,7 @@
 """What a Channel's sample Posts say about it (ticket 02, ADR-015).
 
-A **pure transform**: no `Session`, no network, no clock. Two halves that are
+A **pure transform**: no `Session`, no network, no clock; the fetch time is an
+argument. Two halves that are
 deliberately not the same kind of thing.
 
 `compute_sample_statistics` takes a list of Posts and returns the five values
@@ -27,16 +28,18 @@ claim about what the Channel *did*, which stays true after it goes away.
 
 ## The arithmetic, and why the obvious version is wrong each time
 
-**Posts per week counts intervals, not Posts.** N Posts spanning oldest to
-newest give **N-1** intervals. Five Posts one week apart span four weeks and
-describe a weekly Channel; `5 / 4` reports 1.25 per week, and every Channel in
-the report reads busier than it is, with the error growing as samples shrink.
+**The Posting rate ends at the fetch, not at the newest Post** (ADR-045). N
+Posts over the time from the oldest of them to the fetch that took them. Ending
+at the newest Post reads a burst after a long silence as a busy Channel: five
+Posts in one day, ninety days ago, would read 28 a week, and the Refresh that
+divides by this rate would fetch a dormant Channel every few days. Ending at
+now was rejected too, because "we have not looked" is not "it has not posted";
+the fetch time is the last moment we know about.
 
-**The span is what the samples cover**, not a fixed trailing window and not the
-Channel's lifetime. A fixed window reads zero for anything dormant, which only
-repeats what last post age already says; a lifetime average hides every change
-in behaviour the Channel had. Span-based means "when this Channel is active, it
-posts this often", which paired with last post age is honest in both directions.
+**The span is what the samples cover**, up to that fetch, not a fixed trailing
+window and not the Channel's lifetime. A lifetime average hides every change in
+behaviour; a fixed window reads zero for anything dormant, which only repeats
+what last post age already says.
 
 **Language reads captions, never the stored text.** A media Post with no
 caption is stored with synthesised stand-in text (`[photo]`, `[video]`,
@@ -147,21 +150,28 @@ def views_of(post: SamplePost) -> int | None:
     return count if isinstance(count, int) else None
 
 
-def compute_sample_statistics(posts: Sequence[SamplePost]) -> SampleStatistics:
-    """Five sample-derived statistics, or absent ones for an empty set."""
+def compute_sample_statistics(
+    posts: Sequence[SamplePost], *, fetched_at_ms: int
+) -> SampleStatistics:
+    """Five sample-derived statistics, or absent ones for an empty set.
+
+    `fetched_at_ms` is when the fetch that took `posts` ran, in epoch ms.
+    """
     if not posts:
         return SampleStatistics()
 
     timestamps = sorted(post.timestamp for post in posts)
     count = len(posts)
-    span_ms = timestamps[-1] - timestamps[0]
+    # Never shorter than the Posts themselves cover: Telegram's clock and ours
+    # can disagree by a little, and a fetch stamped before its newest Post must
+    # not shrink the span.
+    span_ms = max(fetched_at_ms, timestamps[-1]) - timestamps[0]
 
-    # `(N - 1) / span`, and a zero span yields nothing rather than a division by
-    # zero: a Channel can post an album as several messages inside one second,
-    # so this is reachable well above the threshold.
+    # A zero span yields nothing rather than a division by zero: an album
+    # posted as several messages inside one second, fetched at once.
     posts_per_week: float | None = None
     if count >= MIN_SAMPLES and span_ms > 0:
-        posts_per_week = (count - 1) / (span_ms / _WEEK_MS)
+        posts_per_week = count / (span_ms / _WEEK_MS)
 
     forward_share: float | None = None
     if count >= MIN_SAMPLES:

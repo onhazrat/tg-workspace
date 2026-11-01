@@ -422,10 +422,14 @@ def test_samples_expire_on_their_own_window_and_the_entry_does_not() -> None:
 
     Measured on when the snapshot was captured, not on the Post's own date, so
     a Channel that went quiet years ago keeps the sample taken of it last week.
+    A bot, because only an entry that is no longer refreshed is collected
+    (ADR-045).
     """
     now = utc_now()
     with Session(engine) as session:
-        record_probe_result(session, HANDLE, _page(samples=[_post(11), _post(12)]))
+        record_probe_result(
+            session, HANDLE, _page(kind="bot", samples=[_post(11), _post(12)])
+        )
         replace_samples(
             session,
             HANDLE,
@@ -443,6 +447,26 @@ def test_samples_expire_on_their_own_window_and_the_entry_does_not() -> None:
             "the entry itself is never collected by age — that would throw the "
             "map away, which is the point of the Directory"
         )
+
+
+def test_a_live_entry_keeps_its_samples_past_the_window() -> None:
+    """A live entry may wait 120 days for its next Refresh, four times the
+    30-day window, and ADR-015 relies on its samples outliving the wait: they
+    are what makes its Posts searchable and its statistics explicable. The
+    next Refresh replaces them (ADR-045)."""
+    now = utc_now()
+    with Session(engine) as session:
+        record_probe_result(session, HANDLE, _page(samples=[_post(11), _post(12)]))
+        replace_samples(
+            session,
+            HANDLE,
+            [_post(11), _post(12)],
+            captured_at=now - timedelta(days=90),
+        )
+        session.commit()
+
+        assert expire_samples_before(session, now - timedelta(days=30)) == 0
+        assert sorted(_ids(session)) == [11, 12]
 
 
 def test_an_old_post_captured_recently_is_not_expired() -> None:

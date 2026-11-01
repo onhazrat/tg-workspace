@@ -58,6 +58,10 @@ from app.schemas.stats import (
     TableSizeResponse,
 )
 from app.services import rbac
+from app.services.channel_directory import (
+    recompute_refresh_due,
+    refresh_policy_refusal,
+)
 from app.services.data_import_export import (
     EVERYONE,
     SUBJECT_NOT_FOUND,
@@ -280,7 +284,10 @@ def put_setting(
     else:
         ADMIN_ONLY_CALLABLE(session, current_user)
         _refuse_invalid_reach(session, key, body)
+        _refuse_invalid_refresh(session, key, body)
         value = put_global_setting(session, key, body)
+        if key == DIRECTORY_KEY:
+            recompute_refresh_due(session)
     touch_sync(session, "settings")
     return AppSettingResponse(key=key, value=value)
 
@@ -298,6 +305,16 @@ def _refuse_invalid_reach(session: Session, key: str, body: dict[str, Any]) -> N
         reach_settings_from({**load_reach_settings(session), **body})
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+def _refuse_invalid_refresh(session: Session, key: str, body: dict[str, Any]) -> None:
+    """422 when a `directory` write would store a Refresh policy out of bounds
+    (ADR-045), validated against the merged row."""
+    if key != DIRECTORY_KEY:
+        return
+    refusal = refresh_policy_refusal(session, body)
+    if refusal is not None:
+        raise HTTPException(status_code=422, detail=refusal)
 
 
 def _writable_facade_fields(

@@ -57,8 +57,8 @@ from app.services.channel_directory import (
     record_sync_metadata,
     refresh_due_count,
     refresh_entries,
+    refresh_policy,
     requeue_probes,
-    resolve_refresh_window,
 )
 from app.services.channel_directory_samples import replace_samples, samples_for
 from app.services.settings_registry import DIRECTORY_KEY
@@ -124,9 +124,25 @@ def _entry(session: Session, handle: str = HANDLE) -> DirectoryEntry:
     return row
 
 
+def _wait_of(session: Session) -> timedelta:
+    row = _entry(session)
+    assert row.refresh_due_at is not None and row.checked_at is not None
+    return row.refresh_due_at - row.checked_at
+
+
 def _set_window(session: Session, days: int) -> None:
-    save_settings_section(session, DIRECTORY_KEY, {"directoryRefreshDays": days})
+    """The longest wait, which is the whole wait of an entry with no Posting
+    rate. Every entry in this file has none: `_page` carries no samples."""
+    save_settings_section(
+        session,
+        DIRECTORY_KEY,
+        {"directoryRefreshMaxDays": days, "directoryRefreshMinDays": 1},
+    )
     session.commit()
+
+
+#: Past the default longest wait, so an entry with no rate is due.
+PAST_THE_WINDOW = timedelta(days=121)
 
 
 # --------------------------------------------------------------------------- #
@@ -135,23 +151,25 @@ def _set_window(session: Session, days: int) -> None:
 
 
 def test_a_live_entry_becomes_due_after_the_window() -> None:
-    """The point of the ticket: a conclusive answer stops being permanent."""
+    """The point of the ticket: a conclusive answer stops being permanent. With
+    no Posting rate it waits the longest (ADR-045)."""
     with Session(engine) as session:
         record_probe_result(session, HANDLE, _page())
         row = _entry(session)
 
         assert row.status == "ok"
         assert row.refresh_due_at is not None
-        # A week out, which is the shipped default.
         due_in = row.refresh_due_at - utc_now()
-        assert timedelta(days=6, hours=23) < due_in <= timedelta(days=7)
+        assert timedelta(days=119, hours=23) < due_in <= timedelta(days=120)
 
 
-def test_the_default_window_is_a_week() -> None:
-    """The number the ticket names, read from one place."""
-    assert settings.DIRECTORY_REFRESH_DAYS_DEFAULT == 7
+def test_the_defaults_are_20_posts_between_4_and_120_days() -> None:
+    """The numbers ADR-045 names, read from one place."""
+    assert settings.DIRECTORY_REFRESH_TARGET_DEFAULT == 20
+    assert settings.DIRECTORY_REFRESH_MIN_DAYS_DEFAULT == 4
+    assert settings.DIRECTORY_REFRESH_MAX_DAYS_DEFAULT == 120
     with Session(engine) as session:
-        assert resolve_refresh_window(session) == timedelta(days=7)
+        assert tuple(refresh_policy(session)) == (20, 4, 120)
 
 
 def test_a_due_entry_is_handed_back_by_the_queue() -> None:
@@ -160,7 +178,7 @@ def test_a_due_entry_is_handed_back_by_the_queue() -> None:
         record_probe_result(session, HANDLE, _page())
         assert dequeue_handles(session, limit=10) == []
 
-        later = utc_now() + timedelta(days=8)
+        later = utc_now() + PAST_THE_WINDOW
         assert dequeue_handles(session, limit=10, now=later) == [HANDLE]
 
 
@@ -199,7 +217,7 @@ def test_a_dead_verdict_costs_no_further_requests_however_long_it_sits() -> None
         record_probe_result(session, "helper_bot", _page(kind="bot"))
         record_probe_result(session, "live_one", _page())
 
-        far = utc_now() + timedelta(days=90)
+        far = utc_now() + PAST_THE_WINDOW
         assert dequeue_handles(session, limit=10, now=far) == ["live_one"]
         assert refresh_due_count(session, now=far) == 1
 
@@ -230,6 +248,9 @@ def test_widening_the_window_reduces_steady_state_request_volume() -> None:
         for handle in ("one", "two", "three"):
             record_probe_result(session, handle, _page())
 
+        _set_window(session, 7)
+        for handle in ("one", "two", "three"):
+            record_probe_result(session, handle, _page())
         a_fortnight = utc_now() + timedelta(days=14)
         assert refresh_due_count(session, now=a_fortnight) == 3
 
@@ -239,18 +260,17 @@ def test_widening_the_window_reduces_steady_state_request_volume() -> None:
         assert refresh_due_count(session, now=a_fortnight) == 0
 
 
-def test_a_window_of_zero_turns_refreshing_off() -> None:
-    """Same convention as every other window in this deployment: 0 = never."""
+def test_a_stored_window_of_zero_is_read_as_one_day() -> None:
+    """Before ADR-045 a window of 0 meant "never refresh". Read as a wait of 0
+    it would refresh every tick, and a nulled due date would let retention take
+    the samples, so it is read at the bound. Probing stops with its Request
+    kind instead."""
     with Session(engine) as session:
         _set_window(session, 0)
-        assert resolve_refresh_window(session) is None
+        assert refresh_policy(session).max_days == 1
 
         record_probe_result(session, HANDLE, _page())
-        assert _entry(session).refresh_due_at is None
-        assert (
-            dequeue_handles(session, limit=10, now=utc_now() + timedelta(days=400))
-            == []
-        )
+        assert _wait_of(session) == timedelta(days=1)
 
 
 # --------------------------------------------------------------------------- #
@@ -296,7 +316,7 @@ def test_a_due_entry_inside_a_retry_backoff_is_still_due() -> None:
         session.add(row)
         session.commit()
 
-        later = utc_now() + timedelta(days=8)
+        later = utc_now() + PAST_THE_WINDOW
         assert dequeue_handles(session, limit=10, now=later) == [HANDLE]
 
 
@@ -389,7 +409,7 @@ def test_a_scheduled_refresh_drains_behind_a_handle_nobody_has_looked_at() -> No
         assert REFRESH_PRIORITY > DEFAULT_PROBE_PRIORITY
 
         enqueue_handles(session, ["fresh_blood"])
-        later = utc_now() + timedelta(days=8)
+        later = utc_now() + PAST_THE_WINDOW
         assert dequeue_handles(session, limit=10, now=later) == ["fresh_blood", HANDLE]
 
 
@@ -404,7 +424,7 @@ def test_sync_metadata_updates_the_entry() -> None:
         record_probe_result(session, HANDLE, _page())
         session.commit()
 
-        later = utc_now() + timedelta(days=8)
+        later = utc_now() + PAST_THE_WINDOW
         record_sync_metadata(session, HANDLE, _meta(), now=later)
         session.commit()
 
@@ -422,7 +442,7 @@ def test_a_synced_channel_never_comes_due_for_a_probe() -> None:
     with Session(engine) as session:
         record_probe_result(session, HANDLE, _page())
 
-        later = utc_now() + timedelta(days=8)
+        later = utc_now() + PAST_THE_WINDOW
         record_sync_metadata(session, HANDLE, _meta(), now=later)
         session.commit()
 
@@ -538,7 +558,7 @@ def test_a_failed_refresh_backs_off_instead_of_retrying_every_tick() -> None:
     """
     with Session(engine) as session:
         record_probe_result(session, HANDLE, _page())
-        later = utc_now() + timedelta(days=8)
+        later = utc_now() + PAST_THE_WINDOW
         assert dequeue_handles(session, limit=10, now=later) == [HANDLE]
 
         record_probe_result(session, HANDLE, None, error="proxy timeout")
@@ -591,6 +611,8 @@ def test_one_unavailable_answer_does_not_seal_a_live_entry(
         row = _entry(session)
         assert row.status == status
         assert row.refresh_due_at is not None, "a live entry gets a second look"
+        # Soon: the shortest wait, whatever the Posting rate (ADR-045).
+        assert _wait_of(session) == timedelta(days=4)
         assert row.display_name == "Stale News", "and keeps what it knew"
         assert row.subscribers == 12_300
 
@@ -601,7 +623,7 @@ def test_a_live_entry_that_came_back_recovers_on_its_own() -> None:
         record_probe_result(session, HANDLE, _page())
         record_probe_result(session, HANDLE, _unavailable())
 
-        later = utc_now() + timedelta(days=8)
+        later = utc_now() + PAST_THE_WINDOW
         assert dequeue_handles(session, limit=10, now=later) == [HANDLE]
 
         record_probe_result(session, HANDLE, _page())
@@ -680,7 +702,7 @@ def test_a_sync_still_reschedules_an_entry_with_nothing_outstanding() -> None:
     """The ordinary case is unchanged: freshness for free."""
     with Session(engine) as session:
         record_probe_result(session, HANDLE, _page())
-        later = utc_now() + timedelta(days=8)
+        later = utc_now() + PAST_THE_WINDOW
         assert dequeue_handles(session, limit=10, now=later) == [HANDLE]
 
         record_sync_metadata(session, HANDLE, _meta(), now=later)
