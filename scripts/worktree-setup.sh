@@ -89,7 +89,8 @@ entries = [c for c in config.get("configurations", []) if c.get("name") != "work
 entries.append({
     "name": "worktree-api",
     "runtimeExecutable": "bash",
-    "runtimeArgs": ["-c", f"cd {root}/backend && POSTGRES_DB={db} uv run fastapi run app/main.py --port {port}"],
+    # Migrates first: a branch's new revisions land after setup ran.
+    "runtimeArgs": ["-c", f"cd {root}/backend && export POSTGRES_DB={db} && uv run alembic upgrade head && uv run fastapi run app/main.py --port {port}"],
     "port": port,
 })
 config["configurations"] = entries

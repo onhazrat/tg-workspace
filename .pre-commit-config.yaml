@@ -1,8 +1,9 @@
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
 # Every hook runs at commit; only the deployment-name check also runs at push,
-# because a push is what makes a leak permanent (`prek install` sets up both).
-default_install_hook_types: [pre-commit, pre-push]
+# because a push is what makes a leak permanent, and the guard check reads the
+# message (`prek install` sets up all three).
+default_install_hook_types: [pre-commit, pre-push, commit-msg]
 default_stages: [pre-commit]
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -111,6 +112,21 @@ repos:
         name: No em dash in an added line
         entry: python3 scripts/check_em_dashes.py
         pass_filenames: false
+        language: system
+
+      - id: check-glossary-words
+        name: No word GLOSSARY.md checks in added code
+        entry: python3 scripts/check_glossary_words.py
+        pass_filenames: false
+        language: system
+
+      # Root CLAUDE.md: a commit touching a guard carries its Mutation-checked
+      # line. It reads the message, so it runs at commit-msg.
+      - id: check-mutation-checked
+        name: A commit touching a guard says how it went red
+        entry: python3 scripts/check_mutation_checked.py
+        always_run: true
+        stages: [commit-msg]
         language: system
 
       - id: check-deployment-names
