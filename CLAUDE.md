@@ -79,16 +79,6 @@ touches the guard or what it guards.
 - **Every commit that lands on `main` must be signed** — but that does *not* mean signing every commit. Squash-merging a PR satisfies it automatically: GitHub authors the squash commit and signs it with its own key, so commits on a branch or in a `.claude/worktrees/` worktree need no signature and must never block on one. **Land PRs with squash merge only** — merge-commit mode puts the branch's own commits on `main` as-is, and rebase-merge replays them unsigned. When committing **directly to `main`**, sign locally (1Password); there a signing failure is a blocker to raise, not to bypass with `gpgsign=false`.
 - Local `git log %G?` is **not** a valid signature check here — it reports `N` on genuinely SSH-signed commits (`gpg.ssh.allowedSignersFile` is unset) and `E` on GitHub's PGP-signed ones. Audit `main` against GitHub instead: `gh api 'repos/{owner}/{repo}/commits?sha=main&per_page=20' --jq '.[] | select(.commit.verification.verified | not) | .sha'` (empty output = clean).
 
-## graphify
-
-This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
-
-Rules:
-- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
-- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
-- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
-- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
-
 ## Agent skills
 
 ### Issue tracker

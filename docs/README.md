@@ -6,12 +6,6 @@
 | **[adr/](adr/)** | Architecture decision records, one per decision |
 | **[migration/](migration/)** | TG-Summarizer → FastAPI migration: locked decisions, inventory, and remediation |
 
-## Tooling
-
-| Document | Description |
-|----------|-------------|
-| [graphify.md](graphify.md) | Codebase knowledge graph — install, build, and query the graph instead of grepping |
-
 ## Audits & investigations
 
 | Document | Description |
