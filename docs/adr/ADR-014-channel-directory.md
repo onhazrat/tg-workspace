@@ -4,7 +4,10 @@
 [ADR-009](./ADR-009-server-authoritative-data.md), which moved Discover's
 aggregation to the server; this decides what the resulting knowledge *is* and
 where it lives. Tickets and their long-form reasoning:
-`.scratch/channel-directory/` (spec plus issues 01–04).
+`.scratch/channel-directory/` (spec plus issues 01–04). The fixed refresh
+window is superseded (2026-11-01) by
+[ADR-045](./ADR-045-refresh-by-expected-new-posts.md): an entry comes due on its
+Refresh target.
 
 ## Context
 

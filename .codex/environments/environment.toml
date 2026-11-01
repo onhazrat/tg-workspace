@@ -1,0 +1,15 @@
+version = 1
+name = "TG Workspace"
+
+[setup]
+script = "bash scripts/codex-worktree-setup.sh"
+
+[[actions]]
+name = "API"
+icon = "run"
+command = "bash scripts/codex-worktree-setup.sh --api"
+
+[[actions]]
+name = "Frontend"
+icon = "run"
+command = "bash scripts/codex-worktree-setup.sh --frontend"

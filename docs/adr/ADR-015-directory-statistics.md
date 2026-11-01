@@ -2,7 +2,9 @@
 
 **Status:** Accepted (2026-09-08). Extends ADR-014, which created the Directory and its sample
 Posts. The `script` statistic is superseded by an entry Language
-([ADR-021](./ADR-021-post-language.md)).
+([ADR-021](./ADR-021-post-language.md)). Posts per week is redefined as the
+Posting rate, and sample retention spares live entries, by
+[ADR-045](./ADR-045-refresh-by-expected-new-posts.md) (2026-11-01).
 
 ## Context
 
