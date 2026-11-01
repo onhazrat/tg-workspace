@@ -19,7 +19,8 @@ import {
  * verdict; the record the server freezes is pinned by
  * `test_artifact_completeness.py`. Three real Channels are selected: `lag`
  * only Behind, `cold` frozen, `whole` Complete. Time is the page's clock
- * wherever a test waits on it: the countdown, the polls and the deadline.
+ * wherever a test waits on it: the countdown and the deadline. A sync's
+ * changes arrive on the mocked event stream.
  */
 
 const HOUR = 3_600_000
@@ -126,6 +127,24 @@ async function mockSync(page: Page) {
   return { starts, release: () => release() }
 }
 
+/**
+ * The Channels a sync changed (WR-02): the stream holds until `push`, then
+ * sends its open frame and those names.
+ */
+async function mockEvents(page: Page) {
+  let push: (names: string[]) => void = () => {}
+  const pushed = new Promise<string[]>((resolve) => {
+    push = resolve
+  })
+  await page.route("**/api/v1/data/posts/window-check/events", async (route) =>
+    route.fulfill({
+      contentType: "text/event-stream",
+      body: `data: {"names":[]}\n\ndata: ${JSON.stringify({ names: await pushed })}\n\n`,
+    }),
+  )
+  return push
+}
+
 /** Every report the gate let through: what was sent, and the Scope it froze. */
 async function recordReports(page: Page) {
   const sent: Report[] = []
@@ -152,10 +171,11 @@ async function world(page: Page) {
   await clearChannelSelection(page)
   await selectChannelsKeyboard(page, [lag, cold, whole])
   const check = await mockCheck(page, { lag, cold })
+  const changed = await mockEvents(page)
   const sync = await mockSync(page)
   const { sent: reports, frozen } = await recordReports(page)
   await page.locator("#tour-tab-action").click()
-  return { lag, cold, whole, check, sync, reports, frozen }
+  return { lag, cold, whole, check, changed, sync, reports, frozen }
 }
 
 const gate = (page: Page) => page.getByTestId("gate")
@@ -387,18 +407,19 @@ test("the gate joins a sync in flight, its rows labelled, and starts none", asyn
   const row = gate(page).getByTestId("gate-row").filter({ hasText: w.lag })
   await expect(row).toContainText(/syncing, started \d+ min ago/)
   await syncButton(page).click()
-  // It waits on that sync by asking the check, poll after poll.
+  // It waits on that sync until the sync changes its Channel, then asks the
+  // check for that Channel alone.
   await pauseClock(page)
-  const asked = w.check.bodies.length
   await page.clock.fastForward(2_000)
-  await expect.poll(() => w.check.bodies.length).toBeGreaterThan(asked)
+  expect(w.reports).toHaveLength(0)
 
   w.check.flying = {}
   w.check.synced = true
   w.sync.release()
-  await page.clock.fastForward(2_000)
+  w.changed([w.lag])
   await expect.poll(() => w.reports.length).toBe(1)
   expect(w.reports[0].gate?.choice).toBe("synced")
+  expect(w.check.bodies.map((b) => b.channelNames)).toContainEqual([w.lag])
   // The report came after the one sync, which the gate never started again.
   expect(w.sync.starts).toHaveLength(1)
 })
@@ -418,7 +439,7 @@ test("behind a sync that read its head before E, the gate queues another", async
 
   // That sync ends: the gate's own starts behind it.
   w.check.flying = {}
-  await page.clock.fastForward(2_000)
+  w.changed([w.lag])
   await expect.poll(() => w.sync.starts.length).toBe(1)
   w.check.synced = true
   w.sync.release()
