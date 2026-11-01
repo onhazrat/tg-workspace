@@ -48,6 +48,18 @@ def mutated(text: str, old: str, new: str) -> str:
     return text.replace(old, new)
 
 
+#: `backend/tests/conftest.py`'s exit when another pytest session holds the
+#: test database (EX_TEMPFAIL). That run tested nothing, so it is no verdict.
+REFUSED = 75
+
+
+def verdict(returncode: int) -> str:
+    """`red`, `green`, or `refused` for one test run's exit code."""
+    if returncode == REFUSED:
+        return "refused"
+    return "red" if returncode else "green"
+
+
 def selected(
     mutations: list[dict[str, str]], registry: str, changed: list[str]
 ) -> list[dict[str, str]]:
@@ -86,7 +98,11 @@ def main(argv: list[str]) -> int:
             result = subprocess.run(cmd, cwd=REPO / cwd, capture_output=True)
         finally:
             target.write_text(original, encoding="utf-8")
-        if result.returncode:
+        outcome = verdict(result.returncode)
+        if outcome == "refused":
+            print(f"REFUSED  {m['name']}: another pytest session holds the test DB")
+            failed = True
+        elif outcome == "red":
             print(f"red      {m['name']}")
             red.append(m["name"])
         else:

@@ -22,6 +22,7 @@ _test_db = os.environ.get("TEST_POSTGRES_DB") or os.environ.get(
 os.environ["POSTGRES_DB"] = _test_db
 
 # Rebind settings + engine before any route handlers import the dev database.
+from sqlalchemy import Connection, text
 from sqlmodel import Session, create_engine, delete
 
 from app.core import config as config_module
@@ -70,6 +71,37 @@ if config_module.settings.POSTGRES_DB != _test_db:
         f"expected test database {_test_db!r}. Set TEST_POSTGRES_DB or POSTGRES_DB_TEST."
     )
     raise RuntimeError(msg)
+
+
+#: Held open for the whole session; its advisory lock is the session's claim.
+_database_claim: Connection | None = None
+
+
+def pytest_sessionstart(session: pytest.Session) -> None:
+    """Claim the test database, or stop: one pytest session per database.
+
+    Every test truncates `tg_*` afterwards, so a second session empties the
+    tables under the first, and the failures read as a regression
+    (`test_one_pytest_session_per_database.py`). The two-key form keeps clear of
+    any single-key advisory lock, and the commit ends the transaction so the
+    open connection never pins the xmin horizon; a session-level lock outlives
+    it and goes with the connection when the process exits.
+    """
+    global _database_claim
+    _database_claim = engine.connect()
+    claimed = _database_claim.execute(
+        text(
+            "SELECT pg_try_advisory_lock(hashtext('pytest'), hashtext(current_database()))"
+        )
+    ).scalar()
+    _database_claim.commit()
+    if not claimed:
+        pytest.exit(
+            f"Another pytest session is using {_test_db}. Wait for it to finish, "
+            "or point this one at another database with TEST_POSTGRES_DB.",
+            # EX_TEMPFAIL, which `scripts/mutate.py` reads as no verdict.
+            returncode=75,
+        )
 
 
 @pytest.fixture(scope="session", autouse=True)
