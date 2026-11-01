@@ -278,17 +278,21 @@ export function SyncButton({
   onSync: () => void
   stopped: boolean
 }) {
-  const [left, setLeft] = useState(AUTO_SYNC_SECONDS)
+  // One interval for the button's life, reading a fixed deadline: a timeout
+  // re-armed after each render starts late whenever the render does.
+  const [deadline] = useState(() => Date.now() + AUTO_SYNC_SECONDS * 1000)
+  const [now, setNow] = useState(Date.now)
+  const left = Math.max(0, Math.ceil((deadline - now) / 1000))
   const fired = useRef(false)
   useEffect(() => {
     if (count === 0 || stopped) return
-    if (left === 0) {
-      if (!fired.current) onSync()
-      fired.current = true
-      return
-    }
-    const id = setTimeout(() => setLeft(left - 1), 1000)
-    return () => clearTimeout(id)
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [count, stopped])
+  useEffect(() => {
+    if (left > 0 || count === 0 || stopped || fired.current) return
+    fired.current = true
+    onSync()
   }, [left, count, onSync, stopped])
   const counting = !stopped && count > 0
   return (
