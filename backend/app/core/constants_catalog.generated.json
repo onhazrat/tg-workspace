@@ -1340,7 +1340,7 @@
       "comment": "A card hidden under the workspace's sticky header is not \"on screen\".",
       "expression": "80",
       "file": "frontend/src/components/post-card/FeedKeyboard.tsx",
-      "line": 20,
+      "line": 22,
       "name": "HEADER_PX",
       "value": 80
     },

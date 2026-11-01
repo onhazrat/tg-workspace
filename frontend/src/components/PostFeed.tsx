@@ -51,6 +51,7 @@ import {
   useSpotlightState,
 } from "./post-card/ChannelSpotlight"
 import { postCardKey, usePostKeys } from "./post-card/FeedKeyboard"
+import { NewPostsPill, useHeldPosts } from "./post-card/NewPosts"
 import { FeedPagingContext } from "./post-card/PhotoViewer"
 import { ReplyPreviewProvider } from "./post-card/ReplyParent"
 
@@ -79,7 +80,8 @@ export const PostFeed: React.FC<PostFeedProps> = ({
     "postFeed_selectedFirst",
   )
   const {
-    posts,
+    posts: loaded,
+    feedKey,
     isInitialLoading,
     hasMore,
     loadMore,
@@ -89,6 +91,8 @@ export const PostFeed: React.FC<PostFeedProps> = ({
     selectedFirst,
     selectedShownTotal: selectedShown,
   })
+  // What a refetch brings in above what was seen waits behind the pill.
+  const { shown: posts, held, showHeld } = useHeldPosts(loaded, feedKey)
 
   const { setActiveTab } = useUI()
   const backFromSpotlight = useSpotlightBack(spotlightApi, () =>
@@ -99,6 +103,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
     onCompact: setCompact,
     spotlit: spotlight !== null,
     onSpotlightBack: backFromSpotlight,
+    onShowNew: showHeld,
   })
 
   const totalInScope = Object.values(counts).reduce((sum, n) => sum + n, 0)
@@ -270,18 +275,24 @@ export const PostFeed: React.FC<PostFeedProps> = ({
             />
           )}
 
-          <ReplyPreviewProvider>
-            <PostFeedResults
-              isInitialLoading={isInitialLoading}
-              posts={posts}
-              showLoadMore={hasMore || isLoadingMore}
-              loadMoreRef={loadMoreRef}
-              postSearch={view.keyword}
-              compact={compact}
-              highlight={highlight}
-              onToggleSelected={onToggleSelected}
-            />
-          </ReplyPreviewProvider>
+          {/* One block, so the pill's row of no height adds no gap to the feed. */}
+          <div>
+            <div className="sticky top-2 z-30 flex h-0 items-start justify-center">
+              <NewPostsPill held={held} onShow={showHeld} />
+            </div>
+            <ReplyPreviewProvider>
+              <PostFeedResults
+                isInitialLoading={isInitialLoading}
+                posts={posts}
+                showLoadMore={hasMore || isLoadingMore}
+                loadMoreRef={loadMoreRef}
+                postSearch={view.keyword}
+                compact={compact}
+                highlight={highlight}
+                onToggleSelected={onToggleSelected}
+              />
+            </ReplyPreviewProvider>
+          </div>
         </motion.div>
       </FeedPagingContext.Provider>
     </SpotlightProvider>

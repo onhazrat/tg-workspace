@@ -263,6 +263,12 @@ export function usePickPool(open: boolean): Post[] {
 
 export interface PostsFeed {
   posts: Post[]
+  /**
+   * Names the list the feed shows: its read's query key. It changes when the
+   * feed becomes another list (a filter, sort, window, spotlight or Selected
+   * first), never on a refetch of the same list (RCH-01).
+   */
+  feedKey: string
   isInitialLoading: boolean
   hasMore: boolean
   loadMore: () => void
@@ -299,7 +305,8 @@ export function usePostsFeed(
   const ranked = isRanked(view)
   const rankingApi = useRankingApi()
 
-  const infinite = useInfiniteQuery(feedQuery(view, selectedFirst))
+  const feed = feedQuery(view, selectedFirst)
+  const infinite = useInfiniteQuery(feed)
   const ranking = useRanking()
 
   // A selection edit, after the render that carries it, so a refetch reads
@@ -364,6 +371,10 @@ export function usePostsFeed(
             (a, b) => Number(!!b.selected) - Number(!!a.selected),
           )
         : rankedPosts,
+      feedKey: JSON.stringify([
+        rankingQuery(view, rankingApi).queryKey,
+        selectedFirst,
+      ]),
       isInitialLoading: ranking.isLoading,
       hasMore: false,
       loadMore: () => {},
@@ -375,6 +386,7 @@ export function usePostsFeed(
   return {
     fetchSelectedShown: selectedShown,
     posts: infinite.data?.pages.flat() ?? NO_POSTS,
+    feedKey: JSON.stringify(feed.queryKey),
     isInitialLoading: infinite.isLoading,
     hasMore: infinite.hasNextPage,
     loadMore: () => {
