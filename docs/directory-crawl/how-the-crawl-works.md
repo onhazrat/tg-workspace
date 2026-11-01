@@ -111,9 +111,12 @@ to 23-28 s.
   This is the recursion: the next harvest tick queues what they name.
 - Sample statistics (`last_post_at`, `posts_per_week`, `forward_share`,
   `language`) and Reach are computed, and the search document is rebuilt.
-- `_schedule_refresh` sets `priority = REFRESH_PRIORITY` and
-  `refresh_due_at = now + directoryRefreshDays` (7) for live kinds.
-  `DEAD_KINDS` (bot, group, user) and `unavailable` never come due again.
+- `_schedule_refresh` sets `priority = REFRESH_PRIORITY` and, for live kinds,
+  `refresh_due_at = now + clamp(target / posts_per_week, min, max)` (ADR-045,
+  `refresh_wait`): the entry's own `refresh_target` or the deployment's, and no
+  rate waits the longest. `DEAD_KINDS` (bot, group, user) and `unavailable`
+  never come due again. Due entries drain by effective priority, then most
+  overdue first.
 
 ### Other writers
 
@@ -134,8 +137,10 @@ to 23-28 s.
 | `DIRECTORY_FOLLOW_SAMPLE_REFERENCES` | true | recursion past one hop |
 | `POST_REFERENCE_SCAN_LIMIT` | 10000 | Posts per extraction tick |
 | `POST_REFERENCE_CHAT_ID_GRACE_DAYS` | 7 | wait for a source chat id |
-| `directoryRefreshDays` (settings row) | 7 | refresh window, 0 disables |
-| `RETENTION_DIRECTORY_SAMPLE_DAYS_DEFAULT` | 30 | sample retention |
+| `directoryRefreshTarget` (settings row) | 20 | new Posts before a Refresh |
+| `directoryRefreshMinDays` (settings row) | 4 | shortest wait between Refreshes |
+| `directoryRefreshMaxDays` (settings row) | 120 | longest wait between Refreshes |
+| `RETENTION_DIRECTORY_SAMPLE_DAYS_DEFAULT` | 30 | sample retention, entries no longer refreshed |
 | `CHANNEL_PHOTO_ORPHAN_MAX_AGE_DAYS` | 30 | avatars of unfollowed handles |
 | jobs `directory_harvest` / `discover_probe` | enabled | the whole crawl |
 

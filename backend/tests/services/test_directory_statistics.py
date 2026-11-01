@@ -13,8 +13,8 @@ a stub would let those two drift apart silently.
 
 ## Watched to fail
 
-* `count / span` instead of `(count - 1) / span` -> the weekly case reads 1.25
-  and the year-old case 8.75
+* end the rate at the newest Post instead of the fetch -> the burst case reads
+  28 a week and the weekly case 1.25
 * read `post.text` instead of the parsed caption -> a set of `[photo]`
   placeholders reports a Language where it has none
 * derive over the samples as stored rather than newest first -> the tie test
@@ -29,6 +29,7 @@ from typing import Any
 from app.models_tg import DirectorySample
 from app.services.directory_statistics import (
     MIN_SAMPLES,
+    SampleStatistics,
     compute_sample_statistics,
     media_density,
     media_mix,
@@ -74,6 +75,12 @@ def sample(
     )
 
 
+def stats_of(rows: list[DirectorySample]) -> SampleStatistics:
+    """The statistics as a fetch the moment the newest Post landed sees them."""
+    newest = max((row.timestamp for row in rows), default=ORIGIN)
+    return compute_sample_statistics(rows, fetched_at_ms=newest)
+
+
 def weekly(count: int, **kwargs: Any) -> list[DirectorySample]:
     """`count` Posts exactly one week apart, newest last."""
     return [sample(i, timestamp=ORIGIN + i * WEEK_MS, **kwargs) for i in range(count)]
@@ -83,7 +90,7 @@ class TestEmpty:
     def test_no_samples_measures_nothing(self) -> None:
         """Absent, never zero. "Posts nothing" and "we did not look" are
         different claims and a sort must not rank them together."""
-        stats = compute_sample_statistics([])
+        stats = stats_of([])
         assert stats.last_post_at is None
         assert stats.sample_count is None
         assert stats.posts_per_week is None
@@ -92,22 +99,40 @@ class TestEmpty:
 
 
 class TestPostsPerWeek:
-    def test_five_posts_a_week_apart_is_one_per_week(self) -> None:
-        """The whole reason this is not `count / span`.
+    """The Posting rate (ADR-045): the sample's Posts over the time from the
+    oldest of them to the fetch that took them."""
 
-        Five Posts one week apart span **four** weeks and describe a weekly
-        Channel. Dividing the Post count by the span reports 1.25, so every
-        Channel in a report reads 25% busier than it is — and the error grows as
-        the sample shrinks, which is exactly where it is least visible.
-        """
-        assert compute_sample_statistics(weekly(5)).posts_per_week == 1.0
+    def test_five_posts_a_week_apart_fetched_a_week_later_is_one_per_week(
+        self,
+    ) -> None:
+        """Five Posts in the five weeks from the oldest to the fetch."""
+        fetched = ORIGIN + 5 * WEEK_MS
+        rate = compute_sample_statistics(weekly(5), fetched_at_ms=fetched)
+        assert rate.posts_per_week == 1.0
+
+    def test_a_burst_after_a_long_silence_reads_slow(self) -> None:
+        """Why the rate ends at the fetch and not at the newest Post. Five Posts
+        inside one day, ninety days before the fetch, describe a quiet Channel;
+        newest-to-oldest would read them as 28 a week and the Refresh would
+        fetch it every few days for nothing."""
+        rows = [sample(i, timestamp=ORIGIN + i * DAY_MS // 4) for i in range(5)]
+        fetched = ORIGIN + 90 * DAY_MS
+        rate = compute_sample_statistics(rows, fetched_at_ms=fetched).posts_per_week
+        assert rate == 5 / (90 / 7)
+
+    def test_a_fetch_stamped_before_the_newest_post_ends_at_that_post(
+        self,
+    ) -> None:
+        """Clock skew between Telegram and the host must not shrink the span
+        below what the Posts themselves cover."""
+        fetched = ORIGIN + 3 * WEEK_MS
+        rate = compute_sample_statistics(weekly(5), fetched_at_ms=fetched)
+        assert rate.posts_per_week == 5 / 4
 
     def test_a_zero_span_yields_no_rate_rather_than_dividing_by_zero(self) -> None:
-        """Reachable well above the threshold: a Channel posts an album as
-        several messages inside the same second, and a probe reads twenty of
-        them off one page."""
+        """Every Post and the fetch inside one millisecond: no time, no rate."""
         rows = [sample(i) for i in range(MIN_SAMPLES + 3)]
-        stats = compute_sample_statistics(rows)
+        stats = compute_sample_statistics(rows, fetched_at_ms=ORIGIN)
         assert stats.posts_per_week is None
         assert stats.sample_count == MIN_SAMPLES + 3
 
@@ -116,19 +141,12 @@ class TestPostsPerWeek:
     ) -> None:
         """A cadence from four Posts is a number pretending to be a measurement.
         The count still shows, so the blank rate explains itself."""
-        stats = compute_sample_statistics(weekly(MIN_SAMPLES - 1))
+        stats = compute_sample_statistics(
+            weekly(MIN_SAMPLES - 1), fetched_at_ms=ORIGIN + 10 * WEEK_MS
+        )
         assert stats.posts_per_week is None
         assert stats.sample_count == MIN_SAMPLES - 1
         assert stats.last_post_at is not None
-
-    def test_the_span_is_what_the_samples_cover(self) -> None:
-        """Not a fixed trailing window: five Posts a day apart over a stretch
-        that ended a year ago still report five per week, and last post age is
-        what says the Channel is dead. A window-based rate would report zero and
-        merely repeat what the age already said."""
-        long_ago = ORIGIN - 400 * DAY_MS
-        rows = [sample(i, timestamp=long_ago + i * DAY_MS) for i in range(5)]
-        assert compute_sample_statistics(rows).posts_per_week == 7.0
 
 
 class TestForwardShare:
@@ -136,18 +154,18 @@ class TestForwardShare:
         rows = weekly(5)
         rows[0].forwarded_from = "source_a"
         rows[1].forwarded_from = "source_b"
-        assert compute_sample_statistics(rows).forward_share == 0.4
+        assert stats_of(rows).forward_share == 0.4
 
     def test_below_the_threshold_it_is_suppressed(self) -> None:
         rows = weekly(4)
         rows[0].forwarded_from = "source_a"
-        assert compute_sample_statistics(rows).forward_share is None
+        assert stats_of(rows).forward_share is None
 
     def test_an_original_channel_shares_zero_rather_than_nothing(self) -> None:
         """Zero is a measurement here, unlike the absent statistics: five Posts
         with no attribution between them is evidence the Channel writes its
         own."""
-        assert compute_sample_statistics(weekly(5)).forward_share == 0.0
+        assert stats_of(weekly(5)).forward_share == 0.0
 
 
 PERSIAN = "امروز جلسه شورای شهر برگزار شد و درباره بودجه سال آینده گفتگو کردند"
@@ -173,18 +191,18 @@ class TestLanguage:
         script, and it read "Arabic / Persian" for either."""
         persian = [sample(i, caption=PERSIAN) for i in range(5)]
         arabic = [sample(i, caption=ARABIC) for i in range(5)]
-        assert compute_sample_statistics(persian).language == "fa"
-        assert compute_sample_statistics(arabic).language == "ar"
+        assert stats_of(persian).language == "fa"
+        assert stats_of(arabic).language == "ar"
 
     def test_placeholders_yield_no_words_rather_than_english(self) -> None:
         """A caption-less photo is stored as `[photo]`; reading the stored text
         would label a Persian photo Channel by its placeholders."""
         rows = [photo(i) for i in range(5)]
-        assert compute_sample_statistics(rows).language == "zxx"
+        assert stats_of(rows).language == "zxx"
 
     def test_a_post_with_no_media_block_is_read_as_its_own_words(self) -> None:
         rows = [sample(i, media=None, text=PERSIAN) for i in range(5)]
-        assert compute_sample_statistics(rows).language == "fa"
+        assert stats_of(rows).language == "fa"
 
     def test_forwards_are_outvoted_by_the_channels_own_words(self) -> None:
         """A Persian Channel forwarding English news is still Persian."""
@@ -197,18 +215,18 @@ class TestLanguage:
                 for i in range(1, 5)
             ],
         ]
-        assert compute_sample_statistics(rows).language == "fa"
+        assert stats_of(rows).language == "fa"
 
     def test_a_sample_of_forwards_alone_still_has_a_language(self) -> None:
         rows = [sample(i, caption=ENGLISH, forwarded_from="reuters") for i in range(5)]
-        assert compute_sample_statistics(rows).language == "en"
+        assert stats_of(rows).language == "en"
 
     def test_a_sample_below_the_minimum_still_has_a_language(self) -> None:
         """No threshold. The rates are suppressed below `MIN_SAMPLES`; a
         Language is a label, and a preview page of three Persian Posts still
         says Persian."""
         rows = [sample(i, caption=PERSIAN) for i in range(MIN_SAMPLES - 2)]
-        stats = compute_sample_statistics(rows)
+        stats = stats_of(rows)
         assert stats.posts_per_week is None
         assert stats.language == "fa"
 
@@ -223,8 +241,8 @@ class TestLanguage:
             sample(2, caption=PERSIAN, timestamp=ORIGIN),
             sample(1, caption=ENGLISH, timestamp=ORIGIN + DAY_MS),
         ]
-        assert compute_sample_statistics(rows).language == "fa"
-        assert compute_sample_statistics(list(reversed(rows))).language == "fa"
+        assert stats_of(rows).language == "fa"
+        assert stats_of(list(reversed(rows))).language == "fa"
 
 
 class TestLastPostAt:
@@ -234,7 +252,7 @@ class TestLastPostAt:
             sample(3, timestamp=ORIGIN + 2 * DAY_MS),
             sample(2, timestamp=ORIGIN + DAY_MS),
         ]
-        stats = compute_sample_statistics(rows)
+        stats = stats_of(rows)
         assert stats.last_post_at == datetime.fromtimestamp(
             (ORIGIN + 2 * DAY_MS) / 1000, tz=UTC
         ).replace(tzinfo=None)

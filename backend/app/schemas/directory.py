@@ -901,6 +901,21 @@ class DirectoryCountResponse(BaseModel):
     total: int
 
 
+class DirectoryRefreshProjectionResponse(BaseModel):
+    """What a Refresh target and waits would cost, beside what probing costs
+    now (ADR-045)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    refreshes_per_day: float = Field(alias="refreshesPerDay")
+    #: Entries whose wait is the shortest, and the longest.
+    at_min: int = Field(alias="atMin")
+    at_max: int = Field(alias="atMax")
+    #: The last seven whole days' mean Directory probe Requests a day, new
+    #: handles included.
+    measured_per_day: float = Field(alias="measuredPerDay")
+
+
 class DirectorySizeResponse(BaseModel):
     """How many Channels the Directory lists at all."""
 

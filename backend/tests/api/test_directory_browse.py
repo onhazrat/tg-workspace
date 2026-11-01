@@ -184,7 +184,10 @@ RU = "Это русский текст о новостях и политике �
 ENTRIES: dict[str, tuple[Any, ...]] = {
     "dt_fa_big": ("Persian Big", FA, 50000, 900, 5, 2, 1, 1000, 0),
     "dt_en_news": ("Daily News", EN, 12000, 50, 5, 0.25, 0.01, 10, 0),
-    "dt_followed_a": ("Followed A", EN, 7000, None, 5, 2, 1, 700, 0),
+    # Spaced a little wider than dt_fa_big: equal samples give equal Posting
+    # rates but for the milliseconds between their probes (ADR-045), and the
+    # rate sort would order the pair by those.
+    "dt_followed_a": ("Followed A", EN, 7000, None, 5, 2, 1.1, 700, 0),
     "dt_ru": ("Russkiy", RU, 3000, None, 5, 3, 2, 400, 1),
     "dt_fa_small": ("Kucheh News", FA, 800, None, 5, 20, 7, 100, 2),
 }

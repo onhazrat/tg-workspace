@@ -27,6 +27,10 @@ import {
   SignIn,
 } from "./account-panels"
 import { AiKeys } from "./ai-keys-panel"
+import {
+  DirectoryRefresh,
+  REFRESH_SETTING_IDS,
+} from "./directory-refresh-panel"
 import { Proxies, TorActions } from "./network-panels"
 import { Overrides, Usage, Users } from "./operator-panels"
 import { Bots, Destinations } from "./publishing-panels"
@@ -296,6 +300,17 @@ export const PANELS: Panel[] = [
       "Chats and channels your bots publish to. Check and Test use your first bot.",
     keywords: "destination chat channel publish test message",
     render: () => <Destinations />,
+  },
+  {
+    id: "directory.deployment.refresh",
+    topic: "directory",
+    title: "Directory Refreshes",
+    description:
+      "When a Directory entry is fetched again, and what that costs in Requests a day.",
+    keywords: "refresh target wait directory probe due posting rate projection",
+    permission: "settings:manage",
+    absorbs: () => Object.values(REFRESH_SETTING_IDS),
+    render: () => <DirectoryRefresh />,
   },
   {
     id: "network.deployment.proxies",

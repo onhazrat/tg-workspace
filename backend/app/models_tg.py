@@ -999,6 +999,11 @@ class DirectoryEntry(SQLModel, table=True):
     #: behind sync work looked exactly like a probe that had failed.
     refresh_due_at: datetime | None = None
 
+    #: This entry's own Refresh target (ADR-045), 1 to 1000; `None` follows the
+    #: deployment's `directoryRefreshTarget`. Kept on the deployment a Directory
+    #: merge writes into, like `priority_boost`.
+    refresh_target: int | None = Field(default=None, sa_column=Column(SmallInteger))
+
     #: What this Channel's sample Posts said about it, stored at probe time
     #: rather than derived on read (ticket 02, **ADR-015**).
     #:

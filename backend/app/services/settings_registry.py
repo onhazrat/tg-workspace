@@ -245,14 +245,14 @@ GLOBAL_KEYS: dict[str, str] = {
         "account setting it for itself."
     ),
     DIRECTORY_KEY: (
-        "How long a live Channel Directory entry stays current before it is "
-        "fetched again (ticket 03). Deployment policy because the Directory "
-        "itself is: it records what exists on Telegram rather than what "
-        "anybody reads, so there is no account whose window it could be — and "
-        "because the window is the rate control on outbound probe traffic, "
-        "which is one deployment's proxies and one deployment's standing with "
-        "Telegram. A per-account copy would let the shortest window chosen by "
-        "anyone set the load everybody pays for."
+        "When a live Channel Directory entry is fetched again (ADR-045): the "
+        "Refresh target and the shortest and longest wait. Deployment policy "
+        "because the Directory itself is: it records what exists on Telegram "
+        "rather than what anybody reads, so there is no account whose policy "
+        "it could be. And because it is the rate control on outbound probe "
+        "traffic, which is one deployment's proxies and one deployment's "
+        "standing with Telegram. A per-account copy would let the shortest "
+        "wait chosen by anyone set the load everybody pays for."
     ),
     DIRECTORY_COLUMNS_KEY: (
         "Which Directory columns are on for an Account that has not chosen "

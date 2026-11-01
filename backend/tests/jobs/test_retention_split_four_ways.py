@@ -628,13 +628,15 @@ def test_directory_samples_run_on_their_own_deployment_window() -> None:
         _policy(session, directorySampleRetentionDays=30)
         _prefs(session, me)
 
+        # A group, because only an entry that is no longer refreshed has its
+        # samples collected (ADR-045).
         record_probe_result(
             session,
             "windowed_handle",
             {
                 "isTelegramPage": True,
                 "isUnavailableOnWebView": False,
-                "kind": "channel",
+                "kind": "group",
                 "subscribers": 1_200,
                 "samples": [{"id": 1, "text": "stale"}, {"id": 2, "text": "fresh"}],
             },

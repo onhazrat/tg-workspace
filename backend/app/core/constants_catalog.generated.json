@@ -388,7 +388,7 @@
       "comment": "How long to wait before re-probing a handle that keeps failing. Doubles per consecutive failure and stops growing at a day: a handle that has failed eight times in a row is probably failing for a reason a tighter loop will not fix, and the sweep should not keep spending proxy lanes on it.",
       "expression": "15",
       "file": "backend/app/services/channel_directory.py",
-      "line": 162,
+      "line": 168,
       "name": "RETRY_BACKOFF_BASE_MINUTES",
       "value": 15
     },
@@ -396,7 +396,7 @@
       "comment": "",
       "expression": "24 * 60",
       "file": "backend/app/services/channel_directory.py",
-      "line": 163,
+      "line": 169,
       "name": "RETRY_BACKOFF_MAX_MINUTES",
       "value": 1440
     },
@@ -404,7 +404,7 @@
       "comment": "Priority for a row nothing has ranked. Large rather than 0 so a handle enqueued with a real candidate rank always sorts ahead of one that was not.",
       "expression": "1000000",
       "file": "backend/app/services/channel_directory.py",
-      "line": 167,
+      "line": 173,
       "name": "DEFAULT_PROBE_PRIORITY",
       "value": 1000000
     },
@@ -412,7 +412,7 @@
       "comment": "A manual recheck or refresh jumps the queue. The operator is looking at that row, and one that waited behind a freshly generated report would take minutes. **Negative, so it beats a rank rather than tying with one.** `enqueue_handles` numbers a report's candidates from zero, so at `0` this sorted level with the strongest candidate of the newest report and the tie fell to whichever handle was alphabetically first. `test_recheck_jumps_the_queue` passed on exactly that accident. Ticket 03 gave the constant a second caller \u2014 `refresh_entries` \u2014 and the property has to hold by construction for both. **A Priority boost can still beat it** (DPF). The drain order is `priority - priority_boost` and nothing else: an Operator who boosts a batch by more than the gap has said that batch matters more, and an exception here would be one more rule to remember about a number they set themselves.",
       "expression": "-1",
       "file": "backend/app/services/channel_directory.py",
-      "line": 183,
+      "line": 189,
       "name": "RECHECK_PRIORITY",
       "value": -1
     },
@@ -420,7 +420,7 @@
       "comment": "The largest Priority boost either way. `priority` is int4 and the bands sit within a few million of zero, so the difference cannot overflow. With bands 500,000 apart, that leaves two thousand bands of headroom.",
       "expression": "1000000000",
       "file": "backend/app/services/channel_directory.py",
-      "line": 188,
+      "line": 194,
       "name": "MAX_PRIORITY_BOOST",
       "value": 1000000000
     },
@@ -428,7 +428,7 @@
       "comment": "Priority for a handle the harvest sweep found in a stored Post (ticket 04). Behind `DEFAULT_PROBE_PRIORITY` and ahead of `REFRESH_PRIORITY`, which is the ladder's own argument applied once more: a handle somebody's report named is worth more than one nobody asked about, and one nobody asked about is still an answer we have never had, which beats re-fetching an answer we hold. **One number for every harvested handle, not a rank**, and that is the fairness mechanism the ticket asks for rather than a shrug. The sweep walks the corpus with a single cursor and no idea who follows what, so the handles it finds arrive in whatever order the Posts did; giving them all one priority makes `dequeue_handles` fall through to its `handle` tiebreak, and an alphabetical order cannot prefer one account's corpus over another's. Ranking them by discovery order would hand the queue to whichever account's Channels the cursor happened to be walking.",
       "expression": "1500000",
       "file": "backend/app/services/channel_directory.py",
-      "line": 205,
+      "line": 211,
       "name": "HARVEST_PRIORITY",
       "value": 1500000
     },
@@ -436,7 +436,7 @@
       "comment": "Priority for a handle an Operator pasted into the Directory (DADD). Behind `HARVEST_PRIORITY` and ahead of `REFRESH_PRIORITY`. A pasted handle is one we have never had an answer for, which beats re-fetching one we hold; but the Directory's own discoveries go first, and an Operator who wants a paste sooner has the Priority boost. One value for the whole paste, like a harvest, so the drain order within it falls through to `handle`.",
       "expression": "1750000",
       "file": "backend/app/services/channel_directory.py",
-      "line": 214,
+      "line": 220,
       "name": "NAMED_PRIORITY",
       "value": 1750000
     },
@@ -444,7 +444,7 @@
       "comment": "Priority for an entry that already has an answer and is only going stale. Larger than `DEFAULT_PROBE_PRIORITY`, so a scheduled refresh drains behind every handle nobody has ever looked at: an answer we hold is worth less than one we have never had. Set on the conclusive branch of `record_probe_result` rather than left alone, because a row keeps the rank of whatever first enqueued it \u2014 and a handle rechecked once carries `RECHECK_PRIORITY`, which would put a week-old entry at the front of the queue for ever after.",
       "expression": "2000000",
       "file": "backend/app/services/channel_directory.py",
-      "line": 224,
+      "line": 230,
       "name": "REFRESH_PRIORITY",
       "value": 2000000
     },
@@ -452,7 +452,7 @@
       "comment": "",
       "expression": "200",
       "file": "backend/app/services/channel_directory.py",
-      "line": 237,
+      "line": 243,
       "name": "DEFAULT_PROBE_PAGE_SIZE",
       "value": 200
     },
@@ -460,7 +460,7 @@
       "comment": "",
       "expression": "1000",
       "file": "backend/app/services/channel_directory.py",
-      "line": 238,
+      "line": 244,
       "name": "MAX_PROBE_PAGE_SIZE",
       "value": 1000
     },
@@ -468,7 +468,7 @@
       "comment": "The search document's recipe (`search_text`). Raise it when the recipe changes, and `scripts/backfill_directory_search.py` re-indexes older rows.",
       "expression": "1",
       "file": "backend/app/services/channel_directory.py",
-      "line": 244,
+      "line": 250,
       "name": "SEARCH_INDEX_VERSION",
       "value": 1
     },
@@ -476,9 +476,17 @@
       "comment": "Entries re-indexed per statement by retention and the backfill.",
       "expression": "500",
       "file": "backend/app/services/channel_directory.py",
-      "line": 246,
+      "line": 252,
       "name": "SEARCH_BATCH",
       "value": 500
+    },
+    {
+      "comment": "The largest Refresh target, deployment's or an entry's (ADR-045). A larger one lands on the longest wait anyway.",
+      "expression": "1000",
+      "file": "backend/app/services/channel_directory.py",
+      "line": 271,
+      "name": "MAX_REFRESH_TARGET",
+      "value": 1000
     },
     {
       "comment": "",
@@ -684,7 +692,7 @@
       "comment": "How many samples a rate needs before it is reported at all. One constant, not a confidence model and not an error bar. A median over three Posts is a number pretending to be a measurement, and without a floor a three-Post Channel outranks a real one in a sort. Below it the raw sample count still shows, so a suppressed rate can explain itself.",
       "expression": "5",
       "file": "backend/app/services/directory_statistics.py",
-      "line": 87,
+      "line": 90,
       "name": "MIN_SAMPLES",
       "value": 5
     },
@@ -1460,7 +1468,7 @@
       "comment": "The Settling curve is refitted daily and the reach settings change by hand, so an hour-old copy is as good as a fresh one (PFB-03).",
       "expression": "60 * 60 * 1000",
       "file": "frontend/src/hooks/queryKeys.ts",
-      "line": 197,
+      "line": 199,
       "name": "VIEW_ESTIMATE_STALE_TIME",
       "value": 3600000
     },
