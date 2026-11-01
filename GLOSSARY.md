@@ -254,6 +254,12 @@ _Avoid_: last activity, latest post time, freshness
 One message scraped from a Channel.
 _Avoid_: message, item, entry
 
+**Album**:
+Posts a Channel sent together, which Telegram shows as one message: one
+caption, one view count, one set of reactions for all of them. Each of its
+Posts keeps its own id.
+_Avoid_: gallery, media group, grouped post
+
 **Link**:
 A stretch of a Post's own words that points somewhere, exactly as Telegram
 marked it: a phrase masking an address, a bare address, a mention or a hashtag.
@@ -540,6 +546,12 @@ when a Post of its own Channel answers it, so a forward has one when the
 forwarding Channel answers it there; an answer from another Channel makes the
 answering Post a reply and leaves its parent without one.
 _Avoid_: comment, thread, response
+
+**Reply chain**:
+A Post and the Posts it answers: its parent, that parent's parent and on up,
+ending at a Post that answers none or whose parent is not stored. It only goes
+up; the replies a Post has are not part of its Reply chain.
+_Avoid_: thread, conversation, ancestry
 
 **Channel spotlight**:
 Showing one Channel's Posts alone in the Posts tab for a moment, as a Post
@@ -833,7 +845,8 @@ _Avoid_: shortcuts mode, vim mode, hotkeys
 The one item in a tab's list that Keyboard mode is on: a Post, a Channel, a
 Directory entry, a Candidate or an Artifact. Each tab keeps its own. It marks
 where the next key acts and changes nothing; the Directory selection, a Pick and
-the Channel selection are what keys change, not what the Highlight is.
+the Channel selection are what keys change, not what the Highlight is. The
+Posts tab's Reply chain keeps another while it is open.
 _Avoid_: focus (that is Focus mode), cursor, ring, selection
 
 **Tools**:
