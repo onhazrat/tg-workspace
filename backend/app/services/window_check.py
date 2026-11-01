@@ -1,27 +1,27 @@
-"""Which Channels of a Scope are Incomplete, and why (ADR-043). A read model.
+"""Which Channels of a Scope are Incomplete, and why (ADR-043, ADR-044). A read model.
 
 `check_window` answers, for an Account, Channel names, a window and a frozen
 moment, each Channel's verdict. E is the earlier of the window's End and the
-frozen moment. A Channel is Complete when all three tests hold:
+frozen moment. A Channel is Complete when one of its Walked ranges spans the
+window:
 
-1. head: a sync read its newest page at or after E (`head_read_at`), or a
-   Post published after E is held;
-2. start: a Post at or before the Start is held, or a walk reached the
-   Channel's first Post;
-3. continuity: every id from that Post (or the first one held) to the head
-   (the first Post after E, or the newest held) is held or a confirmed gap.
+1. head: the range's top was read at or after E, or it holds a Post published
+   after E;
+2. start: it holds a Post at or before the Start, or it reached the Channel's
+   first Post.
 
-Each failing test leaves an unproven stretch. The end runs from the last
-proven moment to E, a hole between the Posts either side of its missing ids, the
-start from the Start to the first Post. Everything is read from data, so a
-Follow made yesterday, a capped walk and another Follower's older sync need
-no special case. The corpus is read through the Follow-scoped seam, and
-frozen, unavailable and the schedule from the Account's own Follows.
+Each failing test leaves an unproven stretch. The end runs from the top
+range's newest Post (or its top read) to E, a Hole is the space between two
+ranges inside the window, and the start runs from the Start to the lowest
+range. A Post stored without a walk (an import) belongs to no range, so it is
+held but proves nothing. Everything is read from data, so a Follow made
+yesterday, a capped walk and another Follower's older sync need no special
+case. The corpus is read through the Follow-scoped seam, and frozen,
+unavailable and the schedule from the Account's own Follows.
 
-**Unproven Posts** is how much an Incomplete window may lack. A hole counts
-its missing ids exactly, every other stretch the Channel's pace, Posts an hour
-over the week before its head-read moment (no earlier than its first Post or
-the scrape cutoff). A pace over less than an hour is unknown, and an unknown
+**Unproven Posts** is how much an Incomplete window may lack. A Hole counts
+its missing ids, an upper bound since some may be deleted Posts, and every
+other stretch the Channel's stored pace (`Channel.pace_per_hour`). An unknown
 pace under a non-hole stretch makes the total a floor.
 
 The live check reads only what it holds now; it never syncs. Skipped and
@@ -35,10 +35,9 @@ import uuid
 from collections import Counter
 from collections.abc import Collection
 from dataclasses import dataclass
-from typing import Any, get_args
+from typing import get_args
 
-from sqlalchemy import BigInteger, Select, String, column, func, union_all, values
-from sqlalchemy import select as sa_select
+from sqlalchemy import func
 from sqlmodel import Session, col, select
 
 from app.jobs.settings import (
@@ -46,7 +45,7 @@ from app.jobs.settings import (
     load_retention_policy,
     load_sync_settings,
 )
-from app.models_tg import Channel, ChannelSettingGroup, Post, PostSyncState, SyncLog
+from app.models_tg import Channel, ChannelSettingGroup, Post, SyncLog
 from app.schemas.window_check import (
     ChannelVerdict,
     Completeness,
@@ -60,167 +59,33 @@ from app.services.follows import followed_with_groups
 from app.services.scraper_jobs import channels_in_flight
 from app.services.telegram_web import UNAVAILABLE_WEB_VIEW_MESSAGE
 from app.services.tenancy import scoped_select
+from app.services.walked_ranges import Span, holes, ranges_of
 
 HOUR_MS = 3_600_000
-WEEK_MS = 7 * 24 * HOUR_MS
 
 #: ADR-043's order, what a person can act on first.
 REASON_ORDER: tuple[Reason, ...] = get_args(Reason)
 
 
-@dataclass
-class _Held:
-    """What the workspace holds of one Channel, as the three tests read it."""
-
-    first_id: int | None = None
-    first_ts: int | None = None
-    max_id: int | None = None
-    #: The newest Post at or before the Start, and the first one after E.
-    start_id: int | None = None
-    head_id: int | None = None
-    newest_ts: int | None = None
-    held: int = 0
-
-
 def _held(
     session: Session, user_id: uuid.UUID, names: list[str], start: int, end: int
-) -> dict[str, _Held]:
-    ts, pid = col(Post.timestamp), col(Post.post_id)
-    rows = session.execute(
+) -> dict[str, int]:
+    """Posts each Channel holds inside the window, off the timestamp index."""
+    if not names:
+        return {}
+    rows = session.exec(
         scoped_select(
-            sa_select(
-                col(Post.channel_name),
-                func.min(pid),
-                func.min(ts),
-                func.max(pid),
-                func.max(pid).filter(ts <= start),
-                func.min(pid).filter(ts > end),
-                func.max(ts).filter(ts <= end),
-                func.count().filter(ts >= start, ts <= end),
+            select(Post.channel_name, func.count())
+            .where(
+                col(Post.channel_name).in_(names),
+                col(Post.timestamp).between(start, end),
             )
-            .where(col(Post.channel_name).in_(names))
             .group_by(col(Post.channel_name)),
             Post,
             user_id,
         )
     ).all()
-    return {
-        str(name): _Held(
-            first_id=first_id,
-            first_ts=first_ts,
-            max_id=max_id,
-            start_id=start_id,
-            head_id=head_id,
-            newest_ts=newest_ts,
-            held=held,
-        )
-        for name, first_id, first_ts, max_id, start_id, head_id, newest_ts, held in rows
-    }
-
-
-def _ranges(name: str, rows: list[tuple[str, int, int]]) -> Any:
-    return values(
-        column("name", String),
-        column("lo", BigInteger),
-        column("hi", BigInteger),
-        name=name,
-    ).data(rows)
-
-
-@dataclass(frozen=True)
-class _Accounted:
-    """A span's ids held as a Post or a confirmed gap, and its first and last
-    break: the ids either side of the first and the last missing run."""
-
-    count: int
-    before: int | None
-    after: int | None
-
-
-def _accounted(
-    session: Session, user_id: uuid.UUID, spans: list[tuple[str, int, int]]
-) -> dict[str, _Accounted]:
-    """Per Channel, the ids in `[lo, hi]` held as a Post or a confirmed gap.
-
-    Disjoint by construction, since storing a Post clears its gap. One read for
-    every span, so a Scope of many holed Channels asks once.
-    """
-    if not spans:
-        return {}
-    ranges = _ranges("r", spans)
-    held: list[Select[Any]] = [
-        scoped_select(
-            sa_select(
-                col(model.channel_name).label("name"), col(model.post_id).label("id")
-            ).join(
-                ranges,
-                (ranges.c.name == col(model.channel_name))
-                & col(model.post_id).between(ranges.c.lo, ranges.c.hi),
-            ),
-            model,
-            user_id,
-        )
-        for model in (Post, PostSyncState)
-    ]
-    ids = union_all(*held).subquery("ids")
-    following = (
-        func.lead(ids.c.id).over(partition_by=ids.c.name, order_by=ids.c.id)
-    ).label("next")
-    stepped = sa_select(ids.c.name, ids.c.id, following).subquery("stepped")
-    gap = stepped.c.next > stepped.c.id + 1
-    rows = session.execute(
-        sa_select(
-            stepped.c.name,
-            func.count(),
-            func.min(stepped.c.id).filter(gap),
-            func.max(stepped.c.next).filter(gap),
-        ).group_by(stepped.c.name)
-    ).all()
-    return {str(name): _Accounted(int(n), lo, hi) for name, n, lo, hi in rows}
-
-
-def _stamps(
-    session: Session, user_id: uuid.UUID, ids: list[tuple[str, int, int]]
-) -> dict[tuple[str, int], int]:
-    """When each `(Channel, id)` Post was published, read once for all."""
-    if not ids:
-        return {}
-    ranges = _ranges("s", ids)
-    rows = session.exec(
-        scoped_select(
-            select(Post.channel_name, Post.post_id, Post.timestamp).join(
-                ranges,
-                (ranges.c.name == col(Post.channel_name))
-                & col(Post.post_id).between(ranges.c.lo, ranges.c.hi),
-            ),
-            Post,
-            user_id,
-        )
-    ).all()
-    return {(str(name), int(pid)): int(ts) for name, pid, ts in rows}
-
-
-def _hole_bounds(
-    session: Session, user_id: uuid.UUID, breaks: dict[str, _Accounted]
-) -> dict[str, tuple[int, int]]:
-    """When the Posts either side of each Channel's first and last missing id
-    were published, which bound the hole's stretch."""
-    edges = [
-        (name, pid, pid)
-        for name, b in breaks.items()
-        for pid in (b.before, b.after)
-        if pid is not None
-    ]
-    stamps = _stamps(session, user_id, edges)
-    # A neighbour that is a confirmed gap, not a Post, has no time, so the
-    # hole then reaches the window's edge.
-    return {
-        name: (
-            stamps.get((name, b.before or 0), 0),
-            stamps.get((name, b.after or 0), 2**62),
-        )
-        for name, b in breaks.items()
-    }
+    return {str(name): int(n) for name, n in rows}
 
 
 def _last_logs(
@@ -239,38 +104,6 @@ def _last_logs(
         )
     ).all()
     return {str(name): (str(status), error) for name, status, error in rows}
-
-
-def _week_posts(
-    session: Session, user_id: uuid.UUID, spans: list[tuple[str, int, int]]
-) -> dict[str, int]:
-    if not spans:
-        return {}
-    r = _ranges("p", spans)
-    rows = session.exec(
-        scoped_select(
-            select(Post.channel_name, func.count())
-            .join(
-                r,
-                (r.c.name == col(Post.channel_name))
-                & col(Post.timestamp).between(r.c.lo, r.c.hi),
-            )
-            .group_by(col(Post.channel_name)),
-            Post,
-            user_id,
-        )
-    ).all()
-    return {str(name): int(n) for name, n in rows}
-
-
-def _pace_span(channel: Channel, held: _Held, cutoff: int) -> tuple[int, int] | None:
-    to = channel.head_read_at
-    if to is None:
-        return None
-    since = max(
-        to - WEEK_MS, held.first_ts if held.first_ts is not None else to, cutoff
-    )
-    return (since, to) if to - since >= HOUR_MS else None
 
 
 def _next_due(channel: Channel, group: ChannelSettingGroup) -> int | None:
@@ -294,28 +127,43 @@ class _Window:
     cutoff: int
 
 
+def _in_window(ranges: list[Span], window: _Window) -> list[tuple[Span, Span]]:
+    """The Holes whose unread stretch reaches into the window."""
+    return [
+        (low, up)
+        for low, up in holes(ranges)
+        if low.hi_ts < window.end and up.lo_ts > window.start
+    ]
+
+
 def _stretches(
-    channel: Channel,
-    held: _Held,
-    window: _Window,
-    *,
-    missing: int,
-    hole: tuple[int, int] | None,
+    ranges: list[Span], window: _Window
 ) -> list[tuple[Reason, UnprovenStretch]]:
-    """Each failing test's reason and the stretch it leaves unproven."""
+    """Each failing test's reason and the stretch it leaves unproven; none
+    when one range spans the window."""
     start, end = window.start, window.end
+
+    def head(r: Span) -> bool:
+        return (r.top_read_at or 0) >= end or r.hi_ts > end
+
+    def foot(r: Span) -> bool:
+        return r.reached_start or r.lo_ts <= start
+
+    if any(head(r) and foot(r) for r in ranges):
+        return []
     out: list[tuple[Reason, UnprovenStretch]] = []
-    head_read = channel.head_read_at or 0
-    if held.head_id is None and head_read < end:
-        since = max(start, head_read, held.newest_ts or 0)
+    if not any(head(r) for r in ranges):
+        top = ranges[-1] if ranges else None
+        since = max(start, top.top_read_at or 0, top.hi_ts) if top else start
         out.append(("end", UnprovenStretch(kind="end", **{"from": since}, to=end)))
-    if held.start_id is None and not channel.history_reached_channel_start:
-        first = held.first_ts if held.first_ts is not None else end
+    if not any(foot(r) for r in ranges):
+        first = ranges[0].lo_ts if ranges else end
         reason: Reason = "retention" if start < window.cutoff else "start"
         stretch = UnprovenStretch(kind="start", **{"from": start}, to=min(first, end))
         out.append((reason, stretch))
-    if missing > 0 and hole is not None:
-        since, to = max(start, hole[0]), min(end, hole[1])
+    if gaps := _in_window(ranges, window):
+        since = max(start, min(low.hi_ts for low, _ in gaps))
+        to = min(end, max(up.lo_ts for _, up in gaps))
         out.append(("hole", UnprovenStretch(kind="hole", **{"from": since}, to=to)))
     return out
 
@@ -382,22 +230,23 @@ def must_sync_again(started: int, head_read_at: int | None, end: int) -> bool:
 def _verdict(
     channel: Channel,
     group: ChannelSettingGroup | None,
-    held: _Held,
+    ranges: list[Span],
     *,
     window: _Window,
+    held: int,
     missing: int,
-    hole: tuple[int, int] | None,
     last_log: tuple[str, str | None] | None,
-    pace: float | None,
     syncing_since: int | None,
 ) -> ChannelVerdict:
-    failing = _stretches(channel, held, window, missing=missing, hole=hole)
+    failing = _stretches(ranges, window)
     standing = _standing(group, last_log)
     # A failure or a freeze explains an Incomplete Channel; alone it is none.
     reasons = [r for r, _ in failing] + (standing.reasons if failing else [])
     reasons.sort(key=REASON_ORDER.index)
     stretches = [s for _, s in failing]
     syncable = not standing.blocked and reasons != ["retention"]
+    missing = missing if "hole" in reasons else 0
+    pace = channel.pace_per_hour
     paced_ms = sum(s.to - s.from_ for s in stretches if s.kind != "hole")
     return ChannelVerdict(
         name=channel.name,
@@ -411,25 +260,12 @@ def _verdict(
         syncable=syncable,
         behind=_is_behind(channel, group, reasons, syncable, window.frozen_at),
         pacePerHour=pace,
-        heldPosts=held.held,
+        heldPosts=held,
         unprovenPosts=missing + (pace or 0) * paced_ms / HOUR_MS,
         syncingSince=syncing_since,
         syncAgain=syncing_since is not None
         and must_sync_again(syncing_since, channel.head_read_at, window.end),
     )
-
-
-def _spans(listed: list[str], held: dict[str, _Held]) -> list[tuple[str, int, int]]:
-    """Each Channel's ids the continuity test reads, from the Post at or
-    before the Start (or the first held) to the head (or the newest held)."""
-    spans: list[tuple[str, int, int]] = []
-    for name in listed:
-        h = held.get(name, _Held())
-        lo = h.start_id if h.start_id is not None else h.first_id
-        hi = h.head_id if h.head_id is not None else h.max_id
-        if lo is not None and hi is not None and hi > lo:
-            spans.append((name, lo, hi))
-    return spans
 
 
 def frozen_moment(asked: int | None) -> int:
@@ -465,38 +301,28 @@ def check_window(
     )
     followed = followed_with_groups(session, user_id=user_id, names=names)
     listed = [channel.name for channel, _ in followed]
-    held = _held(session, user_id, listed, start, window.end)
-    spans = _spans(listed, held)
-    accounted = _accounted(session, user_id, spans)
+    ranges = ranges_of(session, user_id, listed)
+    # Every id of a Hole counts, an upper bound: some are deleted Posts, and a
+    # Post an import stored there is counted too, since no walk read it.
     missing = {
-        n: hi - lo + 1 - (accounted[n].count if n in accounted else 0)
-        for n, lo, hi in spans
+        n: sum(
+            up.lo_id - low.hi_id - 1
+            for low, up in _in_window(ranges.get(n, []), window)
+        )
+        for n in listed
     }
-    holes = _hole_bounds(
-        session, user_id, {n: accounted[n] for n in missing if missing[n] > 0}
-    )
-    paces = {
-        channel.name: span
-        for channel, _ in followed
-        if (span := _pace_span(channel, held.get(channel.name, _Held()), window.cutoff))
-    }
-    week = _week_posts(session, user_id, [(n, lo, hi) for n, (lo, hi) in paces.items()])
+    held = _held(session, user_id, listed, start, window.end)
     logs = _last_logs(session, user_id, listed)
     flight = channels_in_flight(session, listed)
     verdicts = [
         _verdict(
             channel,
             group,
-            held.get(channel.name, _Held()),
+            ranges.get(channel.name, []),
             window=window,
+            held=held.get(channel.name, 0),
             missing=missing.get(channel.name, 0),
-            hole=holes.get(channel.name),
             last_log=logs.get(channel.name),
-            pace=(
-                week.get(channel.name, 0) / ((span[1] - span[0]) / HOUR_MS)
-                if (span := paces.get(channel.name))
-                else None
-            ),
             syncing_since=flight.get(channel.name),
         )
         for channel, group in followed

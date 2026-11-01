@@ -133,7 +133,7 @@ def test_clear_table_deletes_all_rows(client: TestClient) -> None:
 
 
 def test_clear_posts_also_clears_dependent_rows(client: TestClient) -> None:
-    """Stale post_sync_state would make a later sync skip re-fetching."""
+    """Stale Walked ranges would vouch for Posts that are gone."""
     headers = _auth(client)
     now_ms = int(time.time() * 1000)
     client.put(

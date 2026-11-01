@@ -10,9 +10,9 @@ from sqlmodel import Session, col, delete, func, select
 
 from app.core.request_recording import RequestKind
 from app.models_tg import Channel, Post, PostEmbedding, PostTranslation, utc_now
+from app.services import walked_ranges
 from app.services.channel_setting_groups import channel_allows_reset, load_groups_by_id
 from app.services.follows import FollowedChannel, followed_channels_for
-from app.services.post_sync_state import clear_channel_sync_state
 from app.services.quota import QuotaCeilingReached
 from app.services.request_kinds import assert_kind_enabled
 from app.services.sync_meta import touch_sync
@@ -182,7 +182,7 @@ async def bulk_reset_and_queue_sync(
             continue
         try:
             deleted = _clear_channel_posts(session, channel.name)
-            clear_channel_sync_state(session, channel.name)
+            walked_ranges.clear(session, channel.name)
             _reset_channel_coverage_fields(channel)
             result.posts_deleted += deleted
             session.add(channel)

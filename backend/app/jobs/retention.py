@@ -57,7 +57,7 @@ from datetime import timedelta
 from typing import Any, cast
 
 from sqlalchemy import delete as sa_delete
-from sqlmodel import Session, col, func, select
+from sqlmodel import Session, col, select
 
 # Aliased for symmetry with the rest of `app/jobs`, where a local `settings`
 # holding stored values would otherwise shadow the process settings object.
@@ -94,10 +94,6 @@ from app.services.logs import (
     delete_unowned_logs_before,
     expire_sync_payloads_stmt,
 )
-from app.services.post_sync_state import (
-    prune_sync_state_below,
-    prune_sync_state_for_post_ids,
-)
 from app.services.post_thumbnails import (
     delete_cached_thumb,
     enforce_thumb_cache_size_limit,
@@ -107,6 +103,7 @@ from app.services.scraper_jobs import prune_finished_jobs
 from app.services.summary_attempts import trim_dismissed_partials
 from app.services.sync_meta import touch_sync
 from app.services.view_observations import prune_view_observations
+from app.services.walked_ranges import trim_below
 
 logger = logging.getLogger(__name__)
 
@@ -386,7 +383,6 @@ def _sweep_posts(session: Session, cutoff: int) -> int:
                     col(PostTranslation.post_id).in_(post_ids),
                 )
             )
-            prune_sync_state_for_post_ids(session, channel_name, post_ids)
             result = session.execute(
                 sa_delete(Post).where(
                     col(Post.channel_name) == channel_name,
@@ -399,11 +395,7 @@ def _sweep_posts(session: Session, cutoff: int) -> int:
 
     if affected_channels:
         for channel_name in affected_channels:
-            min_remaining = session.exec(
-                select(func.min(Post.post_id)).where(Post.channel_name == channel_name)
-            ).one()
-            if min_remaining is not None:
-                prune_sync_state_below(session, channel_name, min_remaining)
+            trim_below(session, channel_name)
             # Drop a dangling anchor whose post was pruned so the channel
             # does not point at a row that no longer exists.
             channel = session.exec(

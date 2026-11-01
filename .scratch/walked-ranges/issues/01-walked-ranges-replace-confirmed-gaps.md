@@ -32,3 +32,11 @@ every Implementation Decision except Live updates.
 - [ ] The gate and Details word a Hole as "hole: up to N posts".
 - [ ] Tests drive "sync in, check out": faked Telegram pages through one Channel's sync, then the check route's verdict; repair tests also assert the page ids asked for. The migration and retention have their own tests. Each guard is mutation-checked and its docstring names the mutation.
 - [ ] Measured on staging after deploy: the check's median and the count of holed Channels, recorded under Comments.
+
+## Comments
+
+- 2026-11-01: two departures from the spec, both recorded in ADR-044. A Hole's
+  missing ids no longer subtract Posts an import stored inside it: that count
+  planned as a read bounded by Channel alone, and the Hole already reads "up
+  to N". Every sync repairs Holes above its floor, not only the scheduler's
+  regular sync and the gate, so a person's own Sync closes a Hole too.

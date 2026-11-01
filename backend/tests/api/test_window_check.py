@@ -3,16 +3,17 @@
 `POST /data/posts/window-check` answers, for the caller's Channels and an
 Analysis window, each Channel's verdict and the window's Unproven Posts
 (ADR-043). It reads data and never syncs. E is the window's End or now,
-whichever is earlier; a Channel is Complete when all three tests hold:
+whichever is earlier; a Channel is Complete when one Walked range spans the
+window (ADR-044):
 
-1. head: a sync read its newest page at or after E, or a Post after E is held;
-2. start: a Post at or before the window's Start is held, or a walk reached
-   the Channel's first Post;
-3. continuity: every id between that Post and the head is held or a
-   confirmed gap.
+1. head: the range's top was read at or after E, or it holds a Post after E;
+2. start: it holds a Post at or before the window's Start, or a walk reached
+   the Channel's first Post.
 
-Every world below is a fixed window from `S` to `E`, ending two hours ago,
-seeded as the Operator unless it says otherwise.
+How a sync writes ranges is `tests/services/test_walked_ranges.py`'s: here a
+Channel's Posts are seeded as one walk unless a test says otherwise. Every
+world below is a fixed window from `S` to `E`, ending two hours ago, seeded as
+the Operator unless it says otherwise.
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import event
 from sqlmodel import Session, col, delete, select
 
 from app import crud
@@ -34,12 +36,13 @@ from app.models_tg import (
     Channel,
     ChannelSettingGroup,
     Post,
-    PostSyncState,
     SyncJob,
     SyncLog,
 )
 from app.services.follows import get_operator_user_id
 from app.services.telegram_web import UNAVAILABLE_WEB_VIEW_MESSAGE
+from app.services.walked_ranges import Span, record_page
+from app.services.window_check import check_window
 from tests.utils.setting_groups import add_test_channel
 from tests.utils.user import create_random_user, user_authentication_headers
 from tests.utils.utils import get_superuser_token_headers
@@ -77,9 +80,14 @@ def _channel(
     *,
     user_id: uuid.UUID | None = None,
     group: dict[str, Any] | None = None,
+    walks: list[list[int]] | None = None,
     **fields: Any,
 ) -> None:
-    """A followed Channel holding `posts`, each `(post id, published at)`."""
+    """A followed Channel holding `posts`, each `(post id, published at)`.
+
+    A walk read them all, its top at the Channel's `head_read_at` and its
+    bottom at its first Post when `history_reached_channel_start`; `walks`
+    names the post ids of each of several walks instead."""
     owner = user_id or _owner(session)
     if group is not None:
         row = ChannelSettingGroup(
@@ -91,12 +99,23 @@ def _channel(
     add_test_channel(session, name, name=name, user_id=owner, **fields)
     for post_id, ts in posts:
         session.add(Post(channel_name=name, post_id=post_id, timestamp=ts))
-    session.commit()
-
-
-def _gap(session: Session, name: str, *ids: int) -> None:
-    for post_id in ids:
-        session.add(PostSyncState(channel_name=name, post_id=post_id, confirmed_at=1))
+    stamps = dict(posts)
+    for ids in walks or ([list(stamps)] if posts else []):
+        record_page(
+            session,
+            name,
+            Span(
+                lo_id=min(ids),
+                hi_id=max(ids),
+                lo_ts=min(stamps[i] for i in ids),
+                hi_ts=max(stamps[i] for i in ids),
+                top_read_at=fields.get("head_read_at")
+                if max(ids) == max(stamps)
+                else None,
+                reached_start=bool(fields.get("history_reached_channel_start"))
+                and min(ids) == min(stamps),
+            ),
+        )
     session.commit()
 
 
@@ -201,13 +220,12 @@ def test_no_post_at_or_before_the_start_is_history_short_of_the_start(
     assert _verdict(body, "cw_born")["reasons"] == []
 
 
-def test_an_id_neither_held_nor_a_confirmed_gap_is_a_hole(
+def test_ids_between_two_walks_are_a_hole_and_inside_one_are_not(
     client: TestClient, operator: dict[str, str], session: Session
 ) -> None:
     holed = [(1, S - HOUR), (2, S + HOUR), (5, S + 3 * HOUR), (6, E + HOUR)]
-    _channel(session, "cw_holed", holed)
+    _channel(session, "cw_holed", holed, walks=[[1, 2], [5, 6]])
     _channel(session, "cw_gapped", holed)
-    _gap(session, "cw_gapped", 3, 4)
 
     body = _check(client, operator, "cw_holed", "cw_gapped")
 
@@ -333,6 +351,7 @@ def test_lag_with_another_problem_is_never_behind(
         session,
         "cw_both",
         [(1, S - HOUR), (3, S + HOUR)],
+        walks=[[1], [3]],
         next_regular_sync_at=NOW + HOUR,
         **UNREAD_END,
     )
@@ -348,18 +367,19 @@ def test_lag_with_another_problem_is_never_behind(
 READ = E - 24 * HOUR
 S2 = E - 48 * HOUR
 #: One Post eight days before the read, then one every 12 h for the week
-#: before it: 14 Posts in 168 h, a pace of one Post per 12 h.
+#: before it, the pace the sync stored (`test_walked_ranges.py` tests that).
 PACED = [(1, READ - 8 * 24 * HOUR)] + [
     (15 - k, READ - k * 12 * HOUR) for k in range(14)
 ]
 HOLED = [(1, S - HOUR), (2, S + HOUR), (5, S + 3 * HOUR), (6, E + HOUR)]
+HOLED_WALKS = [[1, 2], [5, 6]]
 
 
 def test_a_hole_counts_its_missing_ids_exactly(
     client: TestClient, operator: dict[str, str], session: Session
 ) -> None:
     """No pace needed: a hole-only Channel's unknown pace is no floor."""
-    _channel(session, "cw_holed", HOLED)
+    _channel(session, "cw_holed", HOLED, walks=HOLED_WALKS)
 
     body = _check(client, operator, "cw_holed")
 
@@ -370,7 +390,7 @@ def test_lag_counts_at_the_channels_own_pace(
     client: TestClient, operator: dict[str, str], session: Session
 ) -> None:
     """24 h unproven at one Post per 12 h is about 2 Posts."""
-    _channel(session, "cw_paced", PACED, head_read_at=READ)
+    _channel(session, "cw_paced", PACED, head_read_at=READ, pace_per_hour=1 / 12)
 
     body = _check(client, operator, "cw_paced", start=S2)
 
@@ -386,7 +406,7 @@ def test_an_unknown_pace_makes_the_total_a_floor(
     client: TestClient, operator: dict[str, str], session: Session
 ) -> None:
     """Never read, so no pace: its lag may hide any number of Posts."""
-    _channel(session, "cw_holed", HOLED)
+    _channel(session, "cw_holed", HOLED, walks=HOLED_WALKS)
     _channel(session, "cw_unread", WHOLE[:2])
 
     body = _check(client, operator, "cw_holed", "cw_unread")
@@ -399,7 +419,7 @@ def test_no_posts_expected_only_when_every_pace_is_known(
     client: TestClient, operator: dict[str, str], session: Session
 ) -> None:
     """Silent all week: a known pace of zero, so its lag hides nothing."""
-    _channel(session, "cw_silent", PACED[:1], head_read_at=READ)
+    _channel(session, "cw_silent", PACED[:1], head_read_at=READ, pace_per_hour=0.0)
 
     body = _check(client, operator, "cw_silent", start=S2)
 
@@ -437,7 +457,7 @@ def test_another_accounts_channels_and_settings_never_reach_the_check(
     """A Channel only they follow is not judged, and their frozen group says
     nothing about a Channel both follow."""
     other_id, _ = other
-    _channel(session, "cw_theirs", HOLED, user_id=other_id)
+    _channel(session, "cw_theirs", HOLED, user_id=other_id, walks=HOLED_WALKS)
     _channel(session, "cw_shared", WHOLE[:2], **UNREAD_END)
     _channel(session, "cw_shared", user_id=other_id, group={"is_frozen": True})
 
@@ -539,3 +559,67 @@ def test_the_gate_checks_again_at_its_own_moment(
         clicked,
         clicked - HOUR,
     )
+
+
+# --- Cost --------------------------------------------------------------------------
+
+
+def _posts_reads(plan: dict[str, Any]) -> Iterator[dict[str, Any]]:
+    """Every node of a JSON plan that reads `tg_posts` or one of its indexes."""
+    if plan.get("Relation Name") == "tg_posts" or "tg_posts" in plan.get(
+        "Index Name", ""
+    ):
+        yield plan
+    for child in plan.get("Plans", []):
+        yield from _posts_reads(child)
+
+
+def test_the_check_reads_only_a_bounded_slice_of_posts(session: Session) -> None:
+    """Every Posts read of the check is an index range on time or post id, so
+    its cost follows the window and the Holes, never a Channel's whole history
+    (ADR-044). On staging the old continuity read went through all 1.1 GB of
+    Posts per request.
+
+    With sequential scans priced out, a read bounded only by Channel still
+    plans an index scan on `channel_name` alone, which is the regression this
+    catches on a table too small to show it.
+
+    **Mutation:** count held Posts with no time bound and the read is bounded
+    by Channel alone.
+    """
+    _channel(session, "cw_cost", HOLED, walks=HOLED_WALKS, head_read_at=E)
+    statements: list[tuple[str, Any]] = []
+
+    def grab(_c: Any, _cur: Any, statement: str, params: Any, *_a: Any) -> None:
+        statements.append((statement, params))
+
+    event.listen(engine, "before_cursor_execute", grab)
+    try:
+        with Session(engine) as reading:
+            check_window(
+                reading,
+                user_id=_owner(session),
+                names=["cw_cost"],
+                start=S,
+                end=E,
+                frozen_at=NOW,
+            )
+    finally:
+        event.remove(engine, "before_cursor_execute", grab)
+
+    posts_reads = [(st, p) for st, p in statements if "FROM tg_posts" in st]
+    assert posts_reads, "the check read no Posts at all"
+    with engine.connect() as conn:
+        cursor = conn.connection.dbapi_connection.cursor()  # type: ignore[union-attr]
+        cursor.execute("SET enable_seqscan = off")
+        for statement, params in posts_reads:
+            cursor.execute("EXPLAIN (FORMAT JSON) " + statement, params)
+            ((plan,),) = cursor.fetchall()
+            for node in _posts_reads(plan[0]["Plan"]):
+                assert node["Node Type"] != "Seq Scan", statement
+                if "Index Name" in node:
+                    bound = node.get("Index Cond", "")
+                    assert "timestamp" in bound or "post_id" in bound, (
+                        bound,
+                        statement,
+                    )

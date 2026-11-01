@@ -107,6 +107,9 @@ class Channel(SQLModel, table=True):
     #: Set as the page is fetched, so a walk stopped at the iteration limit
     #: still sets it; Last sync (`last_updated`) is when a sync finished.
     head_read_at: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
+    #: Posts an hour over the week before `head_read_at` (ADR-044), stored by
+    #: the sync so the window check never counts them; None when unknown.
+    pace_per_hour: float | None = None
     next_regular_sync_at: int | None = Field(
         default=None, sa_column=_ms_ts(nullable=True)
     )
@@ -426,16 +429,25 @@ class SettlingCurveFit(SQLModel, table=True):
     channel_count: int
 
 
-class PostSyncState(SQLModel, table=True):
-    __tablename__ = "tg_post_sync_state"
-    __table_args__ = (UniqueConstraint("channel_name", "post_id"),)
+class WalkedRange(SQLModel, table=True):
+    """Post ids of one Channel a sync read page by page without a break
+    (ADR-044). Every Post Telegram shows publicly inside it is held."""
+
+    __tablename__ = "tg_walked_ranges"
+    __table_args__ = (Index("ix_tg_walked_ranges_channel_lo", "channel_name", "lo_id"),)
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    channel_name: str = Field(index=True)
-    post_id: int
-    state: str = "confirmed_gap"
-    confirmed_at: int = Field(default=0, sa_column=_ms_ts())
-    confirmed_job_id: str | None = None
+    channel_name: str
+    lo_id: int
+    hi_id: int
+    #: When the oldest and the newest Post held in the range were published.
+    lo_ts: int = Field(sa_column=_ms_ts())
+    hi_ts: int = Field(sa_column=_ms_ts())
+    #: When a sync read the newest page at the range's top; nothing above
+    #: `hi_id` existed then. None when its top was never a head page.
+    top_read_at: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
+    #: A walk paged past the Channel's first Post below `lo_id`.
+    reached_start: bool = False
     updated_at: datetime = Field(default_factory=utc_now)
 
 

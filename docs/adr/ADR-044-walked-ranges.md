@@ -36,17 +36,19 @@ at or before the Start, or reached the Channel's first Post. The end stretch
 runs from the top range's newest Post to E, a Hole is any space between ranges
 inside the window, and the start stretch runs from the Start to the lowest
 range's bottom. A Hole's Unproven Posts stay its missing ids exactly, now an
-upper bound, and the UI says "hole: up to 4 posts".
+upper bound that also counts any Post an import stored there, and the UI says
+"hole: up to 4 posts".
 
 A Post stored without a walk (bulk upsert, import) is held but belongs to no
 range, so an imported Channel stays Incomplete until a walk reads it.
 
 A sync repairs by jumping: it starts a walk at a Hole's upper range and stops
 when a page reaches the range below, and it reaches the Start the same way
-from the lowest range. The walk back from the head is gone. The scheduler's
-regular sync repairs the Channel's Holes within the scrape cutoff after its
-head pass, under the usual lanes and Budget, so a scheduled successor does not
-carry a Hole forever.
+from the lowest range. The walk back from the head is gone. Every sync, the
+scheduler's included, repairs the Channel's Holes above its floor (the scrape
+cutoff, or the Start a gate asked for) after its head pass, under the usual
+lanes and Budget: a scheduled successor does not carry a Hole forever, and a
+person who presses Sync on a holed Channel sees the Hole close.
 
 Retention raises a range's bottom to its lowest remaining Post and drops its
 claim to the Channel's first Post once that Post is deleted.

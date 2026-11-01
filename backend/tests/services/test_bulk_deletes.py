@@ -16,12 +16,10 @@ from __future__ import annotations
 from sqlmodel import Session, col, select
 
 from app.core.db import engine
-from app.models_tg import Post, PostSyncState
+from app.models_tg import Post
+from app.services import walked_ranges
 from app.services.channels import collect_unfollowed_channel
-from app.services.post_sync_state import (
-    clear_channel_sync_state,
-    prune_sync_state_below,
-)
+from app.services.walked_ranges import Span, channel_ranges, record_page
 from tests.utils.setting_groups import add_test_channel
 
 
@@ -43,16 +41,6 @@ def _post_ids(channel: str) -> set[int]:
             p.post_id
             for p in session.exec(
                 select(Post).where(col(Post.channel_name) == channel)
-            ).all()
-        }
-
-
-def _state_ids(channel: str) -> set[int]:
-    with Session(engine) as session:
-        return {
-            r.post_id
-            for r in session.exec(
-                select(PostSyncState).where(col(PostSyncState.channel_name) == channel)
             ).all()
         }
 
@@ -93,45 +81,14 @@ def test_collection_with_no_posts_succeeds() -> None:
         session.commit()
 
 
-def test_clear_channel_sync_state_returns_deleted_count() -> None:
+def test_clearing_ranges_stays_with_its_channel() -> None:
     with Session(engine) as session:
-        for i in range(4):
-            session.add(PostSyncState(channel_name="ch", post_id=i))
-        session.add(PostSyncState(channel_name="other", post_id=99))
+        for name in ("ch", "other"):
+            record_page(session, name, Span(lo_id=1, hi_id=9, lo_ts=1, hi_ts=9))
         session.commit()
 
-        assert clear_channel_sync_state(session, "ch") == 4
+        walked_ranges.clear(session, "ch")
         session.commit()
 
-    assert _state_ids("ch") == set()
-    assert _state_ids("other") == {99}
-
-
-def test_clear_channel_sync_state_on_empty_returns_zero() -> None:
-    with Session(engine) as session:
-        assert clear_channel_sync_state(session, "nothing-here") == 0
-
-
-def test_prune_sync_state_below_only_removes_older_ids() -> None:
-    with Session(engine) as session:
-        for i in (1, 5, 10, 20):
-            session.add(PostSyncState(channel_name="ch", post_id=i))
-        session.commit()
-
-        assert prune_sync_state_below(session, "ch", 10) == 2
-        session.commit()
-
-    assert _state_ids("ch") == {10, 20}
-
-
-def test_prune_sync_state_below_is_channel_scoped() -> None:
-    with Session(engine) as session:
-        session.add(PostSyncState(channel_name="ch", post_id=1))
-        session.add(PostSyncState(channel_name="other", post_id=1))
-        session.commit()
-
-        assert prune_sync_state_below(session, "ch", 100) == 1
-        session.commit()
-
-    assert _state_ids("ch") == set()
-    assert _state_ids("other") == {1}
+        assert channel_ranges(session, "ch") == []
+        assert len(channel_ranges(session, "other")) == 1
