@@ -95,7 +95,6 @@ def _apply(
         job_id="refresh-job",
         job_source="Manual",
         user_id=None,
-        session_seen_ids=set(),
         before_id=None,
     )
 

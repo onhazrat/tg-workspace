@@ -1181,6 +1181,19 @@ export async function* streamFollowJobEvents(
   )
 }
 
+/**
+ * The followed Channels a sync just changed, gathered per second (WR-02); the
+ * first frame names none and says the stream is open.
+ */
+export async function* streamChannelChanges(
+  signal?: AbortSignal,
+): AsyncGenerator<{ names: string[] }> {
+  yield* sseJsonStream<{ names: string[] }>(
+    "/api/v1/data/posts/window-check/events",
+    { signal },
+  )
+}
+
 /** One frame of an Attempt's watch: new text, or how it ended (SFR-02). */
 export type AttemptFrame =
   | { text: string }

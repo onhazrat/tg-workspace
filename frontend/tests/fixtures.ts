@@ -26,8 +26,8 @@ function loadConverters() {
 }
 
 /**
- * Every window checks Complete unless a spec routes the check itself (a later
- * route wins). Every Action button goes through the gate (CW-02), and a
+ * Every window checks Complete, and no sync announces a change, unless a spec
+ * routes them itself (a later route wins). Every Action button goes through the gate (CW-02), and a
  * seeded Channel with no head read is Incomplete, so without this each spec
  * that clicks one would meet a review it is not about.
  */
@@ -42,6 +42,12 @@ async function completeWindows(page: Page) {
     )
     await route.fulfill({ json: windowCheck(channels, { end }) })
   })
+  // No sync changes anything (WR-02): an empty stream, so the page retries
+  // every few seconds instead of holding a request open, which would keep
+  // `networkidle` from ever arriving.
+  await page.route("**/api/v1/data/posts/window-check/events", (route) =>
+    route.fulfill({ contentType: "text/event-stream", body: "" }),
+  )
 }
 
 /**

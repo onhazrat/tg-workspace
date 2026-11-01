@@ -9,8 +9,9 @@ from sqlmodel import Session, select
 from app.core.db import engine
 from app.jobs.retention import run_retention_cleanup
 from app.jobs.settings import save_settings_section
-from app.models_tg import Channel, Post, PostEmbedding, PostSyncState, PostTranslation
+from app.models_tg import Channel, Post, PostEmbedding, PostTranslation
 from app.services.follows import get_operator_user_id
+from app.services.walked_ranges import Span, channel_ranges, record_page
 from tests.utils.setting_groups import add_test_channel
 
 
@@ -105,7 +106,7 @@ def test_retention_batches_and_cascades(monkeypatch) -> None:
                 timestamp=old_ts,
             )
         )
-        session.add(PostSyncState(channel_name=ch, post_id=1, state="confirmed_gap"))
+        record_page(session, ch, Span(lo_id=1, hi_id=99, lo_ts=old_ts, hi_ts=recent_ts))
         session.commit()
 
         result = run_retention_cleanup(session)
@@ -121,21 +122,18 @@ def test_retention_batches_and_cascades(monkeypatch) -> None:
             ).all()
             == []
         ), "translation not cascaded"
-        assert (
-            check.exec(
-                select(PostSyncState).where(PostSyncState.channel_name == ch)
-            ).all()
-            == []
-        ), "sync state not pruned"
+        ((low, high),) = [(r.lo_id, r.hi_id) for r in channel_ranges(check, ch)]
+        assert (low, high) == (99, 99), "the range still claims swept ids"
 
 
 def test_retention_repairs_what_the_sweep_left_pointing_at_nothing() -> None:
-    """After the sweep, each touched Channel's anchor and sync state are repaired.
+    """After the sweep, each touched Channel's anchor and Walked ranges are repaired.
 
     A Channel whose `anchor_post_id` named a swept Post loses it, one whose
-    anchor survived keeps it, and sync-state rows below the oldest surviving
-    Post go even when no swept Post carried them. A Channel swept empty has no
-    oldest Post to measure from, so its stray sync state stays.
+    anchor survived keeps it. Its ranges start at its oldest surviving Post and
+    no longer claim its first Post (ADR-044); a Channel swept empty keeps none.
+
+    **Mutation:** keep a straddling range's bottom and it claims swept ids.
     """
     old_ts = 1_000_000_000_000
     recent_ts = int(time.time() * 1000)
@@ -164,11 +162,15 @@ def test_retention_repairs_what_the_sweep_left_pointing_at_nothing() -> None:
                     is_anchor=is_anchor,
                 )
             )
-        # Gap rows no swept Post carries: 3 is below the oldest survivor (5),
-        # 7 is above it, and the empty Channel's 50 has nothing to compare to.
-        session.add(PostSyncState(channel_name="ret-dangle", post_id=3, state="gap"))
-        session.add(PostSyncState(channel_name="ret-dangle", post_id=7, state="gap"))
-        session.add(PostSyncState(channel_name="ret-empty", post_id=50, state="gap"))
+        # A walk from 5 down to the first Post, one wholly below the oldest
+        # survivor, and the empty Channel's only walk.
+        walked = [
+            ("ret-dangle", Span(1, 5, old_ts, recent_ts, reached_start=True)),
+            ("ret-kept", Span(9, 10, old_ts, old_ts)),
+            ("ret-empty", Span(1, 1, old_ts, old_ts)),
+        ]
+        for name, span in walked:
+            record_page(session, name, span)
         session.commit()
 
         result = run_retention_cleanup(session)
@@ -179,7 +181,43 @@ def test_retention_repairs_what_the_sweep_left_pointing_at_nothing() -> None:
         kept = check.get(Channel, "ret-kept")
         assert dangling is not None and dangling.anchor_post_id is None
         assert kept is not None and kept.anchor_post_id == 10
-        states = check.exec(
-            select(PostSyncState.channel_name, PostSyncState.post_id)
-        ).all()
-        assert sorted(states) == [("ret-dangle", 7), ("ret-empty", 50)]
+        assert channel_ranges(check, "ret-dangle") == [Span(5, 5, recent_ts, recent_ts)]
+        assert channel_ranges(check, "ret-empty") == []
+
+
+def test_a_kept_anchor_does_not_hold_a_range_over_swept_posts() -> None:
+    """An anchor outlives the sweep, but the Posts between it and the oldest
+    survivor are gone: no range may claim them (ADR-044).
+
+    **Mutation:** trim to the lowest remaining Post, anchor included, and the
+    range still starts at the anchor.
+    """
+    old_ts = 1_000_000_000_000
+    recent_ts = int(time.time() * 1000)
+    with Session(engine) as session:
+        save_settings_section(
+            session, "retention", {"postRetentionDays": 30, "sharedLogRetentionDays": 0}
+        )
+        for post_id, ts, is_anchor in [
+            (10, old_ts, True),
+            (11, old_ts, False),
+            (12, recent_ts, False),
+        ]:
+            session.add(
+                Post(
+                    channel_name="ret-anchored",
+                    post_id=post_id,
+                    text="x",
+                    timestamp=ts,
+                    is_anchor=is_anchor,
+                )
+            )
+        record_page(session, "ret-anchored", Span(10, 12, old_ts, recent_ts))
+        session.commit()
+
+        run_retention_cleanup(session)
+
+    with Session(engine) as check:
+        assert channel_ranges(check, "ret-anchored") == [
+            Span(12, 12, recent_ts, recent_ts)
+        ]

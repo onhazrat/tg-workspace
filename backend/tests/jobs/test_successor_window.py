@@ -36,6 +36,7 @@ from app.models_tg import (
 from app.services import publications, scraper_jobs
 from app.services.scraper_jobs import SyncJobState
 from app.services.summaries import get_summary
+from app.services.walked_ranges import Span, record_page
 from tests.utils.scope import stored_scope
 from tests.utils.setting_groups import add_test_channel
 from tests.utils.user import create_random_user
@@ -69,11 +70,12 @@ def _quick(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _unread_end(session: Session, user: User) -> Channel:
-    """Held from before the Start, never read past E: its only reason is the end."""
+    """Walked from before the Start, never read past E: its only reason is the end."""
     name = f"sw{uuid.uuid4().hex[:10]}"
     channel = add_test_channel(session, name, name=name, user_id=user.id)
     session.add(Post(channel_name=name, post_id=1, timestamp=START - 30 * MINUTE))
     session.add(Post(channel_name=name, post_id=2, timestamp=START + 30 * MINUTE))
+    record_page(session, name, Span(1, 2, START - 30 * MINUTE, START + 30 * MINUTE))
     session.commit()
     return channel
 
@@ -95,12 +97,15 @@ def _predecessor(session: Session, user: User, *names: str) -> Summary:
 
 
 def _read_head(channel_id: str, at: int | None = None) -> None:
-    """What a sync that reached the head leaves behind: a head read, now."""
+    """What a sync that reached the head leaves behind: a head read, now, on
+    the Walked range holding the newest Post (ADR-044)."""
     with Session(engine) as s:
         row = s.get(Channel, channel_id)
         assert row is not None
         row.head_read_at = at or int(time.time() * 1000)
         s.add(row)
+        top = START + 30 * MINUTE
+        record_page(s, row.name, Span(2, 2, top, top, top_read_at=row.head_read_at))
         s.commit()
 
 

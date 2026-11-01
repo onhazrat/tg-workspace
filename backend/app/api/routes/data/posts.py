@@ -5,9 +5,12 @@ Split out of the former `routes/data.py` under C1. The parent router in
 path and operation id is unchanged.
 """
 
+import json
+from collections.abc import AsyncIterator
 from typing import Any
 
 from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
 
 from app.api.deps import CurrentUser, SessionDep
 from app.api.post_views import view_of
@@ -29,7 +32,7 @@ from app.schemas.posts import (
     ViewEstimateResponse,
 )
 from app.schemas.window_check import WindowCheckRequest, WindowCheckResponse
-from app.services import posts_view
+from app.services import channel_changes, posts_view
 from app.services.analysis_window import resolve_analysis_window
 from app.services.posts import bulk_upsert_posts
 from app.services.settling_curve import current_estimate
@@ -238,6 +241,22 @@ def window_check(
         end=window.end,
         frozen_at=frozen_at,
     )
+
+
+# WR-02, ADR-044. A GET, so a safe read open to View-as, and it answers for
+# whoever the token names: the viewed Account under View-as.
+@router.get("/posts/window-check/events")
+async def window_check_events(current_user: CurrentUser) -> StreamingResponse:
+    """Server-sent events: the names of followed Channels a sync just changed,
+    gathered per second, so the page asks the window check for those alone.
+    The first frame names none and says the stream is open.
+    """
+
+    async def frames() -> AsyncIterator[str]:
+        async for names in channel_changes.followed_changes(current_user.id):
+            yield f"data: {json.dumps({'names': names})}\n\n"
+
+    return StreamingResponse(frames(), media_type="text/event-stream")
 
 
 @router.post("/posts/bulk")

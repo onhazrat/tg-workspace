@@ -102,7 +102,7 @@ describe("a row's words", () => {
       "31 h behind, ~114 posts",
     )
     expect(shortfall(holed("b", 4))).toMatch(
-      /^hole: 4 posts, \d\d:13 [AP]M to \d\d:30 [AP]M$/,
+      /^hole: up to 4 posts, \d\d:13 [AP]M to \d\d:30 [AP]M$/,
     )
     expect(
       shortfall(

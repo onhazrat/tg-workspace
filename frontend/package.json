@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "lint": "biome check --write --unsafe --no-errors-on-unmatched --files-ignore-unknown=true ./ ../scripts/crap",
     "generate-client": "openapi-ts",
-    "test:unit": "bun test src",
+    "test:unit": "bun test src --randomize",
     "typecheck:tests": "tsc -p tsconfig.json --noEmit",
     "test:tg-ui": "bash scripts/check-tg-ui-duplicates.sh",
     "test": "bunx playwright test",

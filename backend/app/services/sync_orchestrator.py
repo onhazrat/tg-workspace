@@ -33,6 +33,7 @@ from app.jobs.settings import (
     load_sync_settings,
 )
 from app.models_tg import Channel, Post, utc_now
+from app.services import channel_changes
 from app.services.async_db import run_db
 from app.services.channel_directory import record_sync_metadata
 from app.services.channel_photos import resolve_cached_photo_url
@@ -68,10 +69,6 @@ from app.services.network_settings import (
     redact_proxy_url,
     resolve_proxies,
     resolve_proxy_concurrency,
-)
-from app.services.post_sync_state import (
-    record_gaps_from_page,
-    record_gaps_to_existing_post,
 )
 from app.services.post_thumbnails import (
     cache_post_thumb,
@@ -110,6 +107,13 @@ from app.services.sync_schedule import (
 from app.services.telegram_web import (
     TelegramWebViewUnavailable,
     telegram_web_view_channel_url,
+)
+from app.services.walked_ranges import (
+    Span,
+    channel_ranges,
+    holes,
+    mark_reached_start,
+    record_page,
 )
 
 logger = logging.getLogger(__name__)
@@ -431,27 +435,25 @@ class _ChannelSyncCtx:
     tor_control_port: int
     retrieval_pass: str
     needs_backfill: bool
-    min_stored_post_id: int | None
     scrape_cutoff_ms: int
     effective_start_time: int
     media_settings: dict[str, Any] = field(default_factory=dict)
-    #: Walk from the head back to here, past held Posts (`WALK_BACK_KEY`).
+    #: The Start a gate asked for (`WALK_BACK_KEY`): its Holes and history
+    #: are read down to here.
     walk_back_to: int = 0
 
 
 def _walk_back(ctx: _ChannelSyncCtx, metadata: Any) -> None:
-    """Turn `ctx` into a walk from the head back to `WALK_BACK_KEY`.
+    """Read `ctx`'s Channel down to the Start a gate asked for (ADR-044).
 
-    A backfill pass from the head: held Posts are skipped instead of ending
-    the walk, and the deeper backfill to the cutoff is the scheduler's own.
+    The walk jumps into each Hole above the Start and walks below its lowest
+    range when that stops short of it; pages it already holds are not read.
     """
     to = metadata.get(WALK_BACK_KEY) if isinstance(metadata, dict) else None
     if not isinstance(to, int):
         return
     ctx.walk_back_to = to
-    ctx.needs_backfill = False
-    if ctx.retrieval_pass == "incremental":
-        ctx.retrieval_pass = "backfill"
+    ctx.needs_backfill = True
 
 
 async def _cache_scraped_post_thumbs(
@@ -515,6 +517,8 @@ class _PageApplyResult:
     #: Applying the page moved a stored Post's counters, changed its text, or
     #: changed the Channel's metadata (RQS-11).
     changed: bool = False
+    #: The page's oldest post id; None for an empty page.
+    lowest_id: int | None = None
 
 
 def _prepare_channel_sync(
@@ -571,14 +575,6 @@ def _prepare_channel_sync(
             ).first()
             is not None
         )
-        min_stored_post_id: int | None = None
-        if has_existing_posts:
-            min_row = session.exec(
-                select(func.min(Post.post_id)).where(Post.channel_name == channel.name)
-            ).one()
-            if min_row is not None:
-                min_stored_post_id = int(min_row)
-
         needs_backfill = has_existing_posts and not channel.history_complete_to_cutoff
 
         proxy_default, proxy_overrides = resolve_proxy_concurrency(network)
@@ -602,7 +598,6 @@ def _prepare_channel_sync(
                 ),
                 retrieval_pass="incremental" if has_existing_posts else "initial",
                 needs_backfill=needs_backfill,
-                min_stored_post_id=min_stored_post_id,
                 scrape_cutoff_ms=scrape_cutoff_ms,
                 effective_start_time=scrape_cutoff_ms,
                 media_settings=media_settings,
@@ -882,6 +877,23 @@ def _decide_next_page(
         result.next_before_id = next_before
 
 
+def _page_span(
+    posts: list[dict[str, Any]], before_id: int | None, fetched_at: int | None
+) -> Span:
+    """The ids a page proves: from its oldest Post up to the id it was asked
+    below, or to its newest Post on the newest page, read at `fetched_at`
+    (ADR-044)."""
+    ids = [int(p["id"]) for p in posts]
+    stamps = [int(p.get("timestamp") or 0) for p in posts]
+    return Span(
+        lo_id=min(ids),
+        hi_id=before_id - 1 if before_id is not None else max(ids),
+        lo_ts=min(stamps),
+        hi_ts=max(stamps),
+        top_read_at=fetched_at if before_id is None else None,
+    )
+
+
 def _persist_page_posts(
     session: Session,
     ctx: _ChannelSyncCtx,
@@ -892,7 +904,6 @@ def _persist_page_posts(
     *,
     job_id: str,
     job_source: str,
-    session_seen_ids: set[int],
 ) -> None:
     """Save the page's new posts, and decide whether an incremental pass is done.
 
@@ -900,25 +911,13 @@ def _persist_page_posts(
     `incremental` and `backfill` passes the overlap is the *expected* case, and
     rewriting those rows would churn `retrieval_*` provenance for no gain.
 
-    Meeting stored posts on an incremental pass is the normal stop condition —
-    we have caught up. Any genuinely new ids on that same page sit *above* the
-    stored history, so the span between them and the newest stored post is
-    recorded as a gap before stopping; otherwise a channel that gained posts
-    while we were away would leave a hole nothing ever revisits.
+    Meeting stored posts on an incremental pass is the normal stop condition:
+    we have caught up. The page's Walked range overlaps the range holding
+    them, so the new Posts above join the stored history with no Hole.
     """
     existing_on_page = _existing_post_ids(session, channel.name, page_ids)
-    new_on_page = [pid for pid in page_ids if pid not in existing_on_page]
 
     if ctx.retrieval_pass == "incremental" and existing_on_page:
-        if new_on_page:
-            record_gaps_to_existing_post(
-                session,
-                channel.name,
-                new_on_page,
-                min(existing_on_page),
-                job_id=job_id,
-                session_seen_ids=session_seen_ids,
-            )
         result.stop_sync = True
         result.break_incremental = True
 
@@ -966,7 +965,6 @@ def _apply_scrape_page(
     job_id: str,
     job_source: str,
     user_id: uuid.UUID | None,
-    session_seen_ids: set[int],
     before_id: int | None,
     fetched_at: int | None = None,
 ) -> _PageApplyResult:
@@ -976,7 +974,7 @@ def _apply_scrape_page(
     Channel's head-read moment (ADR-043).
 
     The stages, in order: record telemetry, reconcile the chat id, refresh
-    channel metadata, record gaps, persist new posts, collect auto-follow
+    channel metadata, record the page's Walked range, persist new posts, collect auto-follow
     candidates, and decide whether to fetch another page. Each is its own
     function above; this one is the sequence and the early exits.
     """
@@ -1052,13 +1050,7 @@ def _apply_scrape_page(
             )
 
         page_ids = [p["id"] for p in posts]
-        record_gaps_from_page(
-            session,
-            channel.name,
-            page_ids,
-            job_id=job_id,
-            session_seen_ids=session_seen_ids,
-        )
+        result.lowest_id = min(page_ids, default=None)
 
         if not posts:
             result.stop_sync = True
@@ -1068,8 +1060,15 @@ def _apply_scrape_page(
             # it reached its own start.
             if ctx.retrieval_pass in ("initial", "backfill") and before_id is not None:
                 result.reached_channel_start = True
+                mark_reached_start(session, channel.name, below_id=before_id)
             session.commit()
             return result
+
+        record_page(
+            session,
+            channel.name,
+            _page_span(_posts_to_save(channel.name, posts), before_id, fetched_at),
+        )
 
         _persist_page_posts(
             session,
@@ -1080,7 +1079,6 @@ def _apply_scrape_page(
             result,
             job_id=job_id,
             job_source=job_source,
-            session_seen_ids=session_seen_ids,
         )
 
         if result.break_incremental:
@@ -1102,6 +1100,31 @@ def _apply_scrape_page(
 
         session.commit()
         return result
+
+
+#: Pace reads the week before the head read; under an hour of it is no pace.
+PACE_WEEK_MS = 7 * 24 * 3_600_000
+PACE_MIN_MS = 3_600_000
+
+
+def _posting_pace(session: Session, channel: Channel, cutoff: int) -> float | None:
+    """Posts an hour over the week before the head read, no earlier than the
+    first Post held or the scrape cutoff; what Unproven Posts counts a
+    stretch at (ADR-043), stored so the window check never counts it."""
+    to = channel.head_read_at
+    if to is None:
+        return None
+    first = channel.oldest_stored_post_timestamp
+    since = max(to - PACE_WEEK_MS, first if first is not None else to, cutoff)
+    if to - since < PACE_MIN_MS:
+        return None
+    posts = session.exec(
+        select(func.count()).where(
+            Post.channel_name == channel.name,
+            col(Post.timestamp).between(since, to),
+        )
+    ).one()
+    return int(posts) / ((to - since) / 3_600_000)
 
 
 def _finalize_channel_success(
@@ -1139,6 +1162,7 @@ def _finalize_channel_success(
             ctx.scrape_cutoff_ms,
             reached_channel_start=reached_channel_start,
         )
+        channel.pace_per_hour = _posting_pace(session, channel, ctx.scrape_cutoff_ms)
 
         now = int(time.time() * 1000)
         channel.last_updated = now
@@ -1333,6 +1357,8 @@ class _ChannelWalk:
     #: Set when a page reports a chat-id mismatch: the sync stops and the
     #: channel is reported failed, without going through success finalisation.
     failed_error: str | None = None
+    #: Pages asked for so far, across every pass, against the iteration cap.
+    pages: int = 0
 
 
 async def _fetch_one_page(
@@ -1383,49 +1409,53 @@ async def _fetch_one_page(
     return response
 
 
-async def _walk_channel_pages(
+def _repairs(ctx: _ChannelSyncCtx) -> tuple[list[tuple[Span, Span]], int | None]:
+    """What the walk reads after its head (ADR-044): each Hole above the
+    floor, newest first, and the id to walk below when the history stops
+    short of it. The floor is the scrape cutoff, or the Start a gate asked
+    for when that is later."""
+    floor = max(ctx.scrape_cutoff_ms, ctx.walk_back_to)
+    with Session(engine) as session:
+        ranges = channel_ranges(session, ctx.channel_name)
+    gaps = [(low, up) for low, up in holes(ranges) if up.lo_ts > floor]
+    lowest = ranges[0] if ranges else None
+    short = (
+        ctx.needs_backfill
+        and lowest is not None
+        and not lowest.reached_start
+        and lowest.lo_ts > floor
+    )
+    return gaps[::-1], lowest.lo_id if short and lowest else None
+
+
+async def _walk_pass(
     job: SyncJobState,
     ch_state: ChannelSyncState,
     ctx: _ChannelSyncCtx,
     walk: _ChannelWalk,
     *,
     user_id: uuid.UUID | None,
-) -> None:
-    """Page backwards through a channel until a stop condition fires.
+    before_id: int | None,
+    until_id: int | None = None,
+) -> bool:
+    """Page backwards from `before_id` until the pass is done.
 
-    Stops on: the scraper reporting no next page, the per-channel iteration cap,
-    job cancellation, an incremental pass meeting posts we already hold, the
-    scrape cutoff, or a chat-id mismatch.
-
-    The `needs_backfill` transition appears twice on purpose. An incremental pass
-    can finish either by *meeting* stored posts (`break_incremental`) or by
-    simply running out of new ones (`stop_sync`), and a channel with a gap below
-    its stored history has to switch to the backfill pass in both cases.
+    Done when the scraper offers no next page, an incremental pass meets Posts
+    already held, a page passes the floor, or a page reaches `until_id`, the
+    top of the range below a Hole. Answers False when the whole walk must end:
+    the iteration cap, a cancel, or a chat-id mismatch.
     """
-    known_latest_id = 0
-    before_id: int | None = None
-    iterations = 0
-    stop_sync = False
-    in_backfill = False
-    session_seen_ids: set[int] = set()
-
-    def enter_backfill() -> int | None:
-        nonlocal in_backfill
-        in_backfill = True
-        ctx.retrieval_pass = "backfill"
-        return ctx.min_stored_post_id
-
-    while not stop_sync and not job.cancel_event.is_set():
-        if iterations >= settings.SCRAPER_ITERATION_LIMIT:
-            break
-        iterations += 1
+    while True:
+        if job.cancel_event.is_set() or walk.pages >= settings.SCRAPER_ITERATION_LIMIT:
+            return False
+        walk.pages += 1
 
         # One page, one chain of attempts across both retry layers, judged by
         # what applying it wrote (RQS-01).
         with page(PageType.POSTS) as posts_page:
             fetched_at = int(time.time() * 1000)
             response = await _fetch_one_page(
-                ctx, before_id=before_id, known_latest_id=known_latest_id
+                ctx, before_id=before_id, known_latest_id=walk.final_latest_id
             )
 
             if response.get("fullRequest"):
@@ -1439,7 +1469,6 @@ async def _walk_channel_pages(
                 job_id=job.job_id,
                 job_source=job.source,
                 user_id=user_id,
-                session_seen_ids=session_seen_ids,
                 before_id=before_id,
                 fetched_at=fetched_at,
             )
@@ -1449,11 +1478,19 @@ async def _walk_channel_pages(
                 changed=page_result.changed,
             )
 
+        # The window check reads this page now (WR-02): its range, a Hole it
+        # closed, or the head-read moment.
+        if not page_result.sync_failed and (
+            before_id is None
+            or page_result.lowest_id is not None
+            or page_result.reached_channel_start
+        ):
+            await run_db(channel_changes.announce, ctx.channel_name)
+
         if page_result.reached_channel_start:
             walk.reached_channel_start = True
         if page_result.latest_id:
             walk.final_latest_id = page_result.latest_id
-            known_latest_id = page_result.latest_id
         if page_result.display_name:
             ctx.display_name = page_result.display_name
         if page_result.photo_url:
@@ -1476,22 +1513,51 @@ async def _walk_channel_pages(
                     proxy_concurrency=ctx.proxy_concurrency,
                 )
 
-        if page_result.break_incremental:
-            if ctx.needs_backfill and not in_backfill:
-                before_id = enter_backfill()
-                continue
-            break
-
-        stop_sync = page_result.stop_sync
         if page_result.sync_failed:
             walk.failed_error = page_result.sync_error
-            return
-        if stop_sync and ctx.needs_backfill and not in_backfill:
-            before_id = enter_backfill()
-            stop_sync = False
-            continue
-
+            return False
+        if page_result.break_incremental or page_result.stop_sync:
+            return True
+        lowest = page_result.lowest_id
+        if until_id is not None and lowest is not None and lowest <= until_id:
+            return True
         before_id = page_result.next_before_id
+
+
+async def _walk_channel_pages(
+    job: SyncJobState,
+    ch_state: ChannelSyncState,
+    ctx: _ChannelSyncCtx,
+    walk: _ChannelWalk,
+    *,
+    user_id: uuid.UUID | None,
+) -> None:
+    """Walk a Channel's head, then its Holes, then below its history (ADR-044).
+
+    The head pass reads from the newest page down to the Posts already held
+    (or to the floor, on a first sync). Each Hole above the floor is then read
+    from the range above it down to the range below, one or two pages each,
+    and a history short of the floor is walked down from its lowest range.
+    None of the later passes re-reads a page the workspace already holds.
+    """
+    if not await _walk_pass(job, ch_state, ctx, walk, user_id=user_id, before_id=None):
+        return
+    gaps, below = await run_db(_repairs, ctx)
+    ctx.retrieval_pass = "backfill"
+    for lower, upper in gaps:
+        done = await _walk_pass(
+            job,
+            ch_state,
+            ctx,
+            walk,
+            user_id=user_id,
+            before_id=upper.lo_id,
+            until_id=lower.hi_id + 1,
+        )
+        if not done:
+            return
+    if below is not None:
+        await _walk_pass(job, ch_state, ctx, walk, user_id=user_id, before_id=below)
 
 
 #: Announced when a Channel's claim is given up, carrying the outcome so a

@@ -55,7 +55,7 @@ TEST_NETWORK_LOG_IDS: frozenset[str] = frozenset({"nl-test-1"})
 ALL_TEST_CHANNEL_KEYS: frozenset[str] = TEST_CHANNEL_IDS | TEST_CHANNEL_NAMES
 
 TG_TABLES: tuple[str, ...] = (
-    "tg_post_sync_state",
+    "tg_walked_ranges",
     # REACH-07's curve fits. No foreign key; listed early so the next test
     # estimates through the seed curve rather than a fit a test left behind.
     "tg_settling_curve_fits",

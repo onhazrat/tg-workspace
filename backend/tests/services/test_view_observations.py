@@ -77,7 +77,6 @@ def _apply(
         job_id="observation-job",
         job_source="Manual",
         user_id=None,
-        session_seen_ids=set(),
         before_id=None,
     )
 

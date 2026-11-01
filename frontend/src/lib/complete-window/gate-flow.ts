@@ -27,6 +27,7 @@ import {
   walkBack,
   withEdits,
 } from "./gate"
+import { type Change, merged, touched } from "./live"
 import { incompleteOf, type WindowCheck } from "./window-check"
 
 export type WireWindow = ReturnType<typeof toWireWindow>
@@ -97,6 +98,27 @@ let owed = false
 let run = 0
 /** Ends the wait on the syncs early, as "Continue now". */
 let continueNow: (() => void) | null = null
+/**
+ * Each wait for the next merged change. Module state, as the listener is:
+ * the page builds the flow again on every render.
+ */
+const merges = new Set<() => void>()
+/** Resolved by the next merge of a change, or by `stop`. */
+const nextMerge = (stop: AbortSignal) =>
+  new Promise<void>((resolve) => {
+    const done = () => {
+      merges.delete(done)
+      resolve()
+    }
+    merges.add(done)
+    stop.addEventListener("abort", done, { once: true })
+  })
+/** Stops the open gate hearing which Channels a sync changed. */
+let unlisten: (() => void) | null = null
+const stopListening = () => {
+  unlisten?.()
+  unlisten = null
+}
 
 /** Open the gate for this action, as a row's click does. */
 export function runGated(kind: ActionKind) {
@@ -129,14 +151,13 @@ export interface GateIO {
   sync: (names: string[], walkBackTo: Record<string, number>) => Promise<void>
   /** After the wait, so what a sync added shows. */
   synced: () => void
+  /** Hear which Channels a sync just changed; answers the unsubscribe. */
+  changes: (listener: (change: Change) => void) => () => void
   /** Narrow the selection; answers the Undo. */
   narrow: (names: string[]) => () => void
   /** Into the default group; answers that group's name, or null. */
   unfreeze: (name: string) => Promise<string | null>
 }
-
-/** How often the gate asks whether a sync it joined has finished. */
-const POLL_MS = 2_000
 
 /** The check as the gate shows it, its own edits laid over. */
 const edited = (check: WindowCheck) => withEdits(check, state)
@@ -145,6 +166,7 @@ const edited = (check: WindowCheck) => withEdits(check, state)
 async function finish(choice: GateChoice, named: OutcomeNames = {}, said = "") {
   const { kind, frozenAt, check, leftOut } = state
   setGateOutcome(outcomeOf(choice, frozenAt, check, named, leftOut))
+  stopListening()
   setGate({ phase: "idle" })
   if (said) toast.success(said)
   if (!owed) return
@@ -193,8 +215,6 @@ async function waitOrDeadline(job: Promise<unknown>): Promise<WaitEnd> {
   return end
 }
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
-
 /** The flow's steps over the page's I/O; each reads the gate as it is now. */
 export function gateFlow(io: GateIO) {
   const recheck = async () =>
@@ -202,14 +222,30 @@ export function gateFlow(io: GateIO) {
       await io.check(state.names, state.window as WireWindow, state.frozenAt),
     )
 
-  /** Until no sync in flight is still syncing any of `names`, while waiting. */
-  const landed = async (names: string[], waiting: () => boolean) => {
-    while (names.length && waiting()) {
-      const now = await recheck()
-      if (!now.channels.some((c) => names.includes(c.name) && c.syncingSince))
-        return
-      await sleep(POLL_MS)
-    }
+  /**
+   * A sync changed some of the gate's Channels (WR-02): ask the check for
+   * those alone, as frozen at the click, and merge their rows.
+   */
+  const onChange = async (change: Change) => {
+    const names = touched(change, state.names)
+    if (!names.length) return
+    const fresh = await io
+      .check(names, state.window as WireWindow, state.frozenAt)
+      .catch(() => undefined)
+    if (fresh && state.check)
+      setGate({ check: edited(merged(state.check, fresh)) })
+    for (const done of [...merges]) done()
+  }
+
+  /** Until the check shows none of `names` still syncing, or `stop`. */
+  const landed = async (names: string[], stop: AbortSignal) => {
+    while (
+      !stop.aborted &&
+      state.check?.channels.some(
+        (c) => names.includes(c.name) && c.syncingSince,
+      )
+    )
+      await nextMerge(stop)
   }
 
   const begin = async (kind: ActionKind) => {
@@ -224,6 +260,10 @@ export function gateFlow(io: GateIO) {
       window,
       frozenAt: Date.now(),
     })
+    // Listening before the check, so a sync landing between them is heard,
+    // until the gate finishes or is cancelled.
+    stopListening()
+    unlisten = io.changes(onChange)
     // The banner already checked this Scope: open on its answer at once.
     const cached = io.cached(names)
     if (cached && fixableOf(cached).length)
@@ -232,6 +272,7 @@ export function gateFlow(io: GateIO) {
       await onFrozen(await io.check(names, window), mine)
     } catch (err) {
       if (mine !== run) return
+      stopListening()
       setGate({ phase: "idle" })
       toast.error(`The window check failed (${String(err)}).`)
     }
@@ -248,16 +289,18 @@ export function gateFlow(io: GateIO) {
     const plan = syncPlan(wanted)
     const back = walkBack(wanted, now.start)
     setGate({ check: now, syncing: wanted.map((c) => c.name) })
-    let waiting = true
+    const stop = new AbortController()
     const job = Promise.all([
       plan.atOnce.length ? io.sync(plan.atOnce, back) : undefined,
-      landed(plan.join, () => waiting),
-      landed(plan.after, () => waiting).then(() =>
-        waiting && plan.after.length ? io.sync(plan.after, back) : undefined,
+      landed(plan.join, stop.signal),
+      landed(plan.after, stop.signal).then(() =>
+        !stop.signal.aborted && plan.after.length
+          ? io.sync(plan.after, back)
+          : undefined,
       ),
     ])
     const end = await waitOrDeadline(job)
-    waiting = false
+    stop.abort()
     io.synced()
     const again = await recheck()
     setGate({ check: again })
@@ -309,6 +352,7 @@ export function gateFlow(io: GateIO) {
   const cancel = () => {
     run++
     owed = false
+    stopListening()
     setGate({ phase: "idle" })
   }
 

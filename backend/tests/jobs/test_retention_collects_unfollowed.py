@@ -40,13 +40,13 @@ from app.models_tg import (
     ChannelFollow,
     Post,
     PostEmbedding,
-    PostSyncState,
     PostTranslation,
     SyncLog,
     SyncLogPayload,
 )
 from app.services.follows import FOLLOWS_BACKFILL_KEY, ensure_follow
 from app.services.logs import upsert_sync_log
+from app.services.walked_ranges import Span, channel_ranges, record_page
 from tests.utils.setting_groups import add_test_channel
 from tests.utils.user import create_random_user
 
@@ -197,7 +197,7 @@ def test_collection_takes_the_dependent_rows_too() -> None:
                 translated_text="hi",
             )
         )
-        session.add(PostSyncState(channel_name="deps-ch", post_id=0))
+        record_page(session, "deps-ch", Span(lo_id=0, hi_id=0, lo_ts=0, hi_ts=0))
         session.commit()
         _unfollow_everyone(session, "deps-ch")
 
@@ -220,14 +220,7 @@ def test_collection_takes_the_dependent_rows_too() -> None:
             ).all()
             == []
         )
-        assert (
-            session.exec(
-                select(PostSyncState).where(
-                    col(PostSyncState.channel_name) == "deps-ch"
-                )
-            ).all()
-            == []
-        )
+        assert channel_ranges(session, "deps-ch") == []
 
 
 def test_collection_takes_the_sync_logs_too() -> None:

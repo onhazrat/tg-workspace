@@ -18,13 +18,13 @@ from app.models_tg import (
     NetworkLog,
     Post,
     PostEmbedding,
-    PostSyncState,
     PostTranslation,
     PublishLog,
     Summary,
     SummaryPayload,
     SyncLog,
     SyncLogPayload,
+    WalkedRange,
 )
 
 
@@ -141,9 +141,9 @@ def clear_table(session: Session, name: str, operator_id: uuid.UUID) -> int:
     if name == "posts":
         # Posts own dependent rows elsewhere; every other delete path
         # (retention sweep, reset & sync) clears these together. Leaving
-        # post_sync_state behind is the dangerous one: it still claims the
-        # posts were seen, so a later sync would skip re-fetching them.
-        for dependent in (PostEmbedding, PostTranslation, PostSyncState):
+        # Walked ranges behind is the dangerous one: they still claim the
+        # posts were read, so the window check would vouch for Posts gone.
+        for dependent in (PostEmbedding, PostTranslation, WalkedRange):
             _scoped_delete(session, dependent, operator_id)
 
     # Companion payload tables have no FK to cascade from — they stay

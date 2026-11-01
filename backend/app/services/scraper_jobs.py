@@ -22,6 +22,7 @@ from app.core.config import settings
 from app.core.db import engine
 from app.models_tg import SyncJob as SyncJobRow
 from app.models_tg import utc_now
+from app.services import channel_changes
 from app.services.channel_setting_groups import SyncOperationMode
 from app.services.request_kinds import is_kind_enabled, kind_for_sync_mode
 from app.services.tenancy import scoped_select, tenancy_enforced, unscoped_select
@@ -120,6 +121,9 @@ class SyncJobState:
     )
     _published_job_status: str = field(default="", repr=False)
     _last_published_at_ms: float = field(default=0.0, repr=False)
+    #: The Channels whose finished sync the row already records and
+    #: `channel_changes` already announced. See `_announce_landed`.
+    _announced_landed: set[str] = field(default_factory=set, repr=False)
 
     def to_camel(self) -> dict[str, Any]:
         return {
@@ -268,6 +272,27 @@ def _persist_job(job: SyncJobState) -> None:
             row.updated_at = utc_now()
         session.add(row)
         session.commit()
+    _announce_landed(job)
+
+
+def _announce_landed(job: SyncJobState) -> None:
+    """Announce each Channel whose finished sync this flush wrote (WR-02),
+    every Channel once the job itself has ended, as `channels_in_flight` reads.
+
+    After the commit, not when the Channel finishes: the window check reads
+    which Channels are in flight from this row, so a browser told sooner would
+    ask again, still read the Channel as syncing, and wait on an announcement
+    that never comes.
+    """
+    ended = job.status in _TERMINAL_JOB_STATUSES
+    landed = {
+        ch.channel_name
+        for ch in job.channels.values()
+        if ended or ch.status in _TERMINAL_CHANNEL_STATUSES
+    } - job._announced_landed
+    for name in sorted(landed):
+        channel_changes.announce(name)
+    job._announced_landed |= landed
 
 
 async def _notify_job_update(job: SyncJobState) -> None:
@@ -939,7 +964,7 @@ def reconcile_interrupted_jobs(
     and the generated client, for a row nothing lists.
     """
     now_ms = int(time.time() * 1000)
-    result = session.execute(
+    rows = session.execute(
         sa_update(SyncJobRow)
         .where(
             col(SyncJobRow.status).in_(("pending", "running")),
@@ -952,9 +977,13 @@ def reconcile_interrupted_jobs(
             else sa_true(),
         )
         .values(status="failed", finished_at=now_ms, updated_at=utc_now())
-    )
+        .returning(col(SyncJobRow.channels))
+    ).all()
     session.commit()
-    count = cast(Any, result).rowcount or 0
+    # Their Channels are no longer in flight to the window check (WR-02).
+    for name in sorted({str(ch["channelName"]) for (chs,) in rows for ch in chs or []}):
+        channel_changes.announce(name)
+    count = len(rows)
     if count:
         logger.warning("Marked %s sync job(s) failed: interrupted by a restart", count)
     return count

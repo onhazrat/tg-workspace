@@ -2,7 +2,8 @@
 
 **Status:** Accepted (2026-10-29). Decided in a grilling session; amended on
 2026-10-30 after prototyping it (variant D) and grilling the prototype. Spec:
-`.scratch/complete-window/spec.md`.
+`.scratch/complete-window/spec.md`. Its three tests and its walk-back repair
+are superseded by [ADR-044](./ADR-044-walked-ranges.md).
 
 ## Context
 

@@ -1463,7 +1463,7 @@ EXPORT_OMISSIONS: dict[str, str] = {
         "section — so exporting the job as well would carry a record of how "
         "they were added, which means nothing on another install."
     ),
-    "PostSyncState": (
+    "WalkedRange": (
         "Scrape bookkeeping about the shared corpus — the same reason "
         "`SERVER_MANAGED_CHANNEL_FIELDS` are stripped from an imported "
         "Channel: it describes the exporting install's walk, not the data."

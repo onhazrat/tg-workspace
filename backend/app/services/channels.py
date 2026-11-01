@@ -24,6 +24,7 @@ from app.models_tg import (
     PostTranslation,
     utc_now,
 )
+from app.services import walked_ranges
 from app.services.channel_setting_groups import (
     ensure_default_group,
     get_group_for_channel,
@@ -44,7 +45,6 @@ from app.services.follows import (
 )
 from app.services.language import LANGUAGE_WINDOW, derive_language
 from app.services.logs import collect_channel_sync_logs
-from app.services.post_sync_state import clear_channel_sync_state
 from app.services.reach import MS_PER_HOUR, Reach, compute_reach, reach_settings_from
 from app.services.serialization import channel_to_camel, normalize_body
 from app.services.settling_curve import current_curve
@@ -80,6 +80,7 @@ SERVER_MANAGED_CHANNEL_FIELDS = frozenset(
         "sync_claimed_by",
         "language",
         "head_read_at",
+        "pace_per_hour",
     }
 )
 
@@ -683,7 +684,7 @@ def collect_unfollowed_channel(session: Session, channel_id: str) -> int:
     holds the corpus.
 
     The dependent rows go too. None of `tg_posts`, `tg_post_embeddings`,
-    `tg_post_translations`, `tg_post_sync_state`, `tg_sync_logs` or
+    `tg_post_translations`, `tg_walked_ranges`, `tg_sync_logs` or
     `tg_sync_log_payloads` has a foreign key to `tg_channels` — they are keyed
     by `channel_name` — so nothing cascades, and a collection that removed only
     the Channel would leave six tables pointing at a handle nothing can reach,
@@ -731,9 +732,9 @@ def collect_unfollowed_channel(session: Session, channel_id: str) -> int:
                 col(PostTranslation.channel_name) == ch.name
             )
         )
-        clear_channel_sync_state(session, ch.name)
+        walked_ranges.clear(session, ch.name)
         # Through the aggregate that owns those two tables, the way the sync
-        # state above goes through `post_sync_state`. This module owns
+        # ranges above go through `walked_ranges`. This module owns
         # `tg_channels`; reaching into `tg_sync_logs` from here would put a
         # second writer on it.
         collect_channel_sync_logs(session, ch.name)
