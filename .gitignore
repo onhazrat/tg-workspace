@@ -5,6 +5,8 @@ frontend/dist
 __pycache__
 .env
 .env.worktree
+.env.worktree.tmp
+.codex-worktree-setup.lock
 htmlcov
 .coverage
 TG-Summarizer/tor-bin
