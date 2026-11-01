@@ -9,7 +9,7 @@
 import { useSyncExternalStore } from "react"
 import { scopedSessionStorage } from "@/lib/storage/scoped"
 import { IDLE, type KeyState } from "./interpreter"
-import { type Action, type ListId, withKey } from "./key-list"
+import { type Action, type ListId, type Row, withKey } from "./key-list"
 
 function store<T>(initial: T) {
   let value = initial
@@ -104,6 +104,7 @@ export const useAnnouncement = announcement.use
 export const shownList = store<{
   list: ListId
   carried?: readonly Action[]
+  extra?: readonly Row[]
 } | null>(null)
 export const useShownList = shownList.use
 

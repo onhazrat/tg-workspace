@@ -40,6 +40,7 @@ import {
 } from "../contexts/PostsViewContext"
 import { useUI } from "../contexts/UIContext"
 import { LiveWindowBanner } from "./complete-window/LiveWindowBanner"
+import { PostCard } from "./PostCard"
 import { PostFeedResults } from "./PostFeedResults"
 import { PostFilter } from "./PostFilter"
 import { pillClass } from "./PostFilterParts"
@@ -51,8 +52,27 @@ import {
   useSpotlightState,
 } from "./post-card/ChannelSpotlight"
 import { postCardKey, usePostKeys } from "./post-card/FeedKeyboard"
+import { NewPostsPill, useHeldPosts } from "./post-card/NewPosts"
 import { FeedPagingContext } from "./post-card/PhotoViewer"
+import { ReplyChainPanel, useReplyChain } from "./post-card/ReplyChain"
 import { ReplyPreviewProvider } from "./post-card/ReplyParent"
+import {
+  chainKeys,
+  newestKey,
+  PanelChainView,
+  panelCard,
+  panelItem,
+  parentKey,
+  revealInPanel,
+  useChainMark,
+  usePanelChain,
+} from "./posts-chain-prototype/PanelChain"
+import {
+  ChainOpenContext,
+  PrototypeSwitcher,
+  useVariant,
+  VARIANT_ROWS,
+} from "./posts-chain-prototype/variant"
 
 interface PostFeedProps {
   loadMoreRef: React.RefObject<HTMLDivElement | null>
@@ -79,7 +99,8 @@ export const PostFeed: React.FC<PostFeedProps> = ({
     "postFeed_selectedFirst",
   )
   const {
-    posts,
+    posts: loaded,
+    feedKey,
     isInitialLoading,
     hasMore,
     loadMore,
@@ -89,6 +110,20 @@ export const PostFeed: React.FC<PostFeedProps> = ({
     selectedFirst,
     selectedShownTotal: selectedShown,
   })
+  // PROTOTYPE (posts-reply-chain): variant 0 is main, without any of this.
+  const variant = useVariant()
+  const proto = variant !== "0"
+  // What a refetch brings in above the reader waits behind the pill.
+  const { shown, held, showHeld } = useHeldPosts(loaded, feedKey)
+  const posts = proto ? shown : loaded
+  const feedChain = useReplyChain(posts)
+  const panelChain = usePanelChain(posts)
+  const chain = variant === "A2" ? panelChain : feedChain
+  // A3: [ opens the whole chain, ] closes it, and the regular keys move in it.
+  const a3 = variant === "A3"
+  const a3Items =
+    a3 && panelChain.chain ? chainKeys(panelChain.chain) : undefined
+  const openChain = a3 ? panelChain.openWhole : chain.open
 
   const { setActiveTab } = useUI()
   const backFromSpotlight = useSpotlightBack(spotlightApi, () =>
@@ -99,7 +134,32 @@ export const PostFeed: React.FC<PostFeedProps> = ({
     onCompact: setCompact,
     spotlit: spotlight !== null,
     onSpotlightBack: backFromSpotlight,
+    chain: a3
+      ? { key: panelChain.keyWhole, clear: panelChain.clear }
+      : proto
+        ? chain
+        : undefined,
+    onShowNew: proto ? showHeld : undefined,
+    target: variant === "A2" ? panelCard : undefined,
+    panel: a3Items && {
+      items: a3Items,
+      element: panelItem,
+      reveal: revealInPanel,
+    },
+    extraRows: VARIANT_ROWS[variant],
   })
+  useChainMark(
+    posts,
+    variant === "A2" && panelChain.chain
+      ? newestKey(panelChain.chain)
+      : a3Items
+        ? highlight
+        : null,
+  )
+  // A2: while the panel is open the Highlight is in it, and the feed's copy
+  // of that Post carries the dashed outline instead.
+  const feedHighlight =
+    (variant === "A2" || a3) && panelChain.chain ? null : highlight
 
   const totalInScope = Object.values(counts).reduce((sum, n) => sum + n, 0)
 
@@ -270,18 +330,63 @@ export const PostFeed: React.FC<PostFeedProps> = ({
             />
           )}
 
-          <ReplyPreviewProvider>
-            <PostFeedResults
-              isInitialLoading={isInitialLoading}
-              posts={posts}
-              showLoadMore={hasMore || isLoadingMore}
-              loadMoreRef={loadMoreRef}
-              postSearch={view.keyword}
-              compact={compact}
-              highlight={highlight}
-              onToggleSelected={onToggleSelected}
+          {/* Its own block, so the pill's sticky row takes no room in the feed. */}
+          <div>
+            <div className="sticky top-2 z-30 flex h-0 justify-center">
+              {proto && <NewPostsPill held={held} onShow={showHeld} />}
+            </div>
+            <ChainOpenContext value={proto ? { open: openChain } : null}>
+              <ReplyPreviewProvider>
+                <PostFeedResults
+                  isInitialLoading={isInitialLoading}
+                  posts={posts}
+                  showLoadMore={hasMore || isLoadingMore}
+                  loadMoreRef={loadMoreRef}
+                  postSearch={view.keyword}
+                  compact={compact}
+                  highlight={feedHighlight}
+                  onToggleSelected={onToggleSelected}
+                  mainSkeleton={!proto}
+                />
+              </ReplyPreviewProvider>
+            </ChainOpenContext>
+          </div>
+          {variant === "A" && (
+            <ReplyChainPanel
+              steps={feedChain.steps}
+              onClose={feedChain.clear}
+              onBack={feedChain.back}
             />
-          </ReplyPreviewProvider>
+          )}
+          {(variant === "A2" || a3) && (
+            <ChainOpenContext value={{ open: openChain }}>
+              <ReplyPreviewProvider>
+                <PanelChainView
+                  chain={panelChain.chain}
+                  onBack={a3 ? undefined : panelChain.back}
+                  onClose={panelChain.clear}
+                  dimOthers={!a3 || highlight !== null}
+                  // With no keyboard (a phone), the ring stays on the Post the
+                  // reply answers.
+                  highlight={
+                    a3
+                      ? (highlight ??
+                        (panelChain.chain &&
+                          parentKey(panelChain.chain.origin)))
+                      : undefined
+                  }
+                  renderPost={(post) => (
+                    <PostCard
+                      post={post}
+                      postSearch=""
+                      onToggleSelected={onToggleSelected}
+                    />
+                  )}
+                />
+              </ReplyPreviewProvider>
+            </ChainOpenContext>
+          )}
+          <PrototypeSwitcher />
         </motion.div>
       </FeedPagingContext.Provider>
     </SpotlightProvider>

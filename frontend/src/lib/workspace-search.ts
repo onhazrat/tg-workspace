@@ -18,6 +18,8 @@ import type { TabType } from "@/types"
 
 export type WorkspaceSearch = {
   tab?: TabType
+  /** PROTOTYPE (posts-reply-chain): the Posts tab's `?variant=`. */
+  variant?: string
   /** An old Settings section id or a topic id; the page lands on its topic. */
   section?: string
   /** A Setting, panel or topic id the Settings page scrolls to (SET-02). */
@@ -108,6 +110,8 @@ export function validateWorkspaceSearch(
   if (result.tab === "settings" && section && TOOL_SECTIONS.includes(section))
     return { tab: "tools" }
   if (section) result.section = section
+  const variant = trimmedString(search.variant)
+  if (variant) result.variant = variant
   for (const key of ID_PARAMS) {
     const value = trimmedString(search[key])
     if (value) result[key] = value

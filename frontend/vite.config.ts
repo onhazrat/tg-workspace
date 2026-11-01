@@ -59,6 +59,8 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       port: 5173,
+      // PROTOTYPE (posts-reply-chain): the Tailscale HTTPS name.
+      allowedHosts: [".ts.net"],
       proxy: {
         "/api": {
           target:

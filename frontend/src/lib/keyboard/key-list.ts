@@ -7,7 +7,14 @@
 import type { TabType } from "@/constants"
 
 /** The lists keyboard mode moves through. */
-export type ListId = "posts" | "channels" | "directory" | "discover" | "history"
+export type ListId =
+  | "posts"
+  /** PROTOTYPE (posts-reply-chain), A3: the reply chain panel's Posts. */
+  | "chain"
+  | "channels"
+  | "directory"
+  | "discover"
+  | "history"
 
 export const ACTIONS = {
   tick: { key: "x", label: "select or deselect" },
@@ -38,9 +45,17 @@ export const LIST_KEYS = {
   larger: "+",
   /** Posts: more or less on every Post. */
   everyText: "M",
-  /** Directory: the next and previous page. */
-  nextPage: "]",
-  previousPage: "[",
+  /**
+   * Earlier and later: the Directory's previous and next page; in Posts, the
+   * Post a reply answers and back down the chain.
+   */
+  earlier: "[",
+  later: "]",
+  /** Posts: the top of the reply chain, and back to its start (PROTOTYPE). */
+  earliest: "{",
+  latest: "}",
+  /** Posts: show the new Posts the pill holds (PROTOTYPE posts-reply-chain). */
+  showNew: ".",
 } as const
 
 /** Marks the control keyboard mode presses for `action`. */
@@ -64,9 +79,10 @@ export const keyTitle = (label: string, action: Action, on: boolean) =>
 /** `x` in each list's own word (GLOSSARY.md): select, or Pick in Posts. */
 const TICK_LABEL: Partial<Record<ListId, string>> = {
   posts: "pick or unpick",
+  chain: "pick or unpick",
 }
 
-type Row = readonly [keys: string, what: string]
+export type Row = readonly [keys: string, what: string]
 
 /** J / K, and F / D where a bulk bar acts on the Ticks. */
 const SWEEP = (word: string): Row => ["J / K", `${word} while moving`]
@@ -82,6 +98,24 @@ const LISTS: Record<ListId, { moves: Row[]; actions: Action[] }> = {
       ["M", "more or less on every post"],
       SWEEP("pick or unpick"),
       ["Esc", "drop the highlight"],
+    ],
+    actions: [
+      "tick",
+      "spotlight",
+      "translate",
+      "related",
+      "copy",
+      "open",
+      "photo",
+      "more",
+    ],
+  },
+  chain: {
+    moves: [
+      ["j / k", "next / previous post in the chain"],
+      ["gg / G", "the top / the post you started from"],
+      ["] or Esc", "close the chain"],
+      ["- / + / .", "as in the feed"],
     ],
     actions: [
       "tick",
@@ -173,11 +207,16 @@ const COUNTS: Row[] = [
  * A list's keys for the corner and the full list: its moves, its actions
  * (only those in `carried`, when given, as a card size carries some), counts.
  */
-export function listKeys(list: ListId, carried?: readonly Action[]): Row[] {
+export function listKeys(
+  list: ListId,
+  carried?: readonly Action[],
+  /** PROTOTYPE (posts-reply-chain): a variant's own keys, after the moves. */
+  extra: readonly Row[] = [],
+): Row[] {
   const actions = LISTS[list].actions
     .filter((a) => !carried || carried.includes(a))
     .map((a): Row => [ACTIONS[a].key, actionLabel(list, a)])
-  return [...LISTS[list].moves, ...actions, ...COUNTS]
+  return [...LISTS[list].moves, ...extra, ...actions, ...COUNTS]
 }
 
 /** `g` then one of these goes to that kind of tab, as the strip's go-to does. */

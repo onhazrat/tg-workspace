@@ -111,7 +111,9 @@ export function ShortcutsDialog({
       ? [
           {
             heading: "This tab, in keyboard mode",
-            bindings: bindings(listKeys(shown.list, shown.carried)),
+            bindings: bindings(
+              listKeys(shown.list, shown.carried, shown.extra),
+            ),
           },
         ]
       : []),

@@ -14,6 +14,7 @@ import {
   type Action,
   type ListId,
   offers,
+  type Row,
 } from "@/lib/keyboard/key-list"
 import {
   announcement,
@@ -31,6 +32,8 @@ export interface ListAdapter {
   instance?: string | null
   /** The actions shown now, for the corner list, when only some are. */
   carried?: readonly Action[]
+  /** PROTOTYPE (posts-reply-chain): a variant's own keys for the corner. */
+  extraRows?: readonly Row[]
   /** The items' ids, in order. */
   items: readonly string[]
   /** The item's element, to find its controls; null while it is not mounted. */
@@ -286,13 +289,18 @@ export function useKeyboardList(adapter: ListAdapter): {
 
   // What the corner list shows: this list's keys, those its items carry.
   const carriedKey = adapter.carried?.join(" ")
+  const extraKey = adapter.extraRows?.map((r) => r.join(":")).join("|")
   useEffect(() => {
-    const shown = { list: adapter.list, carried: ref.current.adapter.carried }
+    const shown = {
+      list: adapter.list,
+      carried: ref.current.adapter.carried,
+      extra: ref.current.adapter.extraRows,
+    }
     shownList.set(shown)
     return () => {
       if (shownList.get() === shown) shownList.set(null)
     }
-  }, [adapter.list, carriedKey])
+  }, [adapter.list, carriedKey, extraKey])
 
   return { highlight: on ? highlight : null, setHighlight }
 }

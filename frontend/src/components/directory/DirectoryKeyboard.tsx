@@ -50,9 +50,8 @@ export function useDirectoryKeys({
     },
     onDrop: () => onOpen(null),
     key: (key) => {
-      if (key !== LIST_KEYS.nextPage && key !== LIST_KEYS.previousPage)
-        return false
-      const next = page + (key === LIST_KEYS.nextPage ? 1 : -1)
+      if (key !== LIST_KEYS.later && key !== LIST_KEYS.earlier) return false
+      const next = page + (key === LIST_KEYS.later ? 1 : -1)
       if (next < 0 || next > lastPage) return false
       turnedFrom.current = rowsKey
       onPage(next)

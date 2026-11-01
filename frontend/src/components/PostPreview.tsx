@@ -43,6 +43,11 @@ export interface PostPreviewProps {
   children: ReactNode
   /** The card, rendered only while the preview is open. */
   card: ReactNode
+  /**
+   * PROTOTYPE (posts-reply-chain): a click (or tap) does this instead of
+   * following the link or opening the sheet; hover still previews.
+   */
+  onActivate?: () => void
 }
 
 export function PostPreview({
@@ -55,6 +60,7 @@ export function PostPreview({
   sheetLabel,
   children,
   card,
+  onActivate,
 }: PostPreviewProps) {
   const [open, setOpen] = useState(false)
 
@@ -65,7 +71,7 @@ export function PostPreview({
         {...triggerProps}
         aria-label={sheetLabel}
         className={cn(triggerClassName, "cursor-pointer")}
-        onClick={() => setOpen(true)}
+        onClick={() => (onActivate ? onActivate() : setOpen(true))}
       >
         {children}
       </button>
@@ -94,6 +100,11 @@ export function PostPreview({
         target="_blank"
         rel="noopener noreferrer"
         delay={150}
+        onClick={(e) => {
+          if (!onActivate) return
+          e.preventDefault()
+          onActivate()
+        }}
         className={cn(triggerClassName, "cursor-help")}
       >
         {children}

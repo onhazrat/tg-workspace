@@ -8,6 +8,7 @@ import { cn, highlightText } from "@/lib/utils"
 import type { Channel, Post } from "@/types"
 import { ChannelAvatar } from "../ChannelAvatar"
 import { PostPreview } from "../PostPreview"
+import { useChainOpen } from "../posts-chain-prototype/variant"
 import { RelativeTime } from "../RelativeTime"
 import { postTime, replyParentUrl } from "./post-card-model"
 import { ReplyParentLookup, useReplyPreview } from "./ReplyParent"
@@ -164,6 +165,8 @@ export function PostIdLink({ post }: { post: Post }) {
  */
 function ReplyRef({ post }: { post: Post }) {
   const preview = useReplyPreview()
+  // PROTOTYPE (posts-reply-chain): how a click opens the chain, by variant.
+  const chain = useChainOpen()
   if (post.replyToPostId == null) return null
   const href = replyParentUrl(post, post.replyToPostId)
   const testId = `post-reply-badge-${post.channelName}-${post.id}`
@@ -197,6 +200,7 @@ function ReplyRef({ post }: { post: Post }) {
   return (
     <PostPreview
       sheet={preview.sheet}
+      onActivate={chain ? () => chain.open(post) : undefined}
       href={href}
       title={`Reply to #${post.replyToPostId}`}
       description="The post this reply answers"

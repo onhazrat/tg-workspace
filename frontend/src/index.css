@@ -363,3 +363,21 @@ li[data-marked] {
 tr[data-highlight] {
   outline-offset: -2px;
 }
+/* PROTOTYPE (posts-reply-chain): the reply chain panel's newest Post, where
+   the feed shows it. */
+article[data-chain-marked]:not([data-highlight]) {
+  outline: 2px dashed var(--color-blue-500);
+}
+/* The Post the chain started from: round dots 12px apart, sparser than the
+   outline's dashes, drawn inside the card so its rounding clips them. */
+article[data-chain-origin]:not([data-chain-marked]) {
+  position: relative;
+}
+article[data-chain-origin]:not([data-chain-marked])::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Crect x='2' y='2' rx='13' style='width:calc(100%25 - 4px);height:calc(100%25 - 4px)' fill='none' stroke='%233b82f6' stroke-width='3' stroke-linecap='round' stroke-dasharray='0 12'/%3E%3C/svg%3E");
+}

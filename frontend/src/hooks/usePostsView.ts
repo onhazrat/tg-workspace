@@ -263,6 +263,8 @@ export function usePickPool(open: boolean): Post[] {
 
 export interface PostsFeed {
   posts: Post[]
+  /** Changes when the feed becomes another list (a filter, sort or window). */
+  feedKey: string
   isInitialLoading: boolean
   hasMore: boolean
   loadMore: () => void
@@ -299,7 +301,8 @@ export function usePostsFeed(
   const ranked = isRanked(view)
   const rankingApi = useRankingApi()
 
-  const infinite = useInfiniteQuery(feedQuery(view, selectedFirst))
+  const feed = feedQuery(view, selectedFirst)
+  const infinite = useInfiniteQuery(feed)
   const ranking = useRanking()
 
   // A selection edit, after the render that carries it, so a refetch reads
@@ -364,6 +367,7 @@ export function usePostsFeed(
             (a, b) => Number(!!b.selected) - Number(!!a.selected),
           )
         : rankedPosts,
+      feedKey: "ranked",
       isInitialLoading: ranking.isLoading,
       hasMore: false,
       loadMore: () => {},
@@ -375,6 +379,7 @@ export function usePostsFeed(
   return {
     fetchSelectedShown: selectedShown,
     posts: infinite.data?.pages.flat() ?? NO_POSTS,
+    feedKey: JSON.stringify(feed.queryKey),
     isInitialLoading: infinite.isLoading,
     hasMore: infinite.hasNextPage,
     loadMore: () => {

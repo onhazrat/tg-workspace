@@ -75,7 +75,10 @@ export function CornerHelp() {
       )}
       {help === "corner" && shown ? (
         <KeyRows
-          rows={[...listKeys(shown.list, shown.carried), ...CORNER_FOOT]}
+          rows={[
+            ...listKeys(shown.list, shown.carried, shown.extra),
+            ...CORNER_FOOT,
+          ]}
         />
       ) : (
         <div className="rounded-full border border-app-ink/10 bg-app-card/95 px-3 py-1 font-mono text-[11px] text-app-ink/60 shadow-lg backdrop-blur">
