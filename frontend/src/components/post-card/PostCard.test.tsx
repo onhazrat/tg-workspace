@@ -57,6 +57,25 @@ describe("post-card-model", () => {
     expect(mediaBadgeSuffix("photo", album(3) as Post)).toBe("")
   })
 
+  test("a split Album's badge says the Post's place in it", () => {
+    const place = (id: number, albumPlace: number) =>
+      ({
+        ...post,
+        id,
+        albumId: 10,
+        media: { kinds: ["grouped", "photo"], groupedCount: 4, albumPlace },
+      }) as Post
+    render(<PostCardMedia post={place(10, 1)} />)
+    expect(
+      screen.getByTestId("post-card-media-badge-grouped").textContent,
+    ).toBe("Album · 1 of 4")
+    cleanup()
+    render(<PostCardMedia post={place(11, 2)} />)
+    expect(
+      screen.getByTestId("post-card-media-badge-grouped").textContent,
+    ).toBe("Album · 2 of 4")
+  })
+
   test("an older row without a timestamp falls back to its date", () => {
     expect(postTime({ ...post, timestamp: 5 })).toBe(5)
     expect(postTime(post)).toBe(Date.parse("2026-01-02T03:04:05Z"))

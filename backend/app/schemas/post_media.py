@@ -57,6 +57,8 @@ class PostMedia(BaseModel):
     link_preview: LinkPreview | dict[str, str] | None = Field(None, alias="linkPreview")
     poll: dict[str, Any] | None = None
     grouped_count: int | None = Field(None, alias="groupedCount")
+    #: The Post's place in its Album, 1 for the first (ALB-01).
+    album_place: int | None = Field(None, alias="albumPlace")
     is_media_only: bool = Field(False, alias="isMediaOnly")
 
     model_config = {"populate_by_name": True}

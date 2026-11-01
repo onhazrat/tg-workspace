@@ -6,10 +6,17 @@ export function isLongPost(text: string): boolean {
   return text.length > 900 || text.split("\n").length > 14
 }
 
-/** " (n)" after the Grouped badge, for an album of more than one. */
+/**
+ * After the Album badge: the Post's place in its Album, " · 2 of 4" (ALB-01);
+ * " (n)" for an Album still stored as one Post, until ALB-02 splits it.
+ */
 export function mediaBadgeSuffix(kind: PostMediaKind, post: Post): string {
+  if (kind !== "grouped") return ""
   const count = post.media?.groupedCount
-  return kind === "grouped" && count != null && count > 1 ? ` (${count})` : ""
+  const place = post.media?.albumPlace
+  if (post.albumId != null && place != null && count != null)
+    return ` · ${place} of ${count}`
+  return count != null && count > 1 ? ` (${count})` : ""
 }
 
 /** When a post was published; older rows carry only the date string. */

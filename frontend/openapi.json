@@ -13416,6 +13416,10 @@
             ],
             "title": "Replyto"
           },
+          "albumId": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Albumid"
+          },
           "language": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Language"
@@ -14972,6 +14976,10 @@
               { "type": "null" }
             ],
             "title": "Replyto"
+          },
+          "albumId": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Albumid"
           },
           "language": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],

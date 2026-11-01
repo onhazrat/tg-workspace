@@ -253,6 +253,7 @@ export function applyPostViewPipeline(
 
 export function formatPostsForPrompt(posts: Post[]): string {
   return posts
+    .filter((post) => post.albumId == null || post.albumId === post.id)
     .map((post) => {
       const mediaHints = formatPostMediaHints(post)
       const lines = [

@@ -99,6 +99,9 @@ class PostResponse(BaseModel):
     reply_to_post_id: int | None = Field(default=None, alias="replyToPostId")
     # Shape: {"channel": str, "authorName": str, "text": str, "url": str}
     reply_to: dict[str, Any] | None = Field(default=None, alias="replyTo")
+    # The Album's first message id on every Post of an Album, null outside one
+    # (ALB-01); the Album's size is `media.groupedCount`.
+    album_id: int | None = Field(default=None, alias="albumId")
     # An ISO 639 code, "zxx" (no words) or "und" (undetermined); null while
     # the Post is unread (LANG-01).
     language: str | None = None

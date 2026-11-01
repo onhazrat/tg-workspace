@@ -35,6 +35,15 @@ def test_matches_frontend_golden_reference() -> None:
                 "thumbApiPath": "/api/v1/telegram/post-thumb/durov/522",
             },
         },
+        # An Album's later Post adds no block (ALB-01).
+        {
+            "channelName": "durov",
+            "id": 523,
+            "albumId": 522,
+            "date": "2024-01-01T00:00:00.000Z",
+            "text": "[photo]",
+            "media": {"kinds": ["grouped", "photo"], "isMediaOnly": True},
+        },
     ]
     expected = "\n".join(
         [

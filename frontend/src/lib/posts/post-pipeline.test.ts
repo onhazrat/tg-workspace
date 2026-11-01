@@ -194,6 +194,12 @@ describe("post pipeline", () => {
           thumbApiPath: "/api/v1/telegram/post-thumb/durov/522",
         },
       }),
+      // An Album's later Post adds no block (ALB-01).
+      makePost("durov", 523, 1704067200000, {
+        text: "[photo]",
+        albumId: 522,
+        media: { kinds: ["grouped", "photo"], isMediaOnly: true },
+      }),
     ]
     const expected = [
       `[alpha] ID: 1`,

@@ -1,7 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test"
 import { resetInFlight } from "@/lib/singleFlight"
 import type { Post } from "@/types"
-import { bulkUpsertPosts, getPost, lookupPosts, type PostsApi } from "./store"
+import {
+  bulkUpsertPosts,
+  getPost,
+  getReplyParent,
+  lookupPosts,
+  type PostsApi,
+} from "./store"
 
 /**
  * The narrow-lookup path that survived A1.
@@ -158,5 +164,35 @@ describe("bulkUpsertPosts", () => {
     await bulkUpsertPosts(batch, fakeApi)
 
     expect(upserted).toEqual([batch])
+  })
+})
+
+describe("getReplyParent", () => {
+  const albumApi = (stored: Post[]) =>
+    ({
+      lookupPosts: async (wanted: { channelName: string; postId: number }[]) =>
+        stored.filter((p) =>
+          wanted.some(
+            (r) => r.channelName === p.channelName && r.postId === p.id,
+          ),
+        ),
+    }) as unknown as PostsApi
+  const first = { ...post("a", 10), albumId: 10, replyToPostId: 5 }
+  const third = { ...post("a", 12), albumId: 10 }
+
+  it("keeps the answered photo, climbing on through its Album's first Post", async () => {
+    const parent = await getReplyParent("a", 12, albumApi([first, third]))
+    expect(parent?.id).toBe(12)
+    expect(parent?.replyToPostId).toBe(5)
+  })
+
+  it("keeps the later Album Post when the first is not stored", async () => {
+    expect(await getReplyParent("a", 12, albumApi([third]))).toEqual(third)
+  })
+
+  it("answers any other parent as it is", async () => {
+    expect(await getReplyParent("a", 10, albumApi([first, third]))).toEqual(
+      first,
+    )
   })
 })

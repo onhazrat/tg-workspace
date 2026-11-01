@@ -351,6 +351,11 @@ class Post(SQLModel, table=True):
     # Shape: {"channel": str, "authorName": str, "text": str, "url": str}
     reply_to_post_id: int | None = Field(default=None, index=True)
     reply_to: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
+    #: The Album this Post is a message of, by the Album's first message id,
+    #: which is this Post's own id on the first Post; null outside an Album
+    #: (ALB-01, ADR-046). Only the first Post holds the caption, the counters,
+    #: the forward and the reply.
+    album_id: int | None = None
     # Whether this Post's References have been extracted into
     # `tg_post_references` (CRG-01). The server default is declared so
     # autogenerate does not read the migration's as drift and emit an

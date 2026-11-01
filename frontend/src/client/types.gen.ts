@@ -5521,6 +5521,10 @@ export type PostResponse = {
         [key: string]: unknown;
     } | null;
     /**
+     * Albumid
+     */
+    albumId?: number | null;
+    /**
      * Language
      */
     language?: string | null;
@@ -7202,6 +7206,10 @@ export type SelectablePostResponse = {
     replyTo?: {
         [key: string]: unknown;
     } | null;
+    /**
+     * Albumid
+     */
+    albumId?: number | null;
     /**
      * Language
      */

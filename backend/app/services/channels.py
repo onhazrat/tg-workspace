@@ -45,6 +45,7 @@ from app.services.follows import (
 )
 from app.services.language import LANGUAGE_WINDOW, derive_language
 from app.services.logs import collect_channel_sync_logs
+from app.services.post_filters import not_later_album_post
 from app.services.reach import MS_PER_HOUR, Reach, compute_reach, reach_settings_from
 from app.services.serialization import channel_to_camel, normalize_body
 from app.services.settling_curve import current_curve
@@ -316,7 +317,11 @@ def reach_by_channel(session: Session, channel_names: list[str]) -> dict[str, Re
             col(Post.views_count).label("views"),
             (col(Post.views_observed_at) - col(Post.timestamp)).label("age_ms"),
         )
-        .where(col(Post.channel_name) == wanted.c.name, col(Post.timestamp) > 0)
+        .where(
+            col(Post.channel_name) == wanted.c.name,
+            col(Post.timestamp) > 0,
+            not_later_album_post(),
+        )
         .order_by(col(Post.timestamp).desc())
         .limit(settings.sample_size)
         .lateral("newest")

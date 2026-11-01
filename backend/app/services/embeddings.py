@@ -15,6 +15,7 @@ from app.ai.registry import get_provider
 from app.core.config import settings
 from app.models_tg import EmbeddingLog, Post, PostEmbedding, SyncMeta, utc_now
 from app.services.ai_keys import Purpose, resolve_ai_key
+from app.services.post_filters import not_later_album_post
 
 _last_backfill_run_ms: int | None = None
 
@@ -49,6 +50,7 @@ def _posts_without_embeddings_stmt(
         )
         .where(col(PostEmbedding.id).is_(None))
         .where(col(Post.is_anchor) == False)  # noqa: E712
+        .where(not_later_album_post())
         .order_by(col(Post.timestamp).desc())
     )
     if channel_names:
@@ -75,6 +77,7 @@ def count_posts_without_embeddings(
         )
         .where(col(PostEmbedding.id).is_(None))
         .where(col(Post.is_anchor) == False)  # noqa: E712
+        .where(not_later_album_post())
     )
     if channel_names is not None:
         stmt = stmt.where(col(Post.channel_name).in_(channel_names))
@@ -93,7 +96,10 @@ def get_embedding_status(
             "lastRun": get_last_backfill_run(),
         }
     total_stmt = (
-        select(func.count()).select_from(Post).where(col(Post.is_anchor) == False)  # noqa: E712
+        select(func.count())
+        .select_from(Post)
+        .where(col(Post.is_anchor) == False)  # noqa: E712
+        .where(not_later_album_post())
     )
     if channel_names is not None:
         total_stmt = total_stmt.where(col(Post.channel_name).in_(channel_names))

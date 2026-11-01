@@ -19,6 +19,8 @@ from app.services.channel_photos import resolve_cached_photo_url
 from app.services.network import fetch_with_retry
 from app.services.post_links_parser import extract_body_links
 from app.services.post_media_parser import (
+    album_item_ids,
+    album_later_items,
     finalize_post_media_paths,
     parse_abbreviated_count,
     parse_widget_media,
@@ -142,6 +144,28 @@ def _parse_posts_from_html(
 
         posts.append(post)
         seen.add(post_id)
+
+        # Each later message of an Album is its own Post with its own id and
+        # thumbnail, on the Album's date; everything else stays on the first
+        # (ALB-01, ADR-046).
+        later = album_later_items(el)
+        if later:
+            post["albumId"] = post_id
+        for item_id, item_text, item_media, item_thumb in later:
+            if item_id < start_id or item_id in seen:
+                continue
+            item: dict[str, Any] = {
+                "id": item_id,
+                "text": item_text,
+                "date": date,
+                "media": item_media,
+                "linkSpans": [],
+                "albumId": post_id,
+            }
+            if item_thumb:
+                item["_thumbSourceUrl"] = item_thumb
+            posts.append(item)
+            seen.add(item_id)
 
     more = soup.select_one(".tgme_messages_more")
     next_url = None
@@ -286,6 +310,8 @@ def _parse_channel_meta(soup: BeautifulSoup, channel_name: str) -> dict[str, Any
             m = re.search(r"/(\d+)$", href)
             if m:
                 latest_id = max(latest_id, int(m.group(1)))
+        # An Album's widget is dated by its first message; its last is newer.
+        latest_id = max([latest_id, *album_item_ids(el)])
 
     is_unavailable = latest_id == 0 and bool(soup.select_one(".tgme_page_action"))
     telegram_chat_id = _extract_telegram_chat_id(soup)
@@ -476,6 +502,9 @@ async def get_channel_info(
     result = _parse_channel_meta(soup, channel_name)
     if with_samples:
         posts, _next_url = _parse_posts_from_html(soup, 0, set())
+        # An Album stays one sample, as the preview shows it, so a probe's
+        # posting rate and Reach mean what they meant before ALB-01.
+        posts = [p for p in posts if p.get("albumId") in (None, p["id"])]
         # No media is downloaded for a sample and no thumb path is rewritten —
         # see `_enrich_posts_with_timestamps`.
         result["samples"] = _enrich_posts_with_timestamps(

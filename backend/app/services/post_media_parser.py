@@ -100,11 +100,11 @@ def _parse_duration_seconds(el: Tag) -> int | None:
     # Scoped to the post's own player: an unscoped lookup picks up the duration
     # rendered inside a link preview, which belongs to the linked post.
     player = el.select_one(_VIDEO_PLAYER_SELECTOR)
-    dur_el = (
-        player.select_one(".message_video_duration, .js-message_video_duration")
-        if player
-        else None
-    )
+    return _player_duration(player) if player else None
+
+
+def _player_duration(player: Tag) -> int | None:
+    dur_el = player.select_one(".message_video_duration, .js-message_video_duration")
     if not dur_el:
         return None
     text = dur_el.get_text(strip=True)
@@ -124,12 +124,79 @@ def _parse_duration_seconds(el: Tag) -> int | None:
 
 
 def _extract_grouped_count(el: Tag) -> int | None:
+    count = len(_album_wraps(el))
+    return count if count > 0 else None
+
+
+def _album_wraps(el: Tag) -> list[Tag]:
     grouped = el.select_one(".tgme_widget_message_grouped_wrap")
     if not grouped:
-        return None
-    wraps = grouped.select(".tgme_widget_message_photo_wrap, .grouped_media_wrap")
-    count = len(wraps)
-    return count if count > 0 else None
+        return []
+    return grouped.select(".tgme_widget_message_photo_wrap, .grouped_media_wrap")
+
+
+_SINGLE_HREF_RE = re.compile(r"/(\d+)\?single$")
+
+
+def album_item_ids(el: Tag) -> list[int]:
+    """Each Album item's own message id, from its `/<id>?single` link; empty
+    unless the widget is an Album of two or more whose every item names one,
+    which is the one test of an Album the sync splits (ALB-01)."""
+    ids: list[int] = []
+    for wrap in _album_wraps(el):
+        match = _SINGLE_HREF_RE.search(attr_str(wrap.get("href")) or "")
+        if not match:
+            return []
+        ids.append(int(match.group(1)))
+    return ids if len(ids) > 1 else []
+
+
+def _album_item(wrap: Tag) -> tuple[str, str | None, int | None]:
+    """One Album item's own kind, thumbnail source and a video's duration."""
+    if "tgme_widget_message_video_player" not in wrap.get_attribute_list("class"):
+        return "photo", _extract_background_url(attr_str(wrap.get("style"))), None
+    thumb = wrap.select_one(".tgme_widget_message_video_thumb")
+    return (
+        "video",
+        _extract_background_url(attr_str(thumb.get("style"))) if thumb else None,
+        _player_duration(wrap),
+    )
+
+
+def album_later_items(el: Tag) -> list[tuple[int, str, dict[str, Any], str | None]]:
+    """The Album's messages after its first, each as its own Post's id, text,
+    media and thumbnail source (ALB-01, ADR-046).
+
+    Each carries only what the page gives per item: its kind, thumbnail and a
+    video's duration, with the placeholder text of a captionless Post. The
+    caption and counters are the first Post's. Empty for a widget that is no
+    Album the sync splits.
+    """
+    ids = album_item_ids(el)
+    wraps = _album_wraps(el) if ids else []
+    out: list[tuple[int, str, dict[str, Any], str | None]] = []
+    for place, (item_id, wrap) in enumerate(zip(ids, wraps, strict=True), start=1):
+        if place == 1:
+            continue
+        kind, thumb, duration = _album_item(wrap)
+        media = PostMedia.model_validate(
+            {
+                "kinds": ["grouped", kind],
+                "durationSec": duration,
+                "groupedCount": len(ids),
+                "albumPlace": place,
+                "isMediaOnly": True,
+            }
+        )
+        out.append(
+            (
+                item_id,
+                synthesize_media_only_text([kind]),
+                media.to_storage_dict(),
+                thumb,
+            )
+        )
+    return out
 
 
 def _extract_link_preview(el: Tag) -> dict[str, str] | None:
@@ -330,6 +397,13 @@ def parse_widget_media(
     grouped_count = _extract_grouped_count(el)
     duration_sec = _parse_duration_seconds(el)
     link_preview = _extract_link_preview(el)
+    if album_item_ids(el):
+        # The first Post of a split Album is its first item alone: that item's
+        # kind, thumbnail and duration, not the whole wrap's (ALB-01).
+        own_kind, thumb_source_url, duration_sec = _album_item(_album_wraps(el)[0])
+        kinds = ["grouped", own_kind] + [
+            k for k in kinds if k not in ("grouped", "photo", "video")
+        ]
 
     is_media_only = not caption
     text = caption if caption else synthesize_media_only_text(kinds)
@@ -344,6 +418,7 @@ def parse_widget_media(
             "reactionsCount": reactions_count,
             "linkPreview": link_preview,
             "groupedCount": grouped_count,
+            "albumPlace": 1 if album_item_ids(el) else None,
             "isMediaOnly": is_media_only,
         }
     )
