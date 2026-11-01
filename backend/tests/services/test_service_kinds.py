@@ -79,8 +79,9 @@ INVENTORY: dict[str, str] = {
     # Follow, so the Follow's writer must not be the one that removes it.
     "tags.py": AGGREGATE,
     "logs.py": AGGREGATE,
-    "post_sync_state.py": AGGREGATE,
     "posts.py": AGGREGATE,
+    # Owns `tg_walked_ranges` (ADR-044): what each sync walk read.
+    "walked_ranges.py": AGGREGATE,
     # Owns `tg_view_observations` (REACH-05). Separate from `posts.py` because
     # it owns a table of its own that the stride controller and the curve fit
     # also reach, not a companion payload of `tg_posts`.

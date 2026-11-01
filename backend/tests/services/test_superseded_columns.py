@@ -285,6 +285,8 @@ def test_the_migrations_frozen_list_is_the_derived_one() -> None:
     # `tg_settling_curve_fits` (REACH-07), the curve fitted from them.
     # `tg_citation_pairs` and `tg_citation_counts` (DIR-05) summarise the
     # References, and were created without an owner column for their reason.
+    # `tg_walked_ranges` (ADR-044) replaced `tg_post_sync_state` long after
+    # this revision dropped the old table's stamp, and was created without one.
     never_had_one = derived - frozen
     assert never_had_one <= {
         "tg_channel_directory",
@@ -297,12 +299,15 @@ def test_the_migrations_frozen_list_is_the_derived_one() -> None:
         "tg_settling_curve_fits",
         "tg_sync_meta",
         "tg_view_observations",
+        "tg_walked_ranges",
     }, (
         f"{sorted(never_had_one)} are owner-free in `SCOPES` but the ticket 22 "
         f"migration does not drop a `user_id` from them. If one of these grew a "
         f"stamp, it needs its own revision — this one has already run."
     )
-    assert not frozen - derived, (
+    # Dropped with its stamp's purpose by ADR-044, after this revision ran.
+    gone = {"tg_post_sync_state"}
+    assert not frozen - derived - gone, (
         f"{sorted(frozen - derived)} are dropped by the migration but are not "
         f"owner-free in `SCOPES`. One of the two is wrong."
     )

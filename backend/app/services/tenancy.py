@@ -101,7 +101,6 @@ from app.models_tg import (
     Post,
     PostEmbedding,
     PostReference,
-    PostSyncState,
     PostTranslation,
     PublishLog,
     QuotaLimit,
@@ -122,6 +121,7 @@ from app.models_tg import (
     TagUse,
     UserSetting,
     ViewObservation,
+    WalkedRange,
 )
 from app.models_view_as import ViewAsSession
 
@@ -206,7 +206,7 @@ SCOPES: dict[type[SQLModel], Scope] = {
     # --- Follow-scoped: one scrape serves every follower.
     Channel: Scope.FOLLOW_SCOPED,
     Post: Scope.FOLLOW_SCOPED,
-    PostSyncState: Scope.FOLLOW_SCOPED,
+    WalkedRange: Scope.FOLLOW_SCOPED,
     PostEmbedding: Scope.FOLLOW_SCOPED,
     PostTranslation: Scope.FOLLOW_SCOPED,
     # A sync log answers "did this Channel deliver Posts, and if not why not",
@@ -280,7 +280,7 @@ SCOPES: dict[type[SQLModel], Scope] = {
 FOLLOW_KEYS: dict[type[SQLModel], str] = {
     Channel: "id",
     Post: "channel_name",
-    PostSyncState: "channel_name",
+    WalkedRange: "channel_name",
     PostEmbedding: "channel_name",
     PostTranslation: "channel_name",
     SyncLog: "channel_name",

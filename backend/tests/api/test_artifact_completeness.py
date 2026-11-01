@@ -19,7 +19,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, col, select
 
 from app.core.config import settings
-from app.models_tg import Channel, PostSyncState, SyncLog
+from app.models_tg import Channel, SyncLog, WalkedRange
 from tests.api.test_window_check import (
     HOUR,
     NOW,
@@ -232,7 +232,7 @@ def test_the_reasons_are_the_servers_whatever_the_client_skipped(
 def test_a_skip_changes_no_shared_row(
     client: TestClient, operator: dict[str, str], session: Session
 ) -> None:
-    """Not the Channel, its sync state, its sync logs or its failure count."""
+    """Not the Channel, its Walked ranges, its sync logs or its failure count."""
     _channel(session, "cg_end", WHOLE[:2], **UNREAD_END)
 
     def shared() -> tuple[Any, ...]:
@@ -242,7 +242,7 @@ def test_a_skip_changes_no_shared_row(
             channel.model_dump(),
             session.exec(select(SyncLog).where(SyncLog.channel_name == "cg_end")).all(),
             session.exec(
-                select(PostSyncState).where(col(PostSyncState.channel_name) == "cg_end")
+                select(WalkedRange).where(col(WalkedRange.channel_name) == "cg_end")
             ).all(),
         )
 

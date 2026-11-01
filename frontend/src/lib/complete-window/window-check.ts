@@ -196,7 +196,7 @@ const posts = (n: number) => `${n} ${n === 1 ? "post" : "posts"}`
 
 /**
  * How far a Channel falls short, in its own terms: "31 h behind, ~114
- * posts", "hole: 4 posts, 7:13 PM to 7:30 PM", "history starts 2 h late".
+ * posts", "hole: up to 4 posts, 7:13 PM to 7:30 PM", "history starts 2 h late".
  * Empty when no stretch says it (a failure or a freeze alone).
  */
 export function shortfall(c: Verdict): string {
@@ -219,7 +219,7 @@ export function shortfall(c: Verdict): string {
     const sameDay =
       new Date(hole.from).toDateString() === new Date(hole.to).toDateString()
     parts.push(
-      `hole: ${posts(c.missingIds)}, ${sameDay ? clock(hole.from) : stamp(hole.from)} to ${clock(hole.to)}`,
+      `hole: up to ${posts(c.missingIds)}, ${sameDay ? clock(hole.from) : stamp(hole.from)} to ${clock(hole.to)}`,
     )
   }
   const short = c.stretches.find((s) => s.kind === "start")

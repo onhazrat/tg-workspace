@@ -53,7 +53,6 @@ def _ctx(channel_id: str, channel_name: str) -> _ChannelSyncCtx:
         tor_control_port=9051,
         retrieval_pass="incremental",
         needs_backfill=False,
-        min_stored_post_id=None,
         scrape_cutoff_ms=0,
         effective_start_time=0,
     )
@@ -242,7 +241,6 @@ def test_apply_scrape_page_mismatch_freezes_channel_and_logs_failure() -> None:
         job_id="job-mismatch",
         job_source="Manual",
         user_id=None,
-        session_seen_ids=set(),
         before_id=None,
     )
     assert result.stop_sync is True
