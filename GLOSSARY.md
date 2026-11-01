@@ -301,16 +301,28 @@ _Avoid_: padding, lag, delay, end offset
 A Channel in the Channel selection for which nobody can prove the workspace
 holds every Post it published inside the Analysis window, read up to the
 window's End or the moment the action started, whichever is earlier. Proof
-needs three things: the newest page read at or after that moment, or a Post
-published after it; a Post at or before the window's Start, or the Channel's
-first Post; and every Post between them held or known not to exist. An
-Incomplete Channel carries one reason: not synced to the end, a hole in the
+is one Walked range spanning the window: its top read at or after that moment,
+or holding a Post published after it; its bottom at or before the window's
+Start, or at the Channel's first Post. An Incomplete Channel carries one reason: not synced to the end, a hole in the
 window, history short of the Start, before the retention cutoff, frozen,
 unavailable (Telegram will not serve it publicly), its sync failed, timed out
 or was refused, or the Account skipped it. Skipping is
 one Account's choice for one Artifact and says nothing about the Channel to
 anybody else.
 _Avoid_: stale, lagging, unsynced, unverified
+
+**Walked range**:
+A stretch of one Channel's post ids that a sync read page by page without a
+break, so every Post Telegram shows publicly inside it is held. A post id
+missing inside it is a Post that does not exist publicly (deleted, part of an
+album, hidden), never one the workspace lacks. A Post stored without a walk,
+by import, belongs to none.
+_Avoid_: coverage (Covered Posts is another thing), proven range, synced range
+
+**Hole**:
+The post ids between two Walked ranges of one Channel: nobody has read them,
+so they may hold Posts. Ids missing inside a Walked range are never a Hole.
+_Avoid_: gap, missing Posts
 
 **Complete window**:
 An Analysis window, as an action froze it, with no Incomplete Channel. One with
