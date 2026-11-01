@@ -1,8 +1,9 @@
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
-# Every hook runs at commit; only the deployment-name check also runs at push,
-# because a push is what makes a leak permanent, and the guard check reads the
-# message (`prek install` sets up all three).
+# Every hook runs at commit but three: the deployment-name check also runs at
+# push, because a push is what makes a leak permanent; the frontend CRAP
+# ratchet runs only at push, because it takes a minute; and the guard check
+# reads the message (`prek install` sets up all three stages).
 default_install_hook_types: [pre-commit, pre-push, commit-msg]
 default_stages: [pre-commit]
 repos:
@@ -108,6 +109,17 @@ repos:
         verbose: true
         files: ^backend/app/.*\.py$|^frontend/src/.*\.(ts|tsx)$
 
+      # CI's test-frontend-unit ratchet, before the push rather than after: a
+      # new branching component with no unit test fails it, and Playwright
+      # coverage does not count.
+      - id: crap-ratchet-frontend
+        name: Frontend CRAP ratchet
+        entry: bash scripts/crap/run.sh --frontend
+        pass_filenames: false
+        language: system
+        stages: [pre-push]
+        files: ^frontend/src/.*\.(ts|tsx)$
+
       - id: check-em-dashes
         name: No em dash in an added line
         entry: python3 scripts/check_em_dashes.py
@@ -152,6 +164,13 @@ repos:
         pass_filenames: false
         language: system
         files: ^frontend/(src|tests)/.*\.tsx?$|^scripts/check_test_ids\.py$
+
+      - id: check-adr-numbers
+        name: No two ADRs claim one number
+        entry: python3 scripts/check_adr_numbers.py
+        pass_filenames: false
+        language: system
+        files: ^docs/adr/|^scripts/check_adr_numbers\.py$
 
       # A commit touching a guarded file or its test replays that guard's
       # mutations from docs/agents/guard-mutations.json: each must still go
