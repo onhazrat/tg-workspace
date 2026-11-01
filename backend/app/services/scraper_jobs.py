@@ -11,6 +11,8 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, cast
 
+from sqlalchemy import func
+from sqlalchemy import select as sa_select
 from sqlalchemy import true as sa_true
 from sqlalchemy import update as sa_update
 from sqlmodel import Session, col, delete, select
@@ -22,7 +24,7 @@ from app.models_tg import SyncJob as SyncJobRow
 from app.models_tg import utc_now
 from app.services.channel_setting_groups import SyncOperationMode
 from app.services.request_kinds import is_kind_enabled, kind_for_sync_mode
-from app.services.tenancy import scoped_select, tenancy_enforced
+from app.services.tenancy import scoped_select, tenancy_enforced, unscoped_select
 
 #: The one `LISTEN`/`NOTIFY` channel every sync job's progress travels on
 #: (ticket 10). One channel rather than one per job: `LISTEN` is per-connection,
@@ -40,7 +42,7 @@ _jobs_lock = asyncio.Lock()
 
 #: Jobs this process is *watching* but not running — the SSE mirror (ticket 10).
 #: Deliberately not `_active_jobs`: that dict means "this process is running
-#: it", which is what `has_active_sync_job` answers from, and folding watched
+#: it", which is what `active_sync_job_owners` answers from, and folding watched
 #: jobs into it would tell the worker's scheduler that a sync is in flight
 #: because a browser happened to open a progress stream.
 _mirrored_jobs: dict[str, SyncJobState] = {}
@@ -680,7 +682,7 @@ def deactivate_job(job_id: str) -> None:
 def active_sync_job_owners() -> set[uuid.UUID]:
     """Accounts with a sync job pending or running — running *or still queued*.
 
-    `has_active_sync_job`'s question, asked per account, because since ticket 21
+    Asked per account, because since ticket 21
     `run_auto_sync` creates **one job per owner** and the deployment-wide answer
     made every owner wait for the slowest one. Account A's two-thousand-Channel
     backlog stopped account B's scheduler, for as long as A's job stayed
@@ -698,7 +700,7 @@ def active_sync_job_owners() -> set[uuid.UUID]:
     second batch on top of the first, and that is a question about the account,
     not about the job id.
 
-    Same two-step as `has_active_sync_job` — the in-memory jobs are free, and
+    Two steps: the in-memory jobs are free, and
     the row read happens only for the ids that are still queued. An id whose row
     names an owner this build cannot parse is skipped rather than guessed at;
     it can only come from a hand-edited row, and the alternative is a `ValueError`
@@ -740,43 +742,49 @@ def _held(sync_mode: str) -> bool:
     return not is_kind_enabled(kind_for_sync_mode(sync_mode))
 
 
-def has_active_sync_job() -> bool:
-    """True when a sync job is pending or running — running *or still queued*.
+#: A job Channel's metadata key: walk back to this moment (epoch ms), past the
+#: Posts an incremental pass stops at. The gate and a scheduled successor set
+#: it on a Channel whose start or continuity test failed (ADR-043).
+WALK_BACK_KEY = "walkBackTo"
 
-    `run_auto_sync` and `run_auto_summary` skip their tick on this. It used to
-    read `_active_jobs` alone, which was complete while `create_job` registered
-    every job it made. It no longer does (see `claim_job`), so between enqueue
-    and the first message being claimed this dict says nothing — and that gap is
-    not always brief. `DRAIN_ORDER` puts the automatic lane last, so a long
-    manual bulk keeps auto-sync's messages waiting; every 60-second tick would
-    then see "no active job", create another one, and enqueue another N
-    messages, without bound, for as long as the worker stayed busy.
+#: Why the in-flight read crosses Accounts: the corpus is shared (ADR-043).
+IN_FLIGHT_REASON = (
+    "a Channel's Posts are every Follower's, so any Account's sync of it counts"
+)
+_SYNCING = ("pending", "running")
 
-    So a queued-but-unclaimed job counts as active. The row check runs only when
-    the cheap in-memory answer is negative, and at most once a tick.
 
-    **Deployment-wide, which is right for `run_auto_summary` and was wrong for
-    `run_auto_sync`.** See `active_sync_job_owners`.
+def channels_in_flight(session: Session, names: list[str]) -> dict[str, int]:
+    """Which of `names` a sync job is still syncing, and when it started.
+
+    Any Account's job, since the corpus is shared (CW-03, ADR-043): a gate
+    joins one rather than syncing the Channel twice. Read from the rows, at
+    the flush interval's freshness; a held job keeps nobody busy. With
+    several, the latest start, the one most likely to read past E.
     """
-    if any(j.status in ("pending", "running") for j in _active_jobs.values()):
-        return True
-
-    # Imported lazily: `sync_queue` imports this module.
-    from app.jobs.sync_queue import queued_job_ids
-
-    queued = queued_job_ids()
-    if not queued:
-        return False
-    with Session(engine) as session:
-        found = session.exec(
-            select(SyncJobRow.id)
+    if not names:
+        return {}
+    entry = func.json_array_elements(col(SyncJobRow.channels)).table_valued("value")
+    name = entry.c.value.op("->>")("channelName")
+    rows = session.execute(
+        unscoped_select(
+            sa_select(name, col(SyncJobRow.sync_mode), func.max(SyncJobRow.created_at))
+            .select_from(SyncJobRow)
+            .join(entry, sa_true())
             .where(
-                col(SyncJobRow.status).in_(("pending", "running")),
-                col(SyncJobRow.id).in_(tuple(queued)),
+                col(SyncJobRow.status).in_(_SYNCING),
+                name.in_(names),
+                entry.c.value.op("->>")("status").in_(_SYNCING),
             )
-            .limit(1)
-        ).first()
-    return found is not None
+            .group_by(name, col(SyncJobRow.sync_mode)),
+            reason=IN_FLIGHT_REASON,
+        )
+    ).all()
+    found: dict[str, int] = {}
+    for channel, mode, started in rows:
+        if not _held(mode):
+            found[channel] = max(found.get(channel, 0), started)
+    return found
 
 
 def _running_job_from_row(*, user_id: uuid.UUID) -> SyncJobState | None:

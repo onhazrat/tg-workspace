@@ -57,9 +57,9 @@ from app.services.bulk_follow import run_follow_job_by_id
 from app.services.channel_directory import enqueue_handles
 from app.services.request_stats import flush_recorded_requests
 from app.services.scraper_jobs import (
+    active_sync_job_owners,
     clear_jobs_for_tests,
     create_job,
-    has_active_sync_job,
 )
 from app.services.sync_lanes import (
     AUTO_SYNC_NORMAL_LANE,
@@ -1078,8 +1078,8 @@ def test_a_sync_run_that_fails_early_gives_up_its_claim(
 ) -> None:
     """A claimed job that never reaches its end must not stay active.
 
-    Otherwise `has_active_sync_job` answers yes for good and every auto-summary
-    tick after it is skipped. Mutation: release the claim only at the end of
+    Otherwise `active_sync_job_owners` names its owner for good and every
+    auto-sync tick of that account after it is skipped. Mutation: release the claim only at the end of
     `run_sync_job` rather than in its `finally`.
     """
     h = superuser_token_headers
@@ -1100,4 +1100,4 @@ def test_a_sync_run_that_fails_early_gives_up_its_claim(
 
     client.portal.call(_run)
 
-    assert not has_active_sync_job()
+    assert uuid.UUID(me) not in active_sync_job_owners()

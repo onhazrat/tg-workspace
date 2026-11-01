@@ -160,6 +160,11 @@ test.describe("TG Workspace channels and posts", () => {
         })
         return
       }
+      // The live check (CW-01) shares the prefix too, and is not a feed.
+      if (route.request().url().includes("/posts/window-check")) {
+        await route.continue()
+        return
+      }
       const body = route.request().postDataJSON() as { filter?: unknown } | null
       const photo = JSON.stringify(body?.filter ?? null).includes(
         '{"type":"media","value":"photo"}',

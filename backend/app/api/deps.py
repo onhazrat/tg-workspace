@@ -76,6 +76,9 @@ VIEW_AS_READ_ONLY_PATHS: dict[str, str] = {
     f"{settings.API_V1_STR}/data/posts/window-histogram": (
         "the Analysis window chart's bars over the same scope, for the same reason"
     ),
+    f"{settings.API_V1_STR}/data/posts/window-check": (
+        "which Channels of a scope are Incomplete; reads only, never syncs"
+    ),
     f"{settings.API_V1_STR}/data/posts/lookup": (
         "resolves (channel, post id) pairs a Summary cites"
     ),

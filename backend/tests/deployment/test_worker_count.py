@@ -254,7 +254,7 @@ def test_the_sync_tier_is_a_single_replica() -> None:
 
 
 def test_the_job_registry_is_still_a_dict_in_one_process() -> None:
-    """Reason 2, now half of what it was. `has_active_sync_job` and the SSE
+    """Reason 2, now half of what it was. `active_sync_job_owners` and the SSE
     stream both read this.
 
     Across processes it silently answers for one worker only: the scheduler
@@ -274,8 +274,8 @@ def test_the_job_registry_is_still_a_dict_in_one_process() -> None:
     The job *registry* is still per-process and still a reason.
     """
     assert isinstance(scraper_jobs._active_jobs, dict)
-    assert "_active_jobs" in inspect.getsource(scraper_jobs.has_active_sync_job), (
-        "`has_active_sync_job` no longer reads in-process state — if the claim "
+    assert "_active_jobs" in inspect.getsource(scraper_jobs.active_sync_job_owners), (
+        "`active_sync_job_owners` no longer reads in-process state. If the claim "
         f"moved to the database, see {_PLAN.name} step 2"
     )
 

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react"
 import ReactMarkdown from "react-markdown"
 import { toast } from "sonner"
 import { ArtifactScopeLine } from "@/components/ArtifactScopeLine"
+import { useRunGated } from "@/components/complete-window/Gate"
 import { GoToActionEmptyState } from "@/components/history/GoToActionEmptyState"
 import { usePostsViewEdits } from "@/contexts/PostsViewContext"
 import { useAiKeys } from "@/hooks/useAiKeys"
@@ -23,11 +24,11 @@ import { reportDirection } from "../lib/report-direction"
 import type { Summary } from "../types"
 import { PasteSummaryModal } from "./PasteSummaryModal"
 import { usePreviewWorkspace } from "./PostPreview"
+import { CutShortRetry } from "./summary-view/CutShortMark"
 import {
   AttemptsFold,
   FailedSummaryPanel,
 } from "./summary-view/FailedSummaryPanel"
-import { IncompleteRetry } from "./summary-view/IncompleteMark"
 import { RetryRunWith, useRetryChoice } from "./summary-view/RetryRunWith"
 import { SummaryBody } from "./summary-view/SummaryBody"
 import {
@@ -41,7 +42,6 @@ import { generatesOnTab } from "./workspace-shell/workspace-shell-model"
 export const SummaryView: React.FC = () => {
   const {
     summary,
-    handleSummarize,
     generateBackgroundSummary,
     regeneratingSummaries,
     completePendingSummary,
@@ -50,6 +50,7 @@ export const SummaryView: React.FC = () => {
   const summariesHistory = useSummariesHistory()
   const loadHistory = useInvalidateSummaries()
   const { currentSummaryId, summarizing: runInFlight, setActiveTab } = useUI()
+  const runGated = useRunGated()
   // The run fills the new-Summary tab; another Summary's tab is not generating.
   const summarizing = generatesOnTab({
     summarizing: runInFlight,
@@ -127,7 +128,8 @@ export const SummaryView: React.FC = () => {
       return
     }
     if (!currentSummary) {
-      handleSummarize()
+      // A new Summary goes through the gate on the Action tab (CW-02).
+      runGated("summary")
       return
     }
     toast.promise(generateBackgroundSummary(currentSummary, false), {
@@ -186,9 +188,9 @@ export const SummaryView: React.FC = () => {
           attemptsFold={
             <AttemptsFold attempts={attempts} keyLabel={keyLabel} />
           }
-          incompleteMark={
-            // Rendered by `SummaryBody` only for an open Incomplete Summary.
-            <IncompleteRetry
+          cutShortMark={
+            // Rendered by `SummaryBody` only for an open Cut short Summary.
+            <CutShortRetry
               attempt={runningAttempt}
               text={runningText}
               keyLabel={keyLabel}

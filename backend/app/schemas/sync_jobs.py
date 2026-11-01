@@ -9,6 +9,9 @@ class StartSyncJobRequest(BaseModel):
     sync_mode: (
         Literal["sync_all", "bulk", "individual", "recheck_restricted"] | None
     ) = Field(default=None, alias="syncMode")
+    #: Per Channel id, a moment (epoch ms) to walk back to past held Posts,
+    #: for a Channel whose history or continuity fails a window (ADR-043).
+    walk_back_to: dict[str, int] | None = Field(default=None, alias="walkBackTo")
 
     model_config = {"populate_by_name": True}
 

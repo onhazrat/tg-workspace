@@ -98,6 +98,7 @@ SCOPE_KEYS = {
     "scopedPostCount",
     "sort",
     "groupByChannel",
+    "completeness",
 }
 
 

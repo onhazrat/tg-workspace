@@ -39,6 +39,7 @@ import {
   usePostsViewState,
 } from "../contexts/PostsViewContext"
 import { useUI } from "../contexts/UIContext"
+import { LiveWindowBanner } from "./complete-window/LiveWindowBanner"
 import { PostFeedResults } from "./PostFeedResults"
 import { PostFilter } from "./PostFilter"
 import { pillClass } from "./PostFilterParts"
@@ -230,6 +231,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
             }
           />
 
+          <LiveWindowBanner where="posts" />
           <PostSelectionBar
             selected={selectedCount}
             total={windowTotal}

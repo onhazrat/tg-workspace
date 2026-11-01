@@ -323,10 +323,10 @@ _Avoid_: fresh, full window, synced window
 
 **Behind**:
 An Incomplete Channel whose only reason is not synced to the end, a sync can
-repair it, and it is less than two of its own sync intervals short of the
-window's end: routine lag that its next sync clears. Past that it is
-**Overdue**. Both are still Incomplete Channels; the words only say which ones
-need a look.
+repair it, and the scheduler's next due sync for it is not yet past due:
+routine lag that sync clears. Once that sync is past due, or none is due, it
+is **Overdue**. Both are still Incomplete Channels; the words only say which
+ones need a look.
 _Avoid_: stale, lagging, just synced
 
 **Unproven Posts**:

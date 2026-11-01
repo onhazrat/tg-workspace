@@ -2,6 +2,7 @@ import type {
   ChatSessionSubmitRequest,
   DirectoryFollowSource,
   DirectoryViewRequest,
+  GateOutcome,
   PostFeedRequest,
   PostFilteredRequest,
   SummarySubmitRequest,
@@ -556,8 +557,12 @@ export const dataApi = {
    * or the Posts-tab filters afterwards produces a *new* report rather than
    * altering this one — see IDEA-011 W1.
    */
-  createDiscoverReport: (params: DiscoverScopeQuery) => {
+  createDiscoverReport: (
+    params: DiscoverScopeQuery & { gate?: GateOutcome },
+  ) => {
     const body = discoverScopeBody(params)
+    // The gate's outcome (CW-02); a candidates read never has one.
+    if (params.gate) body.gate = params.gate
     return request<DiscoverReport>("/api/v1/data/discover/reports", {
       method: "POST",
       body: JSON.stringify(body),

@@ -161,6 +161,9 @@ INVENTORY: dict[str, str] = {
     # Which Posts an Artifact covers and the prompt block built from them
     # (ADR-038); takes a frozen Scope, so it names no Artifact table.
     "artifact_coverage.py": READ_MODEL,
+    # Which Channels of a Scope are Incomplete and why (ADR-043): reads
+    # Posts, confirmed gaps, sync logs and the Account's Follows; never syncs.
+    "window_check.py": READ_MODEL,
     # The prompt each Artifact family gets (ADR-038): reads the Artifact by
     # its family's guard and its posts block through `artifact_coverage`,
     # which may not name the Artifact tables itself. Never commits.

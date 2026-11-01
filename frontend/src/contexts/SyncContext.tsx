@@ -58,6 +58,7 @@ interface SyncContextType {
     channelsToScrape: Channel[],
     source: string,
     syncMode?: SyncMode,
+    options?: SyncOptions,
   ) => Promise<void>
   syncQueue: { channel: Channel; source: string; resolve?: () => void }[]
   isProcessingQueue: boolean
@@ -78,6 +79,13 @@ interface SyncContextType {
     channels: BulkFollowChannelInput[],
     options?: FollowOptions,
   ) => Promise<FollowJobStatus | null>
+}
+
+interface SyncOptions {
+  /** Which Stop sync button holds the job. */
+  stoppable?: StoppableSync
+  /** Per Channel id, a moment to walk back to past held Posts (ADR-043). */
+  walkBackTo?: Record<string, number>
 }
 
 /** Module-level so `useFollowJob`'s callbacks keep one identity across renders. */
@@ -216,7 +224,7 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({
       channelsToScrape: Channel[],
       source: string,
       syncMode: SyncMode = "bulk",
-      stoppable?: StoppableSync,
+      { stoppable, walkBackTo }: SyncOptions = {},
     ) => {
       if (isOffline) {
         toast.warning(
@@ -236,6 +244,7 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({
         true,
         syncMode,
         stoppable,
+        walkBackTo,
       )
     }
 
@@ -253,7 +262,7 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({
           plan.channels,
           plan.source,
           plan.syncMode,
-          STOP_BUTTON[mode],
+          { stoppable: STOP_BUTTON[mode] },
         )
         if (activeTabRef.current !== "channels") setActiveTab("posts")
       } catch (err: unknown) {

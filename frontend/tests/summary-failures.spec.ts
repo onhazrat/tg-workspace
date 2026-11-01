@@ -502,11 +502,11 @@ for (const [width, viewport] of [
       state.onAct = (action, id) => {
         if (action === "dismiss") return set(id, NOW)
         if (action === "restore") return set(id, null)
-        // Keep: the server finishes the Summary with the draft, Incomplete.
+        // Keep: the server finishes the Summary with the draft, Cut short.
         state.details[CUT_ID] = summary(CUT_ID, {
           text: "The newest draft of the brief",
           status: null,
-          incomplete: true,
+          cutShort: true,
         })
         const kept = attempt(CUT_ID, 3, { outcome: "kept_partial", kind: null })
         state.attempts[CUT_ID] = [...rows, kept]
@@ -539,7 +539,7 @@ for (const [width, viewport] of [
       )
 
       await drafts.getByRole("button", { name: "Keep this draft" }).click()
-      await expect(page.getByTestId("incomplete-mark")).toContainText(
+      await expect(page.getByTestId("cut-short-mark")).toContainText(
         "The text stops here",
         { timeout: 20_000 },
       )

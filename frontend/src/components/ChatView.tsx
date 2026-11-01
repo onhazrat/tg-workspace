@@ -16,6 +16,7 @@ import {
   chatViewSections,
   newestMissingPosts,
 } from "@/components/chat/chat-view-model"
+import { ArtifactWindowBanner } from "@/components/complete-window/ArtifactWindow"
 import { GoToActionEmptyState } from "@/components/history/GoToActionEmptyState"
 import { useChatContext } from "../contexts/ChatContext"
 import { useRAG } from "../contexts/RAGContext"
@@ -137,6 +138,9 @@ export const ChatView: React.FC = () => {
             artifact={chatSession}
             missingPosts={newestMissingPosts(chatMessages)}
           />
+          <div className="mt-3">
+            <ArtifactWindowBanner scope={chatSession.scope} kind="chat" />
+          </div>
         </div>
       )}
 

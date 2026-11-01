@@ -51,6 +51,7 @@ from app.schemas.scope import (
     ViewMeasure,
     upgrade_legacy_submission,
 )
+from app.schemas.window_check import GateOutcome
 
 
 class SignalCountsResponse(BaseModel):
@@ -490,3 +491,9 @@ class DiscoverReportCreateRequest(DiscoverCandidatesRequest):
     """
 
     window: AnalysisWindowInput  # ty: ignore[invalid-mutable-override]
+    # The gate's outcome, as every other Artifact's Scope carries it (CW-02).
+    gate: GateOutcome | None = None
+
+    def to_scope_submission(self) -> ScopeSubmission:
+        """The Scope with the gate's outcome, which `/candidates` never has."""
+        return super().to_scope_submission().model_copy(update={"gate": self.gate})

@@ -119,6 +119,12 @@ export const queryKeys = {
   postsRanking: (key: string) => ["postsRanking", key] as const,
   postsRankings: ["postsRanking"] as const,
   /**
+   * The live check of a Scope's window (CW-01), keyed on the Live tick too:
+   * its head test reads the minute, so a rolled minute asks again.
+   */
+  windowCheck: (names: readonly string[], window: unknown, tick: number) =>
+    ["windowCheck", names, window, tick] as const,
+  /**
    * The prefixes of every read over the Posts a sync adds to, which
    * `invalidatePostViews` refetches. Each must match its factory above.
    */
@@ -131,6 +137,7 @@ export const queryKeys = {
     ["postsPickPool"],
     ["postsSelectedShown"],
     ["discoverCandidates"],
+    ["windowCheck"],
   ] as const,
   /**
    * The scheduler's job table. Gated on `JOBS_MANAGE`, which is what lets it

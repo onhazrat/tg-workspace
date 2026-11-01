@@ -84,7 +84,7 @@ def cutting(provider: _FakeProvider) -> _FakeProvider:
 # --------------------------------------------------------------------------
 
 
-def test_keep_finishes_the_summary_incomplete_with_that_attempts_text(
+def test_keep_finishes_the_summary_cut_short_with_that_attempts_text(
     client: TestClient,
     headers: dict[str, str],
     cutting: _FakeProvider,
@@ -100,7 +100,7 @@ def test_keep_finishes_the_summary_incomplete_with_that_attempts_text(
     assert (kept["model"], kept["keyId"]) == ("m-1", "key-1")
     summary = _summary(client, headers, summary_id)
     assert summary["text"] == "First half, "
-    assert summary["incomplete"] is True
+    assert summary["cutShort"] is True
     assert summary.get("status") is None
     assert (summary["model"], summary["aiKeyId"]) == ("m-1", "key-1")
     cut, recorded = _attempts(client, headers, summary_id)
@@ -109,7 +109,7 @@ def test_keep_finishes_the_summary_incomplete_with_that_attempts_text(
     assert recorded["id"] == kept["id"]
 
 
-def test_an_incomplete_summary_can_still_be_retried(
+def test_a_cut_short_summary_can_still_be_retried(
     client: TestClient,
     headers: dict[str, str],
     cutting: _FakeProvider,
@@ -123,40 +123,40 @@ def test_an_incomplete_summary_can_still_be_retried(
 
     summary = _summary(client, headers, summary_id)
     assert summary["text"] == "The whole report."
-    assert "incomplete" not in summary
+    assert "cutShort" not in summary
 
 
-def _incomplete(client: TestClient, headers: dict[str, str]) -> str:
+def _cut_short(client: TestClient, headers: dict[str, str]) -> str:
     summary_id = _open(client, headers)
     _act(client, headers, summary_id, _cut(client, headers, summary_id), "keep")
     return summary_id
 
 
-def test_a_failed_retry_of_an_incomplete_summary_keeps_its_report(
+def test_a_failed_retry_of_a_cut_short_summary_keeps_its_report(
     client: TestClient,
     headers: dict[str, str],
     cutting: _FakeProvider,
 ) -> None:
     """Story 30: the kept text is still the report; the retry's failure is
     the Attempt's to show, not a reason to hide the text behind Failed."""
-    summary_id = _incomplete(client, headers)
+    summary_id = _cut_short(client, headers)
 
     _start(client, headers, summary_id)
     _drain()
 
     summary = _summary(client, headers, summary_id)
     assert summary["text"] == "First half, "
-    assert summary["incomplete"] is True
+    assert summary["cutShort"] is True
     assert summary.get("status") is None
     assert _attempts(client, headers, summary_id)[-1]["outcome"] == "failed"
 
 
-def test_a_stopped_retry_of_an_incomplete_summary_keeps_its_report(
+def test_a_stopped_retry_of_a_cut_short_summary_keeps_its_report(
     client: TestClient,
     headers: dict[str, str],
     cutting: _FakeProvider,
 ) -> None:
-    summary_id = _incomplete(client, headers)
+    summary_id = _cut_short(client, headers)
     attempt_id = _start(client, headers, summary_id).json()["id"]
 
     assert _act(client, headers, summary_id, attempt_id, "stop").status_code == 200

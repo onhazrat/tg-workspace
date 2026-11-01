@@ -588,6 +588,29 @@ def followed_channels_for(
     return [(channel, follow) for channel, follow in rows]
 
 
+def followed_with_groups(
+    session: Session, *, user_id: uuid.UUID, names: Iterable[str]
+) -> list[tuple[Channel, ChannelSettingGroup | None]]:
+    """Each Channel named in `names` that `user_id` follows, with the Setting
+    group *their* Follow files it under (None when the group is gone).
+
+    What the Complete window check reads for frozen, unavailable and the
+    schedule (ADR-043): the Account's own settings, never another
+    Follower's. A name the Account does not follow is not in the answer.
+    """
+    rows = session.exec(
+        select(Channel, ChannelSettingGroup)
+        .join(ChannelFollow, col(Channel.id) == col(ChannelFollow.channel_id))
+        .outerjoin(
+            ChannelSettingGroup,
+            col(ChannelSettingGroup.id) == col(ChannelFollow.setting_group_id),
+        )
+        .where(ChannelFollow.user_id == user_id, col(Channel.name).in_(list(names)))
+        .order_by(col(Channel.name))
+    ).all()
+    return [(channel, group) for channel, group in rows]
+
+
 def followed_handles_by_group(
     session: Session, *, user_id: uuid.UUID
 ) -> list[tuple[str, str]]:

@@ -300,6 +300,11 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
         "test_post_window_histogram.py. Not PROBED here: it answers bar counts, not rows, "
         "so this file's by-id and list probes have no id to look for",
     ),
+    ("POST", f"{DATA}/posts/window-check"): (
+        Reason.COVERED_ELSEWHERE,
+        "two live accounts, a Channel only the other follows and a Channel "
+        "both follow under the other's frozen group; test_window_check.py",
+    ),
     ("POST", f"{DATA}/posts/bulk"): (
         Reason.CORPUS,
         "raw ingest; creates no Channel and no Follow, so what it writes is "

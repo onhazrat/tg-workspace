@@ -331,7 +331,7 @@ export interface Summary {
    * Its text is a kept Partial response that stops short (SFR-03). Finished
    * and readable, and a full Attempt clears it. Persisted in server `extra`.
    */
-  incomplete?: boolean
+  cutShort?: boolean
   /**
    * Covered Posts its prompt left out: reclaimed, or of a Channel no longer
    * followed (ADR-038). Absent at zero. Persisted in server `extra`.

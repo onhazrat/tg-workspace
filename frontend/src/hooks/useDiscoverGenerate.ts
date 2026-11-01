@@ -6,6 +6,7 @@ import { useScope } from "@/contexts/ScopeContext"
 import { useSettings } from "@/contexts/SettingsContext"
 import { useUI } from "@/contexts/UIContext"
 import { useCreateDiscoverReportMutation } from "@/hooks/useDiscover"
+import { withGate } from "@/lib/complete-window/gate"
 
 /**
  * Generating a Discover report, extracted so the Action tab can do it too.
@@ -35,16 +36,19 @@ export function useDiscoverGenerate() {
    * as the Picks "Select all" recorded, never as a ranking sent here.
    */
   const generate = async () => {
-    const report = await createReport.mutateAsync({
-      channelNames: selectedChannelNames,
-      startDate,
-      endDate,
-      signals: discoverSignals,
-      viewMeasure,
-      sort,
-      groupByChannel,
-      selection,
-    })
+    // The gate's outcome, when the gate ran this (CW-02).
+    const report = await createReport.mutateAsync(
+      withGate({
+        channelNames: selectedChannelNames,
+        startDate,
+        endDate,
+        signals: discoverSignals,
+        viewMeasure,
+        sort,
+        groupByChannel,
+        selection,
+      }),
+    )
     // Its own tab, shown when this was started from Action (TABS-01).
     workspaceTabs.createTab("discover", report.id)
     return report

@@ -275,7 +275,7 @@ def keep_summary_partial(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> SummaryAttemptResponse:
-    """Finish the summary with this attempt's partial response; it becomes incomplete."""
+    """Finish the summary with this attempt's partial response; it becomes Cut short."""
     attempt = keep_partial(session, summary_id, attempt_id, user_id=current_user.id)
     return SummaryAttemptResponse.model_validate(attempt_to_camel(attempt))
 

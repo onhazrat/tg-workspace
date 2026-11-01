@@ -178,7 +178,7 @@ def freeze_scope(
     # the record without anyone naming it here.
     return FrozenScope.model_validate(
         {
-            **submission.model_dump(by_alias=True, exclude={"window"}),
+            **submission.model_dump(by_alias=True, exclude={"window", "gate"}),
             "start": window.start,
             "end": window.end,
         }

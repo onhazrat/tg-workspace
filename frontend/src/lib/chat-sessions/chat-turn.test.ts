@@ -1,12 +1,11 @@
 import { describe, expect, it } from "bun:test"
 import { AIServiceError } from "@/services/ai"
-import type { Channel, ChatMessage, Post } from "@/types"
+import type { ChatMessage, Post } from "@/types"
 import {
   chatErrorText,
   chatLLMLog,
   chatSessionRecord,
   replaceLastTurn,
-  staleSelectedChannels,
   type TurnResult,
   transcriptLoad,
 } from "./chat-turn"
@@ -32,34 +31,6 @@ describe("replaceLastTurn", () => {
   it("starts the transcript when nothing is on screen yet", () => {
     const failure: ChatMessage = { role: "model", text: "Error: offline" }
     expect(replaceLastTurn([], failure)).toEqual([failure])
-  })
-})
-
-describe("staleSelectedChannels", () => {
-  const minute = 60_000
-  const channels = [
-    { name: "stale", lastUpdated: 1_000_000 - minute - 1 },
-    { name: "edge", lastUpdated: 1_000_000 - minute },
-    { name: "fresh", lastUpdated: 1_000_000 },
-    { name: "never" },
-    { name: "unselected", lastUpdated: 0 },
-  ] as Channel[]
-  const selected = new Set(["stale", "edge", "fresh", "never"])
-
-  it("syncs selected channels older than a minute before the window's end", () => {
-    expect(
-      staleSelectedChannels(channels, selected, 1_000_000, 5_000_000).map(
-        (c) => c.name,
-      ),
-    ).toEqual(["stale", "never"])
-  })
-
-  it("measures from now when the window ends in the future", () => {
-    expect(
-      staleSelectedChannels(channels, selected, 9_000_000, 1_000_000).map(
-        (c) => c.name,
-      ),
-    ).toEqual(["stale", "never"])
   })
 })
 

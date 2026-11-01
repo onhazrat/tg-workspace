@@ -37,7 +37,7 @@ Three pieces of state are per-process, and each breaks differently:
 | state | where | what breaks with N workers |
 |---|---|---|
 | APScheduler | `app/main.py` lifespan → `jobs/scheduler.py` | every scheduled job fires N times |
-| job registry | `services/scraper_jobs.py` (`_active_jobs`, `_channel_locks`, `_cancel_events`, `SyncJobState._update_condition`) | `has_active_sync_job()` sees 1/N of reality; SSE progress is only live on the worker that owns the job |
+| job registry | `services/scraper_jobs.py` (`_active_jobs`, `_channel_locks`, `_cancel_events`, `SyncJobState._update_condition`) | `active_sync_job_owners()` sees 1/N of reality; SSE progress is only live on the worker that owns the job |
 | proxy lane semaphores | `services/proxy_pool.py` (`asyncio.Semaphore`) | **N x the configured request rate through each proxy** |
 
 `tests/deployment/test_worker_count.py` asserts all three still hold. When you
@@ -100,7 +100,7 @@ that only checked "progress arrives" would pass on the broken version.
 
 ### 2. Move the job claim into the database
 
-`has_active_sync_job()` reads a dict. Replace with a real claim — a row-level
+`active_sync_job_owners()` reads a dict. Replace with a real claim, a row-level
 `SELECT ... FOR UPDATE SKIP LOCKED` on `tg_sync_jobs`.
 
 **The per-channel half is done (ticket 11).** `_channel_locks` was an

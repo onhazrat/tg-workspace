@@ -1,5 +1,6 @@
 import type React from "react"
 import type { ScopedPostRef } from "@/client"
+import { ArtifactWindowBanner } from "@/components/complete-window/ArtifactWindow"
 import { scopeChannels } from "@/lib/scope/artifact-scope"
 import type { SummaryTextSize } from "@/lib/settings/schema"
 import type { CitedPost } from "@/lib/summaries/cited-posts"
@@ -36,8 +37,8 @@ export interface SummaryBodyProps {
   failurePanel: (summary: Summary) => React.ReactNode
   /** A finished report's earlier Attempts, beside its Scope line (SFR-02). */
   attemptsFold?: React.ReactNode
-  /** Where an Incomplete Summary's text stops, with its retry (SFR-03). */
-  incompleteMark?: React.ReactNode
+  /** Where a Cut short Summary's text stops, with its retry (SFR-03). */
+  cutShortMark?: React.ReactNode
   /** The publish panel (SUMTAB-09); a slot because it reads the server's plan. */
   publishPanel: (summary: Summary) => React.ReactNode
   /** Renders report Markdown; a slot because its paragraphs read the workspace. */
@@ -93,6 +94,8 @@ export function SummaryBody(props: SummaryBodyProps) {
   if (body)
     return (
       <>
+        {/* Whether its window was Complete, and is now (CW-02). */}
+        <ArtifactWindowBanner scope={summary?.scope} kind="summary" />
         <SummaryHeader
           summary={summary}
           body={body}
@@ -119,7 +122,7 @@ export function SummaryBody(props: SummaryBodyProps) {
         >
           <FoldableSections markdown={body} render={props.renderMarkdown} />
         </div>
-        {summary?.incomplete && props.incompleteMark}
+        {summary?.cutShort && props.cutShortMark}
         {summary &&
           props.cited &&
           (props.cited.loading ? (
