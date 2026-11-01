@@ -61,5 +61,12 @@
     "old": "      setGate({ check: edited(merged(state.check, fresh)) })",
     "new": "      void 0",
     "test": "frontend/src/lib/complete-window/gate-flow.test.ts"
+  },
+  {
+    "name": "hear nothing on a reopened stream's first frame",
+    "file": "frontend/src/lib/complete-window/live.ts",
+    "old": "        else if (opened) hear(\"all\")",
+    "new": "        else if (opened) void 0",
+    "test": "frontend/src/lib/complete-window/live.test.ts"
   }
 ]

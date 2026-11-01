@@ -4,7 +4,7 @@
  */
 import { describe, expect, test } from "bun:test"
 
-import { merged, touched } from "./live"
+import { type Change, listen, merged, touched } from "./live"
 import { verdict, windowCheck } from "./verdict-fixtures"
 
 const E = Date.UTC(2026, 10, 1, 9)
@@ -54,5 +54,25 @@ describe("which Channels a change asks about", () => {
   test("those it names among mine, or all of mine after a reconnect", () => {
     expect(touched(["b", "z"], ["a", "b"])).toEqual(["b"])
     expect(touched("all", ["a", "b"])).toEqual(["a", "b"])
+  })
+})
+
+describe("the stream", () => {
+  // Mutation: hear nothing on a reopened stream's first frame and this goes red.
+  test("hears names after the open frame, and all after a reconnect", async () => {
+    const stop = new AbortController()
+    let connections = 0
+    async function* connect() {
+      connections++
+      yield { names: [] }
+      yield { names: [connections === 1 ? "a" : "b"] }
+      if (connections === 1) throw new Error("dropped")
+      stop.abort()
+    }
+    const heard: Change[] = []
+
+    await listen(stop.signal, (change) => heard.push(change), connect, 0)
+
+    expect(heard).toEqual([["a"], "all", ["b"]])
   })
 })

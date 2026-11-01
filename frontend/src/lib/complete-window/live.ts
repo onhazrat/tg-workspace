@@ -53,14 +53,23 @@ const emit = (change: Change) => {
   for (const listener of listeners) listener(change)
 }
 
-async function listen(signal: AbortSignal) {
+/**
+ * Hear the stream until `signal`, reconnecting after `retryMs` whenever it
+ * drops or ends; every open frame after the first is heard as "all".
+ */
+export async function listen(
+  signal: AbortSignal,
+  hear: (change: Change) => void,
+  connect = streamChannelChanges,
+  retryMs = RECONNECT_MS,
+) {
   let opened = false
   while (!signal.aborted) {
     try {
       let first = true
-      for await (const { names } of streamChannelChanges(signal)) {
-        if (!first) emit(names)
-        else if (opened) emit("all")
+      for await (const { names } of connect(signal)) {
+        if (!first) hear(names)
+        else if (opened) hear("all")
         first = false
         opened = true
       }
@@ -68,7 +77,7 @@ async function listen(signal: AbortSignal) {
       /* dropped: reconnect below */
     }
     if (!signal.aborted)
-      await new Promise((resolve) => setTimeout(resolve, RECONNECT_MS))
+      await new Promise((resolve) => setTimeout(resolve, retryMs))
   }
 }
 
@@ -77,7 +86,7 @@ export function onChannelChanges(listener: (change: Change) => void) {
   listeners.add(listener)
   if (!open) {
     open = new AbortController()
-    void listen(open.signal)
+    void listen(open.signal, emit)
   }
   return () => {
     listeners.delete(listener)
