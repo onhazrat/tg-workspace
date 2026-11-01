@@ -74,11 +74,7 @@ test.describe("command palette keyboard", () => {
 
     await openPaletteKeyboard(page)
     await runPaletteCommand(page, "clear selection")
-    // Escape in an editor only goes back a level; Close shuts the palette.
-    await page
-      .getByTestId("command-palette")
-      .getByRole("button", { name: "Close" })
-      .click()
+    await page.keyboard.press("Escape")
     await expect(page.getByTestId("command-palette")).not.toBeVisible()
 
     await openPaletteKeyboard(page)
