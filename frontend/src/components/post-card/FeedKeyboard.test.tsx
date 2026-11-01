@@ -2,8 +2,9 @@
  * The Posts feed's adapter on keyboard mode's engine (PTR-02, ADR-034): j / k,
  * counts and gg / G move the Highlight, a key presses the highlighted card's
  * own control, Esc drops the Highlight, - and + switch the Compact grid, m
- * opens a Post's text and M every Post's, c in a spotlight goes back, and
- * each move is announced. Keys are typed as a browser sends them, Shift first.
+ * opens a Post's text and M every Post's, c in a spotlight goes back, `.`
+ * shows the held new Posts, and each move is announced. Keys are typed as a
+ * browser sends them, Shift first.
  */
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
@@ -34,9 +35,11 @@ let translated: string[] = []
 function Feed({
   spotlit = false,
   onBack = () => {},
+  onShowNew = () => null,
 }: {
   spotlit?: boolean
   onBack?: () => void
+  onShowNew?: () => string | null
 }) {
   const [compact, setCompact] = useState(false)
   // Every Post starts Picked, as in the feed.
@@ -46,6 +49,7 @@ function Feed({
     onCompact: setCompact,
     spotlit,
     onSpotlightBack: onBack,
+    onShowNew,
   })
   return (
     <>
@@ -210,6 +214,14 @@ describe("the Posts feed's keyboard mode", () => {
     view.rerender(<Feed spotlit onBack={onBack} />)
     type("c")
     expect(onBack).toHaveBeenCalledTimes(1)
+  })
+
+  test(". shows the held Posts and puts the Highlight on the first", () => {
+    const onShowNew = mock(() => "ch_3")
+    render(<Feed onShowNew={onShowNew} />)
+    type("j", ".")
+    expect(onShowNew).toHaveBeenCalledTimes(1)
+    expect(highlighted()).toEqual(["ch_3"])
   })
 
   test("off, no Highlight shows and no key fires", () => {

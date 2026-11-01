@@ -38,6 +38,8 @@ export const LIST_KEYS = {
   larger: "+",
   /** Posts: more or less on every Post. */
   everyText: "M",
+  /** Posts: show the new Posts the pill holds (RCH-01). */
+  showNew: ".",
   /** Directory: the next and previous page. */
   nextPage: "]",
   previousPage: "[",
@@ -80,6 +82,7 @@ const LISTS: Record<ListId, { moves: Row[]; actions: Action[] }> = {
       ["gg / G", "first / last post"],
       ["- / +", "compact / full cards"],
       ["M", "more or less on every post"],
+      [".", "show the new posts"],
       SWEEP("pick or unpick"),
       ["Esc", "drop the highlight"],
     ],

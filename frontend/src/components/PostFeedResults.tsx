@@ -6,6 +6,84 @@ import { PostCard } from "./PostCard"
 import { postCardKey } from "./post-card/FeedKeyboard"
 import { Skeleton } from "./ui/skeleton"
 
+/** As many 22rem columns as fit, in feed order left to right. */
+const COMPACT_GRID =
+  "grid grid-cols-[repeat(auto-fill,minmax(min(22rem,100%),1fr))] gap-3"
+
+const bar = (className: string, key?: string) => (
+  <Skeleton key={key} className={`bg-app-ink/10 ${className}`} />
+)
+
+/** A Post's text: lines of these widths, the last one short. */
+const lines = (widths: string[]) => (
+  <div className="space-y-2">{widths.map((w) => bar(`h-3 ${w}`, w))}</div>
+)
+
+/**
+ * The first load's placeholders, in the shape of the cards that will load
+ * (RCH-01): the Compact grid's small cards, a photo on every third, or full
+ * cards, a photo on every other.
+ */
+function PostSkeletons({ compact }: { compact: boolean }) {
+  if (compact)
+    return (
+      <div className={COMPACT_GRID}>
+        {Array.from({ length: 9 }, (_, i) => (
+          <div
+            key={`post-skeleton-${i}`}
+            className="flex flex-col gap-2 rounded-xl border border-app-ink/10 bg-app-card px-4 pt-3 pb-1.5"
+          >
+            <div className="flex items-center gap-2">
+              {bar("size-6 rounded-full")}
+              {bar("h-3 w-24")}
+              {bar("h-3 w-10")}
+              {bar("ml-auto size-4 rounded")}
+            </div>
+            {i % 3 === 1 && bar("mx-auto h-32 w-3/4 rounded-lg")}
+            {lines(["w-full", "w-[92%]", "w-[60%]"])}
+            <div className="mt-auto flex items-center gap-3 border-t border-app-ink/5 pt-1.5">
+              {bar("h-3 w-10")}
+              {bar("h-3 w-8")}
+              {bar("ml-auto h-3 w-16")}
+            </div>
+          </div>
+        ))}
+      </div>
+    )
+  return (
+    <div className="space-y-4">
+      {Array.from({ length: 4 }, (_, i) => (
+        <div
+          key={`post-skeleton-${i}`}
+          className="overflow-hidden rounded-2xl border border-app-ink/10 bg-app-card shadow-sm"
+        >
+          <div className="flex items-start gap-3 px-5 pt-4">
+            {bar("size-9 rounded-full")}
+            <div className="flex-1 space-y-2 pt-0.5">
+              {bar("h-3.5 w-36")}
+              {bar("h-3 w-28")}
+            </div>
+            {bar("mt-1 size-4 rounded")}
+          </div>
+          {i % 2 === 1 && (
+            <div className="mt-3 px-5">
+              {bar("mx-auto h-56 w-2/3 rounded-lg")}
+            </div>
+          )}
+          <div className="px-5 pt-3 pb-3">
+            {lines(["w-full", "w-[92%]", "w-[85%]", "w-[55%]"])}
+          </div>
+          <div className="flex items-center gap-3 border-t border-app-ink/5 px-5 py-2">
+            {bar("h-3 w-12")}
+            {bar("h-3 w-16")}
+            {bar("ml-auto h-3 w-24")}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 interface PostFeedResultsProps {
   isInitialLoading: boolean
   posts: Post[]
@@ -33,40 +111,9 @@ export const PostFeedResults: React.FC<PostFeedResultsProps> = ({
   onToggleSelected,
 }) =>
   isInitialLoading ? (
-    <div className="space-y-4">
-      {Array.from({ length: 5 }).map((_, index) => (
-        <div
-          key={`post-skeleton-${index}`}
-          className="rounded-xl border border-app-ink/10 bg-app-card p-5"
-        >
-          <div className="mb-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Skeleton className="h-8 w-8 rounded-full bg-app-ink/10" />
-              <div className="space-y-2">
-                <Skeleton className="h-3 w-28 bg-app-ink/10" />
-                <Skeleton className="h-3 w-20 bg-app-ink/10" />
-              </div>
-            </div>
-            <Skeleton className="h-6 w-20 rounded-full bg-app-ink/10" />
-          </div>
-          <div className="space-y-2">
-            <Skeleton className="h-3 w-full bg-app-ink/10" />
-            <Skeleton className="h-3 w-[92%] bg-app-ink/10" />
-            <Skeleton className="h-3 w-[85%] bg-app-ink/10" />
-            <Skeleton className="h-3 w-[70%] bg-app-ink/10" />
-          </div>
-        </div>
-      ))}
-    </div>
+    <PostSkeletons compact={compact} />
   ) : posts.length > 0 ? (
-    <div
-      className={
-        // As many 22rem columns as fit, in feed order left to right.
-        compact
-          ? "grid grid-cols-[repeat(auto-fill,minmax(min(22rem,100%),1fr))] gap-3"
-          : "space-y-4"
-      }
-    >
+    <div className={compact ? COMPACT_GRID : "space-y-4"}>
       {posts.map((post) => (
         <PostCard
           key={`${post.channelName}-${post.id}`}

@@ -1,10 +1,12 @@
 /**
  * The Posts feed's adapter on keyboard mode's engine (PTR-02, ADR-034): its
  * cards in order, how to reach one, and its own keys: - and + for compact or
- * full cards, M for every Post's text, c to leave a spotlight. The engine
- * moves the Highlight and presses the card control carrying a key's
- * `data-shortcut`, so each action keeps one implementation, its button's.
+ * full cards, M for every Post's text, c to leave a spotlight, and `.` to
+ * show the held new Posts (RCH-01). The engine moves the Highlight and
+ * presses the card control carrying a key's `data-shortcut`, so each action
+ * keeps one implementation, its button's.
  */
+import { toast } from "sonner"
 import { useKeyboardList } from "@/components/keyboard/useKeyboardList"
 import { ACTIONS, LIST_KEYS } from "@/lib/keyboard/key-list"
 
@@ -12,7 +14,7 @@ import { ACTIONS, LIST_KEYS } from "@/lib/keyboard/key-list"
 export const postCardKey = (post: { channelName: string; id: number }) =>
   `${post.channelName}_${post.id}`
 
-const cardOf = (key: string) =>
+export const cardOf = (key: string) =>
   document.querySelector<HTMLElement>(
     `article[data-post-key="${CSS.escape(key)}"]`,
   )
@@ -38,6 +40,7 @@ export function usePostKeys({
   onCompact,
   spotlit,
   onSpotlightBack,
+  onShowNew,
 }: {
   /** The cards' `data-post-key`s, in feed order. */
   keys: readonly string[]
@@ -46,8 +49,10 @@ export function usePostKeys({
   spotlit: boolean
   /** c inside a spotlight: back where it was opened from. */
   onSpotlightBack: () => void
+  /** .: shows the held new Posts; the first one's key, or null with none. */
+  onShowNew: () => string | null
 }): string | null {
-  return useKeyboardList({
+  const list = useKeyboardList({
     list: "posts",
     items: keys,
     element: cardOf,
@@ -64,6 +69,12 @@ export function usePostKeys({
         ),
       ),
     key: (key) => {
+      if (key === LIST_KEYS.showNew) {
+        const first = onShowNew()
+        if (first) list.setHighlight(first)
+        else toast("No new posts", { id: "new-posts" })
+        return true
+      }
       if (key === LIST_KEYS.smaller || key === LIST_KEYS.larger) {
         onCompact(key === LIST_KEYS.smaller)
         return true
@@ -81,5 +92,6 @@ export function usePostKeys({
       document.querySelector(
         'input[aria-label="Keyword search"], input[aria-label="Meaning search"]',
       ),
-  }).highlight
+  })
+  return list.highlight
 }

@@ -5,10 +5,11 @@ import { PostFeedResults } from "./PostFeedResults"
 
 // A non-empty feed mounts PostCard, which needs the app's providers, so only
 // the two states without posts render here.
-const render = (isInitialLoading: boolean) =>
+const render = (isInitialLoading: boolean, compact = false) =>
   renderToStaticMarkup(
     <PostFeedResults
       isInitialLoading={isInitialLoading}
+      compact={compact}
       posts={[]}
       showLoadMore
       loadMoreRef={{ current: null }}
@@ -22,6 +23,11 @@ describe("PostFeedResults", () => {
     const html = render(true)
     expect(html).toContain('data-slot="skeleton"')
     expect(html).not.toContain("No Posts in Range")
+  })
+
+  test("the skeletons take the layout that will load: grid or list", () => {
+    expect(render(true, true)).toContain("grid-cols-")
+    expect(render(true, false)).not.toContain("grid-cols-")
   })
 
   test("shows the empty state once a load returns nothing", () => {
