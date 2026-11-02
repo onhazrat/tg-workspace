@@ -9,28 +9,30 @@ draws one skeleton per card size (`PostFeedResults.tsx`, RCH-01); this follows i
 
 1. **One shape per Card size.**
    - Tiles: a 48px circle alone, as the real tile shows only the photo.
-   - Compact cards: header (photo, name, handle) and a sync button. No stats, tags or status.
+   - Compact cards: header (photo, name, handle), the last-sync lines and a sync button. No stats, tags or status block.
    - Cards: header, bio lines, a stat-tile row, tags, footer with status.
-   - Detailed cards: Cards plus the about block and a second schedule line.
+   - Detailed cards: Cards plus the about line, the Start ID and a second schedule line.
+   - Cards and Detailed cards stack the footer as the real one does: status, sync line,
+     schedule, last post, with the Start ID beside it when the face shows one.
 
    Rejected: a single shape scaled by height, which stays wrong at Tiles.
-2. **Columns from `gridLanesForWidth(width, zoom)`**, measuring the grid's
-   width as `VirtualizedChannelGrid` does. Rejected: CSS `auto-fill`, which
+2. **Columns come from `gridLanesForWidth(width, zoom)`.** The grid's width is
+   measured as `VirtualizedChannelGrid` does. Rejected: CSS `auto-fill`, which
    drifts from the real grid at Detailed cards (the cap at the Cards count).
-3. **Fill about one screen**: rows × lanes, with 2 rows of Cards or Detailed
+3. **Placeholders fill about one screen.** Rows × lanes, with 2 rows of Cards or Detailed
    cards, 4 of Compact cards, 6 of Tiles. Rejected: a fixed 8.
-4. **Cards and Detailed cards take their shape from `cardFace(zoom, settings)`**:
+4. **Cards and Detailed cards take their shape from `cardFace(zoom, settings)`.**
    bio lines only when `face.bio`, `face.statTiles.length` stat bars.
 5. **"Card size" is the glossary term** (added to `GLOSSARY.md`); "zoom" is the
    code's name and stays out of prose.
-6. **A render test per size**, mutation-checked by forcing one shape for every size.
+6. **A render test per size.** It is mutation-checked by forcing one shape for every size.
 
 ## Steps
 
 - [x] Prototype: skipped at the user's call (2026-11-02)
 - [x] Extract the grid-width measurement so the skeleton and the grid share it (`useGridBox`)
 - [x] `ChannelGridSkeleton` in `components/channel-grid/`, used by `ChannelGridBody`
-- [x] Render test per size; mutation-check it (seven mutations, all red)
+- [x] Render test per size; mutation-check it (nine mutations, all red)
 - [x] `bun run lint`, typecheck, `test:unit`
 - [x] Screenshots of skeleton and loaded grid at each Card size, shown before merge
 

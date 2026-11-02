@@ -6,7 +6,8 @@ import { useLayoutEffect, useState } from "react"
  *
  * The grid's width, not the window's: the workspace has a sidebar, so the two
  * disagree and the column count follows the container. The grid and its
- * loading skeleton both read it, so their columns cannot drift.
+ * loading skeleton both read it, so their columns cannot drift. Width and top
+ * are read when the grid resizes, not when the bar above it changes height.
  */
 export function useGridBox(ref: React.RefObject<HTMLDivElement | null>): {
   width: number
@@ -21,8 +22,15 @@ export function useGridBox(ref: React.RefObject<HTMLDivElement | null>): {
     const element = ref.current
     if (!element) return
 
-    const apply = () =>
-      setBox({ width: element.clientWidth, top: element.offsetTop })
+    // The same box is kept, so a resize that moves neither (the grid growing
+    // as rows mount) does not re-render the grid.
+    const apply = () => {
+      const width = element.clientWidth
+      const top = element.offsetTop
+      setBox((box) =>
+        box.width === width && box.top === top ? box : { width, top },
+      )
+    }
     apply()
 
     if (typeof ResizeObserver === "undefined") return

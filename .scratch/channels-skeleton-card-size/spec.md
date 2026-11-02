@@ -31,13 +31,13 @@ placeholder was.
 1. As an Account on Tiles, I want the loading placeholders to be tiles, so that the page does not jump when my Channels load.
 2. As an Account on Tiles, I want as many tile placeholders in a row as real tiles will fill, so that the grid looks the same before and after loading.
 3. As an Account on Tiles, I want about a screen of placeholders, so that the page is not mostly empty while it loads.
-4. As an Account on Compact cards, I want placeholders with only a header and a sync button, so that they are as short as the cards that replace them.
+4. As an Account on Compact cards, I want placeholders with only a header, the last-sync lines and a sync button, so that they are as short as the cards that replace them.
 5. As an Account on Compact cards, I want no stat, tag or status placeholders, so that the skeleton does not promise fields the Compact card never shows.
 6. As an Account on Compact cards, I want the same column count as the loaded grid, so that cards do not reflow on arrival.
 7. As an Account on Cards, I want placeholders with a header, bio, stat tiles, tags and a footer, so that the skeleton reads as the card I know.
 8. As an Account on Cards who hides the bio, I want no bio lines in the placeholder, so that the placeholder is not taller than the card.
 9. As an Account on Cards who shows extra counters, I want as many stat-tile placeholders as my cards will show, so that the stat row has the right length.
-10. As an Account on Detailed cards, I want placeholders with the about block and a second schedule line, so that they match the taller Detailed card.
+10. As an Account on Detailed cards, I want placeholders with the about line, the Start ID and a second schedule line, so that they match the taller Detailed card.
 11. As an Account on Detailed cards, I want every optional section in the placeholder whatever my card settings, because Detailed cards show every field.
 12. As an Account on Detailed cards, I want no more columns than the loaded grid uses, so that wide screens do not show narrower placeholders than the cards.
 13. As an Account on a narrow window, I want the placeholders to use the columns the grid would use at that width, so that phones and split screens look right too.
@@ -57,22 +57,22 @@ placeholder was.
 ## Implementation Decisions
 
 - **One skeleton per Card size.** Tiles: a 48px circle alone (the real tile shows only the photo), at the
-  tile's width. Compact cards: the header (photo, name, handle) and a sync button. Cards: the
+  tile's width. Compact cards: the header (photo, name, handle), the last-sync lines and a sync button. Cards: the
   header, bio lines, a stat-tile row, tags, and a footer with status. Detailed cards: the
-  Cards shape plus the about block and a second schedule line. A single shape scaled by
+  Cards shape plus the about line, the Start ID and a second schedule line. A single shape scaled by
   height was rejected because it stays wrong at Tiles.
-- **Columns come from the grid's lane function** (`gridLanesForWidth(width, zoom)`), with
+- **Columns come from the grid's lane function.** It is `gridLanesForWidth(width, zoom)`, with
   the width measured the way the virtualised grid measures its own. That measurement moves
   out of the virtualised grid into one small piece both use. CSS `auto-fill` per size was
   rejected: it disagrees with the real grid for Detailed cards, whose columns are capped at
   the Cards count.
-- **Count fills about one screen**: lanes times a row count per Card size, 6 rows of Tiles,
+- **Count fills about one screen.** Lanes times a row count per Card size, 6 rows of Tiles,
   4 of Compact cards, 2 of Cards or Detailed cards. A fixed eight was rejected.
-- **Cards and Detailed cards take their shape from the card face** (`cardFace(zoom,
-  settings)`): bio lines only when the face shows a bio, one stat placeholder per stat tile
-  the face lists, the about block only when detailed. Tiles and Compact cards need no
+- **Cards and Detailed cards take their shape from the card face.** That is `cardFace(zoom,
+  settings)`. Bio lines only when the face shows a bio, one stat placeholder per stat tile
+  the face lists, the Start ID when the face shows it, the about line only when detailed. Tiles and Compact cards need no
   settings.
-- **No card chrome on placeholders**: no checkbox, badges, hover bar or controls, matching
+- **No card chrome on placeholders.** No checkbox, badges, hover bar or controls, matching
   the Posts skeleton.
 - **The skeleton becomes its own component** beside the grid body, which renders it while
   loading. It takes the Card size and the card settings. The loading, empty and grid
@@ -84,7 +84,7 @@ placeholder was.
 - A good test renders the grid body while loading and checks what an Account would see:
   which shape appears, how many placeholders, how many columns. It does not reach into the
   skeleton's internals or its class names beyond the data attribute.
-- **One seam: the grid body**, through its existing render test (the static-markup tests
+- **One seam, the grid body.** Tested through its existing render test (the static-markup tests
   beside the grid's parts). Render it loading at each of the four Card sizes and check:
   every placeholder carries that Card size; Tiles and Compact cards have no stat
   placeholders; Cards with the bio setting off have no bio lines; Detailed cards have the

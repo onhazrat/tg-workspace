@@ -138,6 +138,7 @@ describe("ChannelGridBody", () => {
     expect(parts("bio")).toBe(0)
     expect(parts("about")).toBe(0)
     expect(parts("tag")).toBe(cards.length)
+    expect(parts("start-id")).toBe(0)
     // The four stat tiles every card shows, on each placeholder.
     expect(parts("stat")).toBe(cards.length * 4)
   })
@@ -148,6 +149,7 @@ describe("ChannelGridBody", () => {
     expect(parts("stat")).toBe(cards.length * 9)
     expect(parts("bio")).toBeGreaterThan(0)
     expect(parts("about")).toBeGreaterThan(0)
+    expect(parts("start-id")).toBe(cards.length)
   })
 
   test("tells an empty account to add a channel", () => {

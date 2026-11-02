@@ -75,17 +75,24 @@ function Placeholder({ face, name }: { face: CardFace; name: string }) {
         {bar("h-6 w-16 rounded-md", "tag")}
         {bar("h-6 w-20 rounded-md")}
       </div>
-      {face.detailed && (
-        <div className="mb-4 space-y-1.5">
-          {bar("h-2.5 w-2/3", "about")}
-          {bar("h-2.5 w-1/2", "about")}
-        </div>
-      )}
+      {face.detailed && bar("mb-4 h-2.5 w-2/3", "about")}
       <div className="mt-auto flex items-center justify-between gap-3 border-t border-app-ink/5 pt-4">
-        <div className="space-y-1.5">
-          {bar("h-2.5 w-16")}
-          {bar("h-4 w-24")}
-          {face.detailed && bar("h-2.5 w-28")}
+        <div className="flex items-start gap-4">
+          {face.startId && (
+            <div className="space-y-1.5">
+              {bar("h-2.5 w-14", "start-id")}
+              {bar("h-4 w-8")}
+            </div>
+          )}
+          {/* Status, the sync line, one schedule line or the detailed two,
+              and the last post, as the real footer stacks them. */}
+          <div className="space-y-1.5">
+            {bar("h-2.5 w-16")}
+            {bar("h-4 w-24")}
+            {bar("h-2.5 w-24")}
+            {face.detailed && bar("h-2.5 w-24")}
+            {bar("h-2.5 w-20")}
+          </div>
         </div>
         {bar("h-8 w-20 rounded-lg")}
       </div>

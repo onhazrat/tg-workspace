@@ -90,7 +90,7 @@ export const VirtualizedChannelGrid: React.FC<VirtualizedChannelGridProps> = ({
    * `scrollMargin` is the distance from the top of the scroll container to the
    * top of the grid. The filter bar sits above it, so this is not zero. Held in
    * state rather than read from the ref during render, where it would be stale
-   * on the first pass and would never update when the bar above changes height.
+   * on the first pass.
    */
   const { width, top: scrollMargin } = useGridBox(gridRef)
   const lanes = gridLanesForWidth(width, zoom)
