@@ -61,7 +61,11 @@ from app.services.followed_channels import (
     is_followed_by,
     normalize_channel_name,
 )
-from app.services.follows import follows_for_channels, resolve_follow_owner
+from app.services.follows import (
+    follows_for_channels,
+    get_operator_user_id,
+    resolve_follow_owner,
+)
 from app.services.logs import upsert_network_log, upsert_sync_log
 from app.services.network import rotate_tor_identity
 from app.services.network_settings import (
@@ -70,6 +74,7 @@ from app.services.network_settings import (
     resolve_proxies,
     resolve_proxy_concurrency,
 )
+from app.services.post_filters import media_kind_clause
 from app.services.post_thumbnails import (
     cache_post_thumb,
     enforce_thumb_cache_size_limit_throttled,
@@ -88,6 +93,7 @@ from app.services.quota import (
     budget_for_sync_mode,
 )
 from app.services.request_accounting import Sync, accounted_work
+from app.services.request_kinds import assert_kind_enabled, kind_for_sync_mode
 from app.services.scraper import get_channel_info, scrape_channel_page
 from app.services.scraper_jobs import (
     WALK_BACK_KEY,
@@ -2295,3 +2301,206 @@ async def run_sync_job(job: SyncJobState, user_id: uuid.UUID | None) -> None:
     finally:
         # On every exit, since a claimed job left behind reads as active for good.
         deactivate_job(job.job_id)
+
+
+@dataclass
+class AlbumSplit:
+    """What `split_stored_albums` found within retention, split and left."""
+
+    albums: int = 0
+    split: int = 0
+    left: int = 0
+
+
+#: Telegram's largest Album: how far above a stored Album with no size its
+#: page is asked from.
+_MAX_ALBUM_SIZE = 10
+
+_DAY_MS = 24 * 60 * 60 * 1000
+
+
+@dataclass
+class _StoredAlbums:
+    """One followed Channel's Albums still stored as one Post (ALB-02).
+
+    `albums` holds each Album's first id and its stored size, None when the
+    stored Post never had one, newest first. `follower` pays for the walk.
+    """
+
+    channel_id: str
+    channel_name: str
+    follower: uuid.UUID
+    albums: list[tuple[int, int | None]] = field(default_factory=list)
+
+
+def _stored_albums() -> list[_StoredAlbums]:
+    """Every Album the sync stored as one Post before ALB-01, within retention,
+    in a Channel somebody follows (ADR-046 leaves the rest to retention).
+
+    A split Album's Posts carry `album_id`, so an Album leaves this read the
+    moment it is written, which is what makes the job resumable and a second
+    run a no-op. `Channel.name` is not unique, so a name walks through one of
+    its Channels, a followed one. The Operator pays when they follow it, the
+    first other follower by id otherwise, as one of their syncs would.
+    """
+    with Session(engine) as session:
+        days = int(load_retention_policy(session).get("postRetentionDays") or 0)
+        floor = int(time.time() * 1000) - days * _DAY_MS if days > 0 else 0
+        rows = session.exec(
+            select(Post.channel_name, Post.post_id, Post.media)
+            .where(
+                col(Post.album_id).is_(None),
+                media_kind_clause("grouped"),
+                col(Post.timestamp) >= floor,
+            )
+            .order_by(col(Post.channel_name), col(Post.post_id).desc())
+        ).all()
+        channels = session.exec(
+            select(Channel.id, Channel.name).where(
+                col(Channel.name).in_({row[0] for row in rows})
+            )
+        ).all()
+        operator = get_operator_user_id(session)
+        follows = sorted(
+            follows_for_channels(session, [c[0] for c in channels]),
+            key=lambda f: (f.user_id != operator, str(f.user_id)),
+        )
+    name_of = dict(channels)
+    walker: dict[str, tuple[str, uuid.UUID]] = {}
+    for follow in follows:
+        walker.setdefault(
+            name_of[follow.channel_id], (follow.channel_id, follow.user_id)
+        )
+    by_name: dict[str, _StoredAlbums] = {}
+    for channel_name, post_id, media in rows:
+        if channel_name not in walker:
+            continue
+        channel_id, follower = walker[channel_name]
+        stored = by_name.setdefault(
+            channel_name, _StoredAlbums(channel_id, channel_name, follower)
+        )
+        size = (media or {}).get("groupedCount")
+        stored.albums.append((post_id, int(size) if size else None))
+    return list(by_name.values())
+
+
+def _album_on_page(
+    posts: list[dict[str, Any]], first: int, size: int | None
+) -> list[dict[str, Any]]:
+    """The Album's Posts as the page shows them, or none unless it shows all
+    of them (two at least) and each with its own thumbnail."""
+    items = [p for p in posts if p.get("albumId") == first]
+    whole = len(items) >= 2 and len(items) == (size or len(items))
+    if not whole or not all(p.get("_thumbSourceUrl") for p in items):
+        return []
+    return items
+
+
+def _write_split_albums(
+    channel_name: str, posts: list[dict[str, Any]], job_id: str
+) -> None:
+    """Upsert every Post of the split Albums, the stored first Post included,
+    so it gains its membership; its counters stay as they were observed."""
+    with Session(engine) as session:
+        bulk_upsert_posts_impl(
+            _posts_to_save(channel_name, posts),
+            session,
+            retrieval_job_id=job_id,
+            retrieval_pass="album_split",
+            retrieval_source="album_split",
+            stored_counters=False,
+        )
+        touch_sync(session, "posts", commit=False)
+        session.commit()
+
+
+async def _split_page(
+    ctx: _ChannelSyncCtx,
+    albums: list[tuple[int, int | None]],
+    job_id: str,
+    report: AlbumSplit,
+) -> int:
+    """Fetch the page holding the newest of `albums` and split every Album it
+    reaches; answers how many of `albums` it settled.
+
+    The page is asked from just above the newest Album, so it holds that one
+    whole and every older one down to its lowest id. A page that fails leaves
+    that one Album.
+    """
+    first, size = albums[0]
+    with page(PageType.POSTS) as posts_page:
+        try:
+            response = await _fetch_one_page(
+                ctx, before_id=first + (size or _MAX_ALBUM_SIZE), known_latest_id=0
+            )
+        except SyncScrapeError:
+            report.left += 1
+            return 1
+        posts = response.get("posts") or []
+        lowest = min([first, *(int(p["id"]) for p in posts)])
+        reached = [album for album in albums if album[0] >= lowest]
+        found = [_album_on_page(posts, *album) for album in reached]
+        written = [p for items in found for p in items]
+        if written:
+            await run_db(_write_split_albums, ctx.channel_name, written, job_id)
+        posts_page.report_posts(len(written) - sum(map(bool, found)), 0)
+    split = sum(map(bool, found))
+    report.split += split
+    report.left += len(reached) - split
+    return len(reached)
+
+
+async def _split_channel_albums(
+    stored: _StoredAlbums, job_id: str, report: AlbumSplit
+) -> None:
+    """Walk the pages holding one Channel's stored Albums, newest first.
+
+    Under the sync's limits: its ceiling, its claim (a Channel another sync
+    holds is left for the next run) and its page cap per run. Committed per
+    page, so an interrupted run loses at most that page.
+    """
+    albums = stored.albums
+    holder = f"{job_id}:{uuid.uuid4().hex[:8]}"
+    try:
+        await run_db(
+            assert_within_ceiling, stored.follower, budget_for_sync_mode("auto")
+        )
+    except QuotaCeilingReached:
+        report.left += len(albums)
+        return
+    if not await run_db(try_claim_channel_sync, stored.channel_id, holder=holder):
+        report.left += len(albums)
+        return
+    try:
+        _status, ctx, _reason = await run_db(
+            _prepare_channel_sync, stored.channel_id, stored.follower, sync_mode="auto"
+        )
+        pages = 0
+        while ctx is not None and albums and pages < settings.SCRAPER_ITERATION_LIMIT:
+            pages += 1
+            albums = albums[await _split_page(ctx, albums, job_id, report) :]
+            await run_db(renew_channel_sync_claim, stored.channel_id, holder=holder)
+        report.left += len(albums)
+    finally:
+        await run_db(release_channel_sync_claim, stored.channel_id, holder=holder)
+
+
+async def split_stored_albums(*, dry_run: bool = False) -> AlbumSplit:
+    """Split the Albums stored as one Post before ALB-01 into their Posts.
+
+    Each Channel's walk is an auto-sync's walk in all but its pages: the
+    sync's own page fetch, its proxies and thumbnail caching, charged to the
+    follower's auto-sync Budget and held to its limits. A dry run counts the
+    Albums and fetches nothing; a disabled auto kind refuses before anything.
+    """
+    stored = await run_db(_stored_albums)
+    report = AlbumSplit(albums=sum(len(s.albums) for s in stored))
+    if dry_run:
+        return report
+    await run_db(assert_kind_enabled, kind_for_sync_mode("auto"))
+    job_id = f"album-split-{uuid.uuid4().hex[:8]}"
+    for channel in stored:
+        async with accounted_work(Sync(channel.follower, "auto", job_id)):
+            with attributed(channel=channel.channel_name):
+                await _split_channel_albums(channel, job_id, report)
+    return report
