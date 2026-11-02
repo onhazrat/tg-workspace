@@ -120,6 +120,16 @@ repos:
         stages: [pre-push]
         files: ^frontend/src/.*\.(ts|tsx)$
 
+      # The backend half can only be scored in CI, but a function whose
+      # complexity alone is above the threshold fails there at any coverage.
+      - id: crap-complexity-backend
+        name: Backend complexity under the CRAP threshold
+        entry: python3 scripts/crap/backend_complexity.py
+        language: system
+        verbose: true
+        stages: [pre-push]
+        files: ^backend/app/.*\.py$
+
       - id: check-em-dashes
         name: No em dash in an added line
         entry: python3 scripts/check_em_dashes.py

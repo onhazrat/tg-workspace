@@ -9,8 +9,6 @@ pages, and runs the split job: durov 510-511 (two photos) and durov 373-381
 from __future__ import annotations
 
 import asyncio
-import pathlib
-import time
 import uuid
 from collections.abc import Iterator
 from typing import Any
@@ -21,14 +19,14 @@ from sqlmodel import Session, col, select
 from app.core.db import engine
 from app.core.request_recording import RequestKind, RequestKindDisabled
 from app.models_tg import Channel, Post
-from app.services import scraper, sync_orchestrator
+from app.services import sync_orchestrator
 from app.services.channels import channel_sync_claim_holder, try_claim_channel_sync
 from app.services.follows import get_operator_user_id
 from app.services.posts import bulk_upsert_posts_impl
 from app.services.quota import Budget, QuotaCeilingReached
 from tests.utils.setting_groups import add_test_channel
+from tests.utils.tg_html import load_live_fixture, recent_page
 
-LIVE = pathlib.Path(__file__).resolve().parents[1] / "fixtures" / "live"
 DAY_MS = 24 * 60 * 60 * 1000
 
 
@@ -48,17 +46,7 @@ def name(session: Session) -> str:
 
 
 def _page(file: str, name: str, *, age_ms: int = 0) -> list[dict[str, Any]]:
-    """The page's Posts as the sync parses them, each publish time moved to a
-    recent minute (`age_ms` further back) in the same order."""
-    html = (LIVE / file).read_text(encoding="utf-8")
-    posts = scraper._parse_scrape_channel_page(
-        html, name, "", None, None, None, None, {}
-    )["posts"]
-    stamps = sorted({p["timestamp"] for p in posts})
-    now = int(time.time() * 1000) - age_ms
-    for p in posts:
-        p["timestamp"] = now - (len(stamps) - stamps.index(p["timestamp"])) * 60_000
-    return list(posts)
+    return list(recent_page(load_live_fixture(file), name, age_ms=age_ms)["posts"])
 
 
 def _store_as_one_post(
