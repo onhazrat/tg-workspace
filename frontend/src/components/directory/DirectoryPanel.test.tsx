@@ -171,6 +171,29 @@ describe("the header", () => {
   })
 })
 
+describe("a Hidden Channel (HKD-01, ADR-047)", () => {
+  test("says Telegram hides it, keeps its count and link, and shows no Recent posts", () => {
+    mount({ entry: entry({ status: "hidden", subscribers: 5_493 }) })
+    expect(screen.getByTestId("directory-panel-hidden").textContent).toBe(
+      "Hidden. Telegram hides this Channel's Posts on the web, so it cannot be followed.",
+    )
+    expect(screen.getByText("5.49K")).toBeTruthy()
+    expect(screen.getByRole("link", { name: "@chan" })).toBeTruthy()
+    expect(screen.queryByText("Recent posts")).toBeNull()
+  })
+
+  test("a readable Channel keeps its Recent posts", () => {
+    mount({ entry: entry({ status: "ok" }) })
+    expect(screen.getByText("Recent posts")).toBeTruthy()
+    expect(screen.queryByTestId("directory-panel-hidden")).toBeNull()
+  })
+
+  test("a group's count names what it counts", () => {
+    mount({ entry: entry({ kind: "group", subscribers: 25 }) })
+    expect(screen.getByText("25 members")).toBeTruthy()
+  })
+})
+
 describe("before and without an entry", () => {
   test("loading", () => {
     mount({ entry: undefined, posts: undefined, why: undefined })

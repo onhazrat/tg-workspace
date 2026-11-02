@@ -256,7 +256,7 @@ export type DiscoverProbeQueue = {
   retrying: number
   /** Resolved as followable channels. */
   resolved: number
-  /** Resolved as bots, accounts, groups or private channels. */
+  /** Resolved as bots, accounts, groups, free handles or Hidden Channels. */
   unavailable: number
   /** Whether the drain job is enabled — the operator's pause switch. */
   enabled: boolean

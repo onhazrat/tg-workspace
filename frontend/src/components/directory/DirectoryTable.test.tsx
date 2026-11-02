@@ -348,6 +348,41 @@ describe("d's toast in keyboard mode", () => {
   })
 })
 
+describe("Handle kinds (HKD-01, ADR-047)", () => {
+  const cellsOf = (handle: string) =>
+    [
+      ...screen.getByTestId(`directory-row-${handle}`).querySelectorAll("td"),
+    ].map((c) => c.textContent)
+
+  test("Subscribers names what it counts for a group and a bot, and is blank with no count", () => {
+    mount({
+      rows: [
+        row("chan", { kind: "channel", subscribers: 12_300 }),
+        row("chat", { kind: "group", subscribers: 25 }),
+        row("helper", { kind: "bot", subscribers: 7_966_382 }),
+        row("person", { kind: "user", subscribers: null }),
+      ],
+      shown: ["subscribers"],
+    })
+    expect(cellsOf("chan")).toContain("12.3K")
+    expect(cellsOf("chat")).toContain("25 members")
+    expect(cellsOf("helper")).toContain("7.97M monthly users")
+    expect(cellsOf("person").join("")).not.toMatch(/\d/)
+  })
+
+  test("a Hidden Channel's verdict reads Hidden and says why", () => {
+    mount({
+      rows: [row("hid", { status: "hidden" }), row("ok1", { status: "ok" })],
+      shown: ["status"],
+    })
+    const hidden = screen.getByText("Hidden")
+    expect(hidden.getAttribute("title")).toBe(
+      "Telegram hides this Channel's Posts on the web, so it cannot be followed",
+    )
+    expect(cellsOf("ok1")).toContain("ok")
+  })
+})
+
 describe("columns and sorting", () => {
   test("a hidden column is gone; the Channel and the actions stay", () => {
     mount({ shown: without("reach", "language") })

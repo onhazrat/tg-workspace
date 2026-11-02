@@ -28,9 +28,9 @@ from app.services.post_media_parser import (
 from app.services.post_reply_parser import extract_reply
 from app.services.telegram_html import (
     attr_str,
-    counts_subscribers,
     extract_link_spans,
     extract_telegram_html_text,
+    header_count,
     message_body_element,
 )
 from app.services.telegram_web import (
@@ -231,43 +231,45 @@ def _extract_telegram_chat_id(soup: BeautifulSoup) -> int | None:
     return None
 
 
-def _classify_handle_kind(
-    soup: BeautifulSoup, channel_name: str, latest_id: int
-) -> str:
-    """What kind of thing a `t.me/<handle>` page describes — best effort.
+#: The verb a `t.me/<handle>` page's title opens with: `View` for a Channel or
+#: a group, `Launch` for a bot, `Contact` for a user or a handle nobody holds.
+_TITLE_VERB = re.compile(r"^Telegram: (View|Launch|Contact) @")
 
-    Returns `channel` | `group` | `bot` | `user` | `unknown`.
 
-    This is deliberately *secondary* to `isUnavailableOnWebView`, which is a
-    structural fact (is there a readable message feed?). The kind is heuristics
-    over presentation markup Telegram can restyle at any time, so it is used to
-    word the UI — "this is a bot" reads better than "not followable" — and never
-    to decide what gets hidden. `unknown` is an ordinary outcome, not a failure.
+def _classify_handle_kind(soup: BeautifulSoup, latest_id: int) -> str:
+    """The Handle kind the page Telegram served for a handle names (ADR-047).
 
-    The one firm rule in here is the bot check: Telegram *requires* bot
-    usernames to end in "bot", so for a handle with no feed and no member or
-    subscriber count, the suffix is strong evidence rather than a guess.
+    Returns `channel` | `group` | `bot` | `user` | `free` | `unknown`.
+
+    **The kind decides what the Directory lists**: only `channel` is listed by
+    default. It reads Telegram's own page, never the handle's spelling, because
+    574 readable Channels on staging end in "bot". The page is presentation
+    markup Telegram can restyle, so `tests/api/test_directory_handle_kinds.py`
+    pins one stored page per kind: a restyle fails there instead of silently
+    unlisting Channels. A page matching none of these is `unknown`.
     """
-    if latest_id > 0:
+    found = header_count(soup)
+    counts = found[1] if found else None
+    if latest_id > 0 or counts == "subscriber":
         return "channel"
-
-    extra_el = soup.select_one(".tgme_page_extra")
-    extra = extra_el.get_text(" ", strip=True).lower() if extra_el else ""
-
-    # A subscriber count with no readable feed is a private or restricted
-    # channel: real, but not something we can scrape.
-    if counts_subscribers(soup):
-        return "channel"
-    if "member" in extra:
+    if counts == "member":
         return "group"
-    if channel_name.strip().lower().endswith("bot"):
+    title = soup.title.get_text(strip=True) if soup.title else ""
+    verb = match.group(1) if (match := _TITLE_VERB.match(title)) else None
+    if verb == "Launch":
         return "bot"
-    # Presence lines only ever appear on personal accounts.
-    if "last seen" in extra or "online" in extra:
-        return "user"
-    if soup.select_one(".tgme_page_action"):
-        return "user"
+    if verb == "Contact":
+        # A held handle names its holder; a free one names nobody.
+        return "user" if soup.select_one(".tgme_page_title") else "free"
     return "unknown"
+
+
+def _page_audience(soup: BeautifulSoup) -> int | None:
+    """The header line's count, kept in `subscribers` for every kind: a
+    Channel's subscribers, a group's members, a bot's monthly users (ADR-047).
+    A group's online count after it is not kept."""
+    found = header_count(soup)
+    return parse_abbreviated_count(re.sub(r"\s", "", found[0])) if found else None
 
 
 #: The five Channel counters (ADR-023), keyed as the page labels them.
@@ -322,6 +324,10 @@ def _parse_channel_meta(soup: BeautifulSoup, channel_name: str) -> dict[str, Any
         latest_id = max([latest_id, *album_item_ids(el)])
 
     is_unavailable = latest_id == 0 and bool(soup.select_one(".tgme_page_action"))
+    subscribers = _channel_counter(counters, "subscribers", channel_name)
+    if subscribers is None:
+        # A page with no preview shows its count in the header line instead.
+        subscribers = _page_audience(soup)
     telegram_chat_id = _extract_telegram_chat_id(soup)
 
     # Did we get a Telegram page at all, or a proxy error page / captcha / empty
@@ -345,12 +351,14 @@ def _parse_channel_meta(soup: BeautifulSoup, channel_name: str) -> dict[str, Any
         **{
             name: _channel_counter(counters, name, channel_name)
             for name in CHANNEL_COUNTERS
+            if name != "subscribers"
         },
+        "subscribers": subscribers,
         "latestId": latest_id,
         "telegramChatId": telegram_chat_id,
         "isUnavailableOnWebView": is_unavailable,
         "isTelegramPage": is_telegram_page,
-        "kind": _classify_handle_kind(soup, channel_name, latest_id),
+        "kind": _classify_handle_kind(soup, latest_id),
     }
 
 
@@ -462,13 +470,29 @@ def _parse_scrape_channel_page(
 
 
 def private_channel_info(page: str, channel_name: str) -> dict[str, Any]:
-    """What a private Channel's own page says about it (RQS-13).
+    """What a Hidden Channel's own page says about it (RQS-13, ADR-047)."""
+    return {**withheld_page_info(page, channel_name), "isPrivate": True}
 
-    Its title and kind, from the page the fetch raised on. No Posts, so an
-    empty `samples`; and no photo, which would cost a fetch of its own.
+
+def withheld_page_info(page: str, channel_name: str) -> dict[str, Any]:
+    """What the page Telegram answered a handle with no preview says (ADR-047).
+
+    Its Handle kind, title and count, from the page the fetch raised on; an
+    empty page says nothing, so its kind is `unknown`. No Posts, so an empty
+    `samples`; and no photo, which would cost a fetch of its own. A user's
+    name is not kept: the Directory records that a person holds the handle,
+    not who.
     """
-    info = _parse_channel_meta(make_soup(page), channel_name)
-    return {**info, "isPrivate": True, "photoUrl": None, "samples": []}
+    info = _parse_channel_meta(make_soup(page), channel_name) if page else {}
+    if info.get("kind") in ("user", "free"):
+        info["displayName"] = None
+    return {
+        **info,
+        "isTelegramPage": True,
+        "isUnavailableOnWebView": True,
+        "photoUrl": None,
+        "samples": [],
+    }
 
 
 async def get_channel_info(

@@ -26,7 +26,7 @@ import { timeBoundWords } from "@/lib/time-bound/text"
 import { type BoostMode, DirectoryBoost } from "./DirectoryBoost"
 import { DirectoryRefreshTarget } from "./DirectoryRefreshTarget"
 import { DirectorySamples, FirstFew, PostText } from "./DirectorySamples"
-import { cell, columnOf, FollowCell } from "./DirectoryTable"
+import { cell, columnOf, FollowCell, HIDDEN_TITLE } from "./DirectoryTable"
 import { TagBadges, TagPicker } from "./DirectoryTags"
 
 const HEADING =
@@ -483,11 +483,25 @@ export function DirectoryPanel({
               </div>
             )}
             <WhyHere handle={handle} why={why} citedWindow={citedWindow} />
-            <h4 className={HEADING}>Recent posts</h4>
-            {posts ? (
-              <DirectorySamples handle={handle} posts={posts} />
+            {/* A Hidden Channel has no Posts we could read (ADR-047). */}
+            {entry.status === "hidden" ? (
+              <p
+                data-testid="directory-panel-hidden"
+                className="mt-3 text-xs text-app-ink/60"
+              >
+                <b>Hidden.</b> {HIDDEN_TITLE}.
+              </p>
             ) : (
-              <p className="text-xs text-app-ink/40">Loading recent posts…</p>
+              <>
+                <h4 className={HEADING}>Recent posts</h4>
+                {posts ? (
+                  <DirectorySamples handle={handle} posts={posts} />
+                ) : (
+                  <p className="text-xs text-app-ink/40">
+                    Loading recent posts…
+                  </p>
+                )}
+              </>
             )}
             <Neighbours
               title="Cited most by"

@@ -42,19 +42,32 @@ Follow's business, not the Channel's.
 _Avoid_: feed, source, subscription
 
 **Directory**:
-The corpus-wide map of every Channel anyone has seen referenced or an
-Operator has named, followed or not. It outlives Follows and Posts
-deliberately, because it records what exists on Telegram rather than what
-anybody reads.
+The corpus-wide map of every handle anyone has seen referenced or an
+Operator has named, followed or not, whatever its Handle kind. It outlives
+Follows and Posts deliberately, because it records what exists on Telegram
+rather than what anybody reads. Only Channels are listed by default.
 _Avoid_: probe table, channel map, index, registry
 
 **Directory entry**:
-One Channel's row in the Directory: its metadata, its followability verdict, a
-sample of its recent Posts, and the statistics derived from that sample. The
-sample is a snapshot of one preview page, replaced wholesale and never promoted
-into the corpus; the statistics are kept once computed, so an entry that stops
-being probed still describes the Channel after its sample is collected.
+One handle's row in the Directory: its Handle kind, its metadata, its
+followability verdict and, for a Channel, a sample of its recent Posts and the
+statistics derived from that sample. The sample is a snapshot of one preview
+page, replaced wholesale and never promoted into the corpus; the statistics are
+kept once computed, so an entry that stops being probed still describes the
+Channel after its sample is collected.
 _Avoid_: probe, probe row, map row
+
+**Handle kind**:
+What a handle names on Telegram: a Channel, a group, a bot, a user, or nothing
+at all (a free handle). Read from the page Telegram serves for the handle, so it
+is Telegram's answer and not a guess from the handle's spelling.
+_Avoid_: chat type, entity kind, peer type, kind (alone)
+
+**Hidden Channel**:
+A Channel whose Posts Telegram will not show on the web, though the Channel
+exists and its handle is public. It is listed in the Directory like any other
+Channel, and cannot be followed while Telegram withholds its Posts.
+_Avoid_: private channel, unavailable channel, restricted channel
 
 **Priority boost**:
 An Operator's standing adjustment to how soon a Directory entry is fetched

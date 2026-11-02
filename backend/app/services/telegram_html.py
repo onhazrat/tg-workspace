@@ -10,6 +10,7 @@ body — do not select that class directly.
 
 from __future__ import annotations
 
+import re
 from copy import copy
 from typing import Any
 
@@ -32,14 +33,33 @@ def attr_str(value: str | list[str] | None) -> str | None:
     return value
 
 
+#: A header line that leads with a count: `5 493 subscribers`, `25 members,
+#: 7 online`, `7 966 382 monthly users`. A bot's or a user's page has another
+#: header line before it holding `@handle`, which is why the count is matched
+#: from the start of a line and never searched for.
+_HEADER_COUNT = re.compile(
+    r"^([\d.,\s]+[KMB]?)\s*(subscriber|member|monthly user)", re.IGNORECASE
+)
+
+
+def header_count(page: Tag) -> tuple[str, str] | None:
+    """The count a handle's own page leads a header line with, as Telegram
+    wrote it, and what it counts: `subscriber`, `member` or `monthly user`.
+    `None` when no header line leads with one (ADR-047)."""
+    for extra in page.select(".tgme_page_extra"):
+        if match := _HEADER_COUNT.match(extra.get_text(" ", strip=True)):
+            return match.group(1), match.group(2).lower()
+    return None
+
+
 def counts_subscribers(page: Tag) -> bool:
     """The page's header counts subscribers: it is a Channel's own page.
 
-    With no message feed beside it, that is a private Channel rather than a
-    handle nobody holds (RQS-13).
+    With no message feed beside it, that is a Hidden Channel rather than a
+    handle nobody holds (RQS-13, ADR-047).
     """
-    extra = page.select_one(".tgme_page_extra")
-    return extra is not None and "subscriber" in extra.get_text(" ").lower()
+    found = header_count(page)
+    return found is not None and found[1] == "subscriber"
 
 
 def message_reply_block(el: Tag) -> Tag | None:

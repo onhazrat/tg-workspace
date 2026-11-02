@@ -256,6 +256,8 @@ INTERNAL_COLUMNS: frozenset[DirectoryColumn] = frozenset(
         "latest_id",
     }
 )
+
+
 #: On by default until an Operator stores defaults of their own: the ten the
 #: table showed before the catalogue existed. Once stored, a column the stored
 #: defaults do not name is off.
@@ -1277,7 +1279,7 @@ def _rows(
 
 
 def _is(cond: IsCond) -> ColumnElement[bool]:
-    # `unavailable` was private or deleted until RQS-13 split private off; a
+    # `unavailable` held Hidden Channels until RQS-13 split them off; a
     # Condition written for it still finds both.
     if (cond.field, cond.value) == ("status", "unavailable"):
         return col(DirectoryEntry.status).in_(UNAVAILABLE_STATUSES)
@@ -1527,9 +1529,11 @@ def newest_references(
 
 # ---- The detail panel (DIR-03) --------------------------------------------------------
 
-#: What the panel shows of an entry: its measures, its Language and its bio.
+#: What the panel shows of an entry: its measures, its Language, its bio, and
+#: its verdict, which says when it is a Hidden Channel (ADR-047).
 _PANEL_COLUMNS: frozenset[DirectoryColumn] = frozenset(
     {
+        "status",
         "subscribers",
         "reach",
         "posts_per_week",

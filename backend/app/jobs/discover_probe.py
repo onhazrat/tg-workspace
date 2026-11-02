@@ -78,7 +78,11 @@ from app.services.network_settings import (
 )
 from app.services.pgmq import queue_length
 from app.services.request_kinds import is_kind_enabled
-from app.services.scraper import get_channel_info, private_channel_info
+from app.services.scraper import (
+    get_channel_info,
+    private_channel_info,
+    withheld_page_info,
+)
 from app.services.sync_lanes import DISCOVER_PROBE_LANE
 from app.services.telegram_web import (
     TelegramChannelPrivate,
@@ -173,7 +177,7 @@ async def _probe_one(
     handle probed, named by the `Probe` Accounted work its lane message opens.
     The page fetch is a metadata page, judged once the verdict is written:
     Useful when it changed the entry or brought new sample Posts, Wasted as a
-    missing handle when Telegram has no page for it. A private Channel's page
+    missing handle when Telegram has no page for it. A Hidden Channel's page
     is an answer like any other (RQS-13).
     """
     with page(PageType.METADATA, soft_block=Cause.MISSING_HANDLE) as probe_page:
@@ -213,24 +217,20 @@ async def _fetch_and_store(
             with_samples=True,
         )
     except TelegramChannelPrivate as exc:
-        # The handle exists and its Posts are private (RQS-13): the page names
-        # the Channel, and the Directory keeps that answer.
+        # A Hidden Channel (RQS-13, ADR-047): the page names the Channel and
+        # withholds its Posts, and the Directory keeps that answer.
         info = private_channel_info(exc.page, handle)
     except TelegramWebViewUnavailable as exc:
         # Telegram itself said the handle has no readable web view. That is an
-        # answer, not a failure, so it is recorded as a verdict.
+        # answer, not a failure, so it is recorded as a verdict, with the
+        # Handle kind the page it answered with names (ADR-047).
         #
         # `samples: []` rather than no key at all, and the difference matters:
-        # this payload is synthesized with no page behind it, but the thing
-        # Telegram just said is precisely that there are no readable messages.
-        # An absent key would mean "we did not look" and leave a stale snapshot
-        # on a handle that has gone private — the entry would go on advertising
-        # Posts nobody can reach.
-        info = {
-            "isTelegramPage": True,
-            "isUnavailableOnWebView": True,
-            "samples": [],
-        }
+        # what Telegram just said is precisely that there are no readable
+        # messages. An absent key would mean "we did not look" and leave a
+        # stale snapshot on a handle that has gone dark: the entry would go on
+        # advertising Posts nobody can reach.
+        info = withheld_page_info(exc.page, handle)
         error = str(exc)
     except RequestKindDisabled:
         # No answer at all, so no verdict: the probe goes back on its lane.
