@@ -215,6 +215,7 @@ def post_to_camel(p: Post) -> dict[str, Any]:
         "linkSpans": p.link_spans,
         "replyToPostId": p.reply_to_post_id,
         "replyTo": p.reply_to,
+        "albumId": p.album_id,
         "language": p.language,
         # The columns alone (ADR-024). REACH-08 removed the fallback to media
         # keys once the REACH-01 backfill had emptied them on staging.

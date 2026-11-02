@@ -593,6 +593,12 @@ def _has_reply_clause(scope: PostScope) -> ColumnElement[bool]:
     return tuple_(func.lower(col(Post.channel_name)), col(Post.post_id)).in_(replies)
 
 
+def not_later_album_post() -> ColumnElement[bool]:
+    """Every Post but an Album's later ones, which hold only their own photo:
+    no words, no views and no reply (ALB-01, ADR-046)."""
+    return or_(col(Post.album_id).is_(None), col(Post.album_id) == col(Post.post_id))
+
+
 def post_type_clause(
     value: PostType,
     followed_names: frozenset[str] | None,

@@ -224,6 +224,7 @@ def _posts_to_save(
                 "linkSpans": p.get("linkSpans"),
                 "replyToPostId": p.get("replyToPostId"),
                 "replyTo": p.get("replyTo"),
+                "albumId": p.get("albumId"),
             }
         )
     return out

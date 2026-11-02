@@ -114,6 +114,8 @@ export type PostMedia = {
   linkPreview?: PostLinkPreview | null
   poll?: PostPollMedia | null
   groupedCount?: number | null
+  /** The Post's place in its Album, 1 for the first (ALB-01). */
+  albumPlace?: number | null
   isMediaOnly?: boolean
 }
 
@@ -149,6 +151,8 @@ export interface Post {
   linkSpans?: PostLinkSpan[] | null
   replyToPostId?: number | null
   replyTo?: PostReplyRef | null
+  /** The Album's first message id on each of its Posts; null outside one. */
+  albumId?: number | null
   forwardedFrom?: string
   forwardedFromName?: string
   isAnchor?: boolean

@@ -79,6 +79,10 @@ def format_posts_for_prompt(posts: list[dict[str, Any]]) -> str:
     """
     blocks: list[str] = []
     for post in posts:
+        # An Album's later Posts hold no words of their own; its first Post
+        # speaks for it, "Album: N items" included (ALB-01).
+        if post.get("albumId") not in (None, post["id"]):
+            continue
         hints = _format_media_hints(post)
         lines = [
             f"[{post['channelName']}] ID: {post['id']}",

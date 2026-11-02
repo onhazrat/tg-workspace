@@ -5,7 +5,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { createContext, type ReactNode, useContext, useMemo } from "react"
 import { queryKeys } from "@/hooks/queryKeys"
-import { getPost } from "@/lib/posts/store"
+import { getReplyParent } from "@/lib/posts/store"
 import type { Post } from "@/types"
 import {
   OpenInTelegram,
@@ -55,7 +55,9 @@ export function ReplyParentLookup({
   const { data, isPending } = useQuery({
     queryKey: queryKeys.replyParent(ref?.channelName ?? "", ref?.postId ?? 0),
     queryFn: async () =>
-      ref ? ((await getPost(ref.channelName, ref.postId)) ?? null) : null,
+      ref
+        ? ((await getReplyParent(ref.channelName, ref.postId)) ?? null)
+        : null,
     enabled: ref != null,
     // A failed lookup shows the excerpt now rather than after the retries.
     retry: false,

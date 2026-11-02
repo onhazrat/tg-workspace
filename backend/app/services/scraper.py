@@ -12,13 +12,15 @@ import re
 from datetime import UTC, datetime
 from typing import Any
 
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 
 from app.core.config import settings
 from app.services.channel_photos import resolve_cached_photo_url
 from app.services.network import fetch_with_retry
 from app.services.post_links_parser import extract_body_links
 from app.services.post_media_parser import (
+    album_item_ids,
+    album_later_items,
     finalize_post_media_paths,
     parse_abbreviated_count,
     parse_widget_media,
@@ -93,25 +95,7 @@ def _parse_posts_from_html(
         time_el = el.select_one("time[datetime]")
         date = attr_str(time_el.get("datetime") if time_el else None) or ""
 
-        forwarded_from: str | None = None
-        forwarded_from_name: str | None = None
-        forwarded_from_post_id: int | None = None
-        fwd_el = el.select_one(".tgme_widget_message_forwarded_from_name")
-        if fwd_el:
-            forwarded_from_name = fwd_el.get_text(strip=True)
-            href = attr_str(fwd_el.get("href"))
-            if href:
-                # CRG-03: the href names the source Post as well as the source
-                # Channel, and this used to keep only the handle. The pair
-                # helper refuses both together for a private channel or an
-                # invite link, whose first segment is a reserved path ("c",
-                # "joinchat") and never a followable handle — storing that
-                # would seed phantom auto-follow candidates, and the Post id
-                # under it is worth nothing without somewhere to resolve it.
-                parsed = extract_channel_post_from_href(href)
-                if parsed is not None:
-                    forwarded_from, forwarded_from_post_id = parsed
-
+        forwarded_from, forwarded_from_name, forwarded_from_post_id = _forward(el)
         reply_to_post_id, reply_to = extract_reply(el)
 
         post: dict[str, Any] = {
@@ -142,6 +126,7 @@ def _parse_posts_from_html(
 
         posts.append(post)
         seen.add(post_id)
+        posts.extend(_later_album_posts(el, post, start_id, seen))
 
     more = soup.select_one(".tgme_messages_more")
     next_url = None
@@ -151,6 +136,53 @@ def _parse_posts_from_html(
             next_url = resolve_telegram_href(href)
 
     return posts, next_url
+
+
+def _forward(el: Tag) -> tuple[str | None, str | None, int | None]:
+    """The forward attribution: source handle, its display name, source Post."""
+    fwd_el = el.select_one(".tgme_widget_message_forwarded_from_name")
+    if not fwd_el:
+        return None, None, None
+    name = fwd_el.get_text(strip=True)
+    href = attr_str(fwd_el.get("href"))
+    # CRG-03: the href names the source Post as well as the source Channel, and
+    # this used to keep only the handle. The pair helper refuses both together
+    # for a private channel or an invite link, whose first segment is a
+    # reserved path ("c", "joinchat") and never a followable handle. Storing
+    # that would seed phantom auto-follow candidates, and the Post id under it
+    # is worth nothing without somewhere to resolve it.
+    parsed = extract_channel_post_from_href(href) if href else None
+    if parsed is None:
+        return None, name, None
+    return parsed[0], name, parsed[1]
+
+
+def _later_album_posts(
+    el: Tag, first: dict[str, Any], start_id: int, seen: set[int]
+) -> list[dict[str, Any]]:
+    """Each later message of an Album as its own Post, with its own id and
+    thumbnail on the Album's date; everything else stays on `first`, which
+    this marks as the Album's first Post (ALB-01, ADR-046)."""
+    later = album_later_items(el)
+    if later:
+        first["albumId"] = first["id"]
+    posts: list[dict[str, Any]] = []
+    for item_id, item_text, item_media, item_thumb in later:
+        if item_id < start_id or item_id in seen:
+            continue
+        item: dict[str, Any] = {
+            "id": item_id,
+            "text": item_text,
+            "date": first["date"],
+            "media": item_media,
+            "linkSpans": [],
+            "albumId": first["id"],
+        }
+        if item_thumb:
+            item["_thumbSourceUrl"] = item_thumb
+        posts.append(item)
+        seen.add(item_id)
+    return posts
 
 
 def _extract_channel_photo_url(soup: BeautifulSoup) -> str | None:
@@ -286,6 +318,8 @@ def _parse_channel_meta(soup: BeautifulSoup, channel_name: str) -> dict[str, Any
             m = re.search(r"/(\d+)$", href)
             if m:
                 latest_id = max(latest_id, int(m.group(1)))
+        # An Album's widget is dated by its first message; its last is newer.
+        latest_id = max([latest_id, *album_item_ids(el)])
 
     is_unavailable = latest_id == 0 and bool(soup.select_one(".tgme_page_action"))
     telegram_chat_id = _extract_telegram_chat_id(soup)
@@ -476,6 +510,9 @@ async def get_channel_info(
     result = _parse_channel_meta(soup, channel_name)
     if with_samples:
         posts, _next_url = _parse_posts_from_html(soup, 0, set())
+        # An Album stays one sample, as the preview shows it, so a probe's
+        # posting rate and Reach mean what they meant before ALB-01.
+        posts = [p for p in posts if p.get("albumId") in (None, p["id"])]
         # No media is downloaded for a sample and no thumb path is rewritten —
         # see `_enrich_posts_with_timestamps`.
         result["samples"] = _enrich_posts_with_timestamps(

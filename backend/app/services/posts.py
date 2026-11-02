@@ -264,6 +264,10 @@ def _item_fields(item: dict[str, Any]) -> dict[str, Any]:
         fields["link_spans"] = _post_link_spans_from_item(item)
     if "replyTo" in item:
         fields["reply_to"] = _post_reply_from_item(item)
+    # Key-guarded like `forwardedFromPostId`, so an export from before ALB-01
+    # leaves a split Album's membership alone.
+    if "albumId" in item or "album_id" in item:
+        fields["album_id"] = _post_int_from_item(item, "albumId", "album_id")
     return fields
 
 
@@ -274,6 +278,7 @@ _INSERT_DEFAULTS: dict[str, Any] = {
     "date": "",
     "timestamp": 0,
     "forwarded_from_post_id": None,
+    "album_id": None,
     "media": None,
     "links": None,
     "link_spans": None,

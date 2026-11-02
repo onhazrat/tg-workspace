@@ -71,6 +71,24 @@ export async function getPost(
   return match
 }
 
+/**
+ * A reply's parent, the very photo answered. A later Post of an Album holds
+ * no reply of its own, so it carries its Album's first Post's (ADR-046), and
+ * a preview of the parent goes on to the parent's parent from there.
+ */
+export async function getReplyParent(
+  channelName: string,
+  id: number,
+  client: PostsApi = api,
+): Promise<Post | undefined> {
+  const parent = await getPost(channelName, id, client)
+  if (parent?.albumId == null || parent.albumId === parent.id) return parent
+  const first = await getPost(channelName, parent.albumId, client)
+  return first
+    ? { ...parent, replyToPostId: first.replyToPostId, replyTo: first.replyTo }
+    : parent
+}
+
 export async function bulkUpsertPosts(
   posts: Post[],
   client: PostsApi = api,
