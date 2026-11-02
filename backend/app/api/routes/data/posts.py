@@ -9,13 +9,15 @@ import json
 from collections.abc import AsyncIterator
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 from app.api.deps import CurrentUser, SessionDep
 from app.api.post_views import view_of
 from app.schemas.posts import (
     BulkUpsertPostsResponse,
+    PostChainRequest,
+    PostChainResponse,
     PostCountsResponse,
     PostFacetCount,
     PostFacetsRequest,
@@ -213,6 +215,34 @@ def lookup_posts_route(
             [(ref.channel_name, ref.post_id) for ref in body.posts],
         )
     ]
+
+
+# RCH-02. A read expressed as a POST for the reason `posts_counts` is one, and
+# on `VIEW_AS_READ_ONLY_PATHS` beside it.
+@router.post("/posts/chain")
+def posts_chain(
+    body: PostChainRequest,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> PostChainResponse:
+    """A reply's Reply chain up to the top in one read, and why it ends there.
+
+    The first Post first, each flagged by the Post selection under the sent
+    window and Channels. 404 when the first Post is not one the Account sees.
+    """
+    found = posts_view.chain(
+        session,
+        view_of(session, current_user.id, body),
+        body.channel_name,
+        body.post_id,
+    )
+    if found is None:
+        raise HTTPException(status_code=404, detail="Post not found")
+    posts, stop = found
+    return PostChainResponse(
+        posts=[SelectablePostResponse.model_validate(row) for row in posts],
+        stop=stop,
+    )
 
 
 # CW-01, ADR-043. A read expressed as a POST for the reason `posts_counts` is

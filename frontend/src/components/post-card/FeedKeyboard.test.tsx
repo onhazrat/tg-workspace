@@ -44,7 +44,7 @@ function Feed({
   const [compact, setCompact] = useState(false)
   // Every Post starts Picked, as in the feed.
   const [unpicked, setUnpicked] = useState<string[]>([])
-  const highlight = usePostKeys({
+  const { highlight } = usePostKeys({
     keys: KEYS,
     onCompact: setCompact,
     spotlit,

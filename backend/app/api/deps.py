@@ -79,6 +79,9 @@ VIEW_AS_READ_ONLY_PATHS: dict[str, str] = {
     f"{settings.API_V1_STR}/data/posts/window-check": (
         "which Channels of a scope are Incomplete; reads only, never syncs"
     ),
+    f"{settings.API_V1_STR}/data/posts/chain": (
+        "a reply's Reply chain up to the top, for the chain panel"
+    ),
     f"{settings.API_V1_STR}/data/posts/lookup": (
         "resolves (channel, post id) pairs a Summary cites"
     ),

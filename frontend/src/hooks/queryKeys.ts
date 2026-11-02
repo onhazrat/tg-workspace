@@ -109,6 +109,8 @@ export const queryKeys = {
   postsFeeds: ["postsFeed"] as const,
   /** The command palette's Find related Posts list: the feed's first 100. */
   postsPickPool: (scope: unknown) => ["postsPickPool", scope] as const,
+  /** A reply's Reply chain under the view's window and selection (RCH-02). */
+  postsChain: (scope: unknown) => ["postsChain", scope] as const,
   /** The selected Posts the feed shows, for Copy links and Export Markdown. */
   postsSelectedShown: (scope: unknown) =>
     ["postsSelectedShown", scope] as const,
@@ -136,6 +138,7 @@ export const queryKeys = {
     ["postsWindowHistogram"],
     ["postsPickPool"],
     ["postsSelectedShown"],
+    ["postsChain"],
     ["discoverCandidates"],
     ["windowCheck"],
   ] as const,

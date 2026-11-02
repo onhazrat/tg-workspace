@@ -13,6 +13,7 @@ import {
 } from "@/hooks/usePostsView"
 import { useCompactPostGrid, useSessionFlag } from "@/hooks/useSessionFlag"
 import { downloadBlob } from "@/lib/data-transfer/download"
+import { useKeyboardMode } from "@/lib/keyboard/mode"
 import { spotlightView } from "@/lib/posts/channel-spotlight"
 import { feedSubtitle } from "@/lib/posts/post-filter-bar"
 import {
@@ -53,7 +54,18 @@ import {
 import { postCardKey, usePostKeys } from "./post-card/FeedKeyboard"
 import { NewPostsPill, useHeldPosts } from "./post-card/NewPosts"
 import { FeedPagingContext } from "./post-card/PhotoViewer"
-import { ReplyPreviewProvider } from "./post-card/ReplyParent"
+import {
+  chainRings,
+  panelItem,
+  ReplyChainPanel,
+  revealInPanel,
+  useChainMark,
+  useReplyChain,
+} from "./post-card/ReplyChain"
+import {
+  ReplyChainOpenContext,
+  ReplyPreviewProvider,
+} from "./post-card/ReplyParent"
 
 interface PostFeedProps {
   loadMoreRef: React.RefObject<HTMLDivElement | null>
@@ -98,13 +110,35 @@ export const PostFeed: React.FC<PostFeedProps> = ({
   const backFromSpotlight = useSpotlightBack(spotlightApi, () =>
     setActiveTab("channels"),
   )
-  const highlight = usePostKeys({
-    keys: posts.map(postCardKey),
+  // A reply's Reply chain, in the side panel (RCH-02).
+  const chain = useReplyChain(view, feedKey)
+  const feedKeys = posts.map(postCardKey)
+  const { highlight, setHighlight } = usePostKeys({
+    keys: feedKeys,
     onCompact: setCompact,
     spotlit: spotlight !== null,
     onSpotlightBack: backFromSpotlight,
     onShowNew: showHeld,
+    chain: {
+      items: chain.keys,
+      ring: chain.ring,
+      open: (key) => {
+        const post = posts.find((p) => postCardKey(p) === key)
+        if (post) openChain(post)
+      },
+      close: chain.close,
+    },
   })
+  // A reply link inside the open chain moves to its parent there.
+  const openChain = (reply: (typeof posts)[number]) => {
+    const opened = chain.open(reply)
+    if (!opened?.within) return
+    setHighlight(opened.key)
+    revealInPanel(panelItem(opened.key))
+  }
+  const keyboard = useKeyboardMode()
+  const rings = chainRings(chain, highlight)
+  useChainMark(feedKeys, rings.panel)
 
   const totalInScope = Object.values(counts).reduce((sum, n) => sum + n, 0)
 
@@ -280,18 +314,26 @@ export const PostFeed: React.FC<PostFeedProps> = ({
             <div className="sticky top-2 z-30 flex h-0 items-start justify-center">
               <NewPostsPill held={held} onShow={showHeld} />
             </div>
-            <ReplyPreviewProvider>
-              <PostFeedResults
-                isInitialLoading={isInitialLoading}
-                posts={posts}
-                showLoadMore={hasMore || isLoadingMore}
-                loadMoreRef={loadMoreRef}
-                postSearch={view.keyword}
-                compact={compact}
-                highlight={highlight}
-                onToggleSelected={onToggleSelected}
-              />
-            </ReplyPreviewProvider>
+            <ReplyChainOpenContext value={openChain}>
+              <ReplyPreviewProvider>
+                <PostFeedResults
+                  isInitialLoading={isInitialLoading}
+                  posts={posts}
+                  showLoadMore={hasMore || isLoadingMore}
+                  loadMoreRef={loadMoreRef}
+                  postSearch={view.keyword}
+                  compact={compact}
+                  highlight={rings.feed}
+                  onToggleSelected={onToggleSelected}
+                />
+                <ReplyChainPanel
+                  chain={chain}
+                  view={view}
+                  highlight={rings.panel}
+                  dim={keyboard}
+                />
+              </ReplyPreviewProvider>
+            </ReplyChainOpenContext>
           </div>
         </motion.div>
       </FeedPagingContext.Provider>

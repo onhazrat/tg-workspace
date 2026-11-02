@@ -15,43 +15,55 @@ hold every decision; the prototype (variant A3 on the pushed branch
 
 **Blocked by:** ALB-01 (a chain through an Album climbs from its first Post).
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `POST /data/posts/chain` returns the Reply chain from the given Post to
+- [x] `POST /data/posts/chain` returns the Reply chain from the given Post to
       the top in one read, each Post with its real Pick state under the sent
       window and Post selection, and a stop reason: `notReply`,
       `parentNotStored` (with the excerpt), `privateParent`, `depthCap` (100).
-- [ ] The route follows a parent in another Channel and climbs from a later
+- [x] The route follows a parent in another Channel and climbs from a later
       Album Post through its Album's first Post; it is Account-scoped and in
       the route inventory, and the generated client is regenerated.
-- [ ] `[` on a reply, or a click on its "Reply to #N" on the Posts tab, opens
+- [x] `[` on a reply, or a click on its "Reply to #N" on the Posts tab, opens
       the panel with the whole chain at once and the Highlight on the parent;
       hovering the link still previews; `[` on a Post that is not a reply says
       so; `[` while open does nothing.
-- [ ] Inside the panel `j`, `k`, `gg`, `G` and counts move the Highlight and
+- [x] Inside the panel `j`, `k`, `gg`, `G` and counts move the Highlight and
       keep it in view; card keys act on the highlighted card; an action key the
       card lacks does nothing; `-`, `+`, `M`, `.` work as in the feed; the
       corner guide lists the panel's keys.
-- [ ] `]`, Esc, the close button, a tab switch and a change of filter, sort,
+- [x] `]`, Esc, the close button, a tab switch and a change of filter, sort,
       spotlight or window close the panel and restore the feed's Highlight; a
       Live-minute refetch leaves it open.
-- [ ] A reply link inside the chain moves to its parent there; one in the feed
+- [x] A reply link inside the chain moves to its parent there; one in the feed
       starts a new chain.
-- [ ] The feed copy of the highlighted Post scrolls into view with a dashed
+- [x] The feed copy of the highlighted Post scrolls into view with a dashed
       outline; the starting Post's feed card shows sparse dots when not dashed;
       the feed shows no Highlight ring while the panel is open.
-- [ ] Panel cards are the feed's own cards; the Pick box shows only on Posts
+- [x] Panel cards are the feed's own cards; the Pick box shows only on Posts
       inside the Analysis window; a parent not stored shows Telegram's excerpt.
-- [ ] `p` steps only through the chain's photos and never pages the feed.
-- [ ] The highlighted card holds still while cards above it load, and after a
+- [x] `p` steps only through the chain's photos and never pages the feed.
+- [x] The highlighted card holds still while cards above it load, and after a
       finger or wheel scroll the top card does; this works without rendered
       frames (resize, content change and photo load all re-check).
-- [ ] On a phone the panel fills the screen with its close button always in
+- [x] On a phone the panel fills the screen with its close button always in
       view, nothing is muted, and the ring marks the parent; on desk widths it
       overlays the feed's right side. It renders through a portal and is not a
       dialog.
-- [ ] Reply links on other tabs keep only the hover preview; the variant A
+- [x] Reply links on other tabs keep only the hover preview; the variant A
       feed-jump chain code and the variant switch are gone.
-- [ ] Tests: the chain route over HTTP, and the mocked Posts-tab Playwright
+- [x] Tests: the chain route over HTTP, and the mocked Posts-tab Playwright
       spec at desk and phone size (run serially), plus keyboard-harness cases
       for `[` on a non-reply and `[` while open; each mutation-checked.
+
+## Comments
+
+- 2026-11-02: implemented on `claude/rch-02-reply-chain-panel-b3df9a`, opened
+  as a PR against `main`. The route is `posts_view.chain`, one recursive CTE
+  scoped at every step; the panel is `post-card/ReplyChain.tsx`. Mouse and
+  touch have no Esc (Keyboard mode only); the close button covers them. The
+  bottom-sheet preview of a reply link now opens only off the Posts tab, so
+  its Playwright case moved to the unit tests that already cover it.
+  Holding still is ported from the prototype and has no automated test of
+  its own: the whole chain now arrives in one read, so nothing loads above
+  the held card except photos.

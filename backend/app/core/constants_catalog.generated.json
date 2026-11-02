@@ -825,10 +825,18 @@
       "value": 200
     },
     {
+      "comment": "The most Posts one Reply chain reads, its first Post included.",
+      "expression": "100",
+      "file": "backend/app/services/posts_view.py",
+      "line": 510,
+      "name": "MAX_CHAIN_POSTS",
+      "value": 100
+    },
+    {
       "comment": "Every spread's bar count (`BINS` in `components/Spread.tsx`), so one component draws both.",
       "expression": "32",
       "file": "backend/app/services/posts_view.py",
-      "line": 533,
+      "line": 639,
       "name": "VALUE_BINS",
       "value": 32
     },
@@ -1340,7 +1348,7 @@
       "comment": "A card hidden under the workspace's sticky header is not \"on screen\".",
       "expression": "80",
       "file": "frontend/src/components/post-card/FeedKeyboard.tsx",
-      "line": 22,
+      "line": 24,
       "name": "HEADER_PX",
       "value": 80
     },
@@ -1375,6 +1383,14 @@
       "line": 337,
       "name": "SWIPE_PX",
       "value": 60
+    },
+    {
+      "comment": "Room under the panel's sticky header.",
+      "expression": "56",
+      "file": "frontend/src/components/post-card/ReplyChain.tsx",
+      "line": 28,
+      "name": "HEADER_PX",
+      "value": 56
     },
     {
       "comment": "",
@@ -1476,7 +1492,7 @@
       "comment": "The Settling curve is refitted daily and the reach settings change by hand, so an hour-old copy is as good as a fresh one (PFB-03).",
       "expression": "60 * 60 * 1000",
       "file": "frontend/src/hooks/queryKeys.ts",
-      "line": 199,
+      "line": 202,
       "name": "VIEW_ESTIMATE_STALE_TIME",
       "value": 3600000
     },

@@ -509,6 +509,48 @@ export const rankingQuery = (view: PostsView, api: RankingApi) =>
   })
 
 /**
+ * A reply's Reply chain (RCH-02), read whole in one request: its Posts
+ * flagged under the Scope's Channels, the window and the selection, as the
+ * lookup flags them. Keyed by the window and the selection's revision, so a
+ * Pick in the panel and a sync read it again while a Live minute does not.
+ */
+export const chainQuery = (
+  view: PostsView,
+  from: { channelName: string; id: number },
+) => {
+  const start = { channelName: from.channelName, postId: from.id }
+  return queryOptions({
+    queryKey: queryKeys.postsChain({
+      ...start,
+      channelNames: view.scopeChannelNames,
+      window: view.windowKey,
+      selection: view.selectionRevision,
+    }),
+    queryFn: () =>
+      dataApi.getPostsChain({
+        channelName: from.channelName,
+        postId: from.id,
+        ...postScopeBody({
+          channelNames: view.scopeChannelNames,
+          startDate: view.startDate,
+          endDate: view.endDate,
+          selection: view.selection,
+        }),
+      }),
+    staleTime: SUMMARIZER_STALE_TIME,
+    // The same chain read again keeps its cards up; another chain starts empty.
+    placeholderData: (previous, query) => {
+      const was = query?.queryKey[1] as typeof start | undefined
+      return was?.channelName === start.channelName &&
+        was.postId === start.postId
+        ? previous
+        : undefined
+    },
+    retry: false,
+  })
+}
+
+/**
  * The selected Posts the tab shows, in its order, at most `EXPORT_LIMIT`:
  * what Copy links and Export Markdown take (PTR-06). While ranked, the
  * Ranking's cached Posts; otherwise asked fresh, so an edit a moment ago is

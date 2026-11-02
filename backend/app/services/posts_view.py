@@ -26,9 +26,9 @@ import math
 import uuid
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
-from typing import Any
+from typing import Any, Literal
 
-from sqlalchemy import ColumnElement, and_, func, literal, not_, or_, true
+from sqlalchemy import ColumnElement, and_, case, func, literal, not_, or_, true
 from sqlalchemy import select as sa_select
 from sqlalchemy.orm import aliased
 from sqlmodel import Session, col, select
@@ -502,6 +502,112 @@ def posts_by_ref(
         return []
     stmt = scoped_select(select(Post), Post, user_id)
     return [post_to_camel(p) for p in session.exec(_by_ref(stmt, pairs)).all()]
+
+
+# ---- The Reply chain (RCH-02) ----------------------------------------------------
+
+#: The most Posts one Reply chain reads, its first Post included.
+MAX_CHAIN_POSTS = 100
+
+ChainStop = Literal["notReply", "parentNotStored", "privateParent", "depthCap"]
+
+
+def chain(
+    session: Session, view: PostsView, channel_name: str, post_id: int
+) -> tuple[list[dict[str, Any]], ChainStop] | None:
+    """The Reply chain from one Post up to the top, each flagged by the selection.
+
+    One recursive query, a level per step through the unique (Channel, post
+    id) index: the parent's Channel is the reply's `replyTo.channel`, or its
+    own when that is empty, and a link naming no Channel is a private parent.
+    A later Album Post replies with its Album's first Post's reply (ADR-046)
+    and carries it on the wire, as the hover preview shows it. Every step is
+    scoped, so a parent the Account does not Follow is not stored for it.
+    Ignores the Post filter, the keyword, the cap and the sort. `None` when
+    the Account cannot see the first Post.
+    """
+    head = aliased(Post)
+
+    def walked(depth: Any) -> Any:
+        # Only the first Post of an Album holds its reply.
+        own = col(Post.reply_to_post_id).isnot(None)
+        stmt = sa_select(
+            col(Post.channel_name).label("channel_name"),
+            col(Post.post_id).label("post_id"),
+            depth.label("depth"),
+            func.coalesce(Post.reply_to_post_id, head.reply_to_post_id).label(
+                "reply_id"
+            ),
+            case((own, Post.reply_to), else_=head.reply_to).label("reply_to"),
+        )
+        return scoped_select(stmt, Post, view.user_id).outerjoin(
+            head,
+            and_(
+                col(head.channel_name) == Post.channel_name,
+                col(head.post_id) == Post.album_id,
+            ),
+        )
+
+    walk = (
+        walked(literal(0))
+        .where(col(Post.channel_name) == channel_name, col(Post.post_id) == post_id)
+        .cte("chain", recursive=True)
+    )
+    below = walk.alias("below")
+    named = below.c.reply_to["channel"].as_string()
+    walk = walk.union_all(
+        walked(below.c.depth + 1)
+        .join(
+            below,
+            and_(
+                col(Post.channel_name)
+                == func.coalesce(func.nullif(named, ""), below.c.channel_name),
+                col(Post.post_id) == below.c.reply_id,
+            ),
+        )
+        .where(
+            below.c.depth < MAX_CHAIN_POSTS - 1,
+            or_(
+                below.c.reply_to["url"].as_string().is_(None),
+                func.coalesce(named, "") != "",
+            ),
+        )
+    )
+    # The walk scoped every step, so its rows are the Account's already.
+    stmt = (
+        select(Post, view.selected, walk.c.reply_id, walk.c.reply_to)
+        .join(
+            walk,
+            and_(
+                col(Post.channel_name) == walk.c.channel_name,
+                col(Post.post_id) == walk.c.post_id,
+            ),
+        )
+        .order_by(walk.c.depth)
+    )
+    posts = [
+        {
+            **post_to_camel(p),
+            "replyToPostId": reply_id,
+            "replyTo": reply_to,
+            "selected": bool(chosen),
+        }
+        for p, chosen, reply_id, reply_to in session.execute(stmt).all()
+    ]
+    return (posts, _chain_stop(posts)) if posts else None
+
+
+def _chain_stop(posts: list[dict[str, Any]]) -> ChainStop:
+    """Why the walk ended at the top Post."""
+    top = posts[-1]
+    reply_to = top["replyTo"] or {}
+    if top["replyToPostId"] is None:
+        return "notReply"
+    if reply_to.get("url") and not reply_to.get("channel"):
+        return "privateParent"
+    if len(posts) >= MAX_CHAIN_POSTS:
+        return "depthCap"
+    return "parentNotStored"
 
 
 # ---- What an Action covers -------------------------------------------------------

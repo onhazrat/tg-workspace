@@ -1,7 +1,9 @@
 /**
  * The Posts tab's reply link previews the parent, against the real app with
- * the posts reads mocked: hovering shows the whole parent, a parent that is
- * itself a reply previews its own, and a narrow screen opens a bottom sheet.
+ * the posts reads mocked: hovering shows the whole parent, and a parent that
+ * is itself a reply previews its own. A click or tap on the Posts tab opens
+ * the Reply chain instead (`summarizer-posts-reply-chain.spec.ts`); the
+ * bottom sheet other tabs open is unit-tested in `ReplyParent.test.tsx`.
  */
 import type { Page } from "@playwright/test"
 import { expect, test } from "./fixtures.ts"
@@ -92,18 +94,5 @@ test("hovering a reply link shows its whole parent, and the parent's own reply l
   await expect(page.getByTestId("reply-parent-card")).toHaveCount(2)
   await expect(page.getByTestId("reply-parent-card").nth(1)).toContainText(
     "the root question",
-  )
-})
-
-test("on a narrow screen a tap opens the parent in a bottom sheet", async ({
-  page,
-}) => {
-  const { channel } = await openReply(page)
-  // Narrowed after the workspace is set up, so only the preview changes mode.
-  await page.setViewportSize({ width: 390, height: 844 })
-  await page.getByTestId(`post-reply-badge-${channel}-3`).click()
-  const sheet = page.getByRole("dialog")
-  await expect(sheet.getByTestId("reply-parent-card")).toContainText(
-    "its last line",
   )
 })

@@ -271,6 +271,12 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
         "ref in the batch, test_post_filter_tree.py; flagged by a Post "
         "selection with a foreign ref, test_post_selection.py",
     ),
+    ("POST", f"{DATA}/posts/chain"): (
+        Reason.COVERED_ELSEWHERE,
+        "every step of the walk is scoped: a parent in a Channel nobody "
+        "follows ends the chain, and a first Post one cannot see answers 404; "
+        "test_posts_chain.py",
+    ),
     ("POST", f"{DATA}/posts/counts"): (
         Reason.COVERED_ELSEWHERE,
         "test_post_tenancy_scoping.py; under the Post filter with two live "

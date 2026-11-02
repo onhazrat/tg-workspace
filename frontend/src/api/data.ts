@@ -3,6 +3,8 @@ import type {
   DirectoryFollowSource,
   DirectoryViewRequest,
   GateOutcome,
+  PostChainRequest,
+  PostChainResponse,
   PostFeedRequest,
   PostFilteredRequest,
   SummarySubmitRequest,
@@ -502,6 +504,17 @@ export const dataApi = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+
+  /**
+   * A reply's Reply chain, the reply first and the top last, each flagged by
+   * the selection, and why it ends there (RCH-02). Its Posts typed as the
+   * feed's.
+   */
+  getPostsChain: (body: PostChainRequest) =>
+    request<Omit<PostChainResponse, "posts"> & { posts: Post[] }>(
+      "/api/v1/data/posts/chain",
+      { method: "POST", body: JSON.stringify(body) },
+    ),
 
   /**
    * Resolve specific posts by natural key. Batch capped server-side at 200.
