@@ -12,18 +12,32 @@ Replies to those Albums' photos then find their parents. The spec is
 
 **Blocked by:** ALB-01.
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Given a stored one-Post Album and its fixture page, the job writes the
+- [x] Given a stored one-Post Album and its fixture page, the job writes the
       missing Posts and sets Album membership on all of them, with the shared
       values left on the first Post.
-- [ ] An Album whose page fails to fetch, or whose page no longer shows the
+- [x] An Album whose page fails to fetch, or whose page no longer shows the
       Album, stays one Post and is counted as left.
-- [ ] Running the job a second time writes nothing.
-- [ ] An interrupted run resumes without redoing finished Albums.
-- [ ] Only Albums within retention are walked, through the same Requests and
+- [x] Running the job a second time writes nothing.
+- [x] An interrupted run resumes without redoing finished Albums.
+- [x] Only Albums within retention are walked, through the same Requests and
       limits as a sync.
-- [ ] The job reports split and left counts; it is runnable with `--dry-run`
+- [x] The job reports split and left counts; it is runnable with `--dry-run`
       first, like the other maintenance scripts, and is listed in
       `development.md`.
-- [ ] Tests run at the sync seam with fixture pages, mutation-checked.
+- [x] Tests run at the sync seam with fixture pages, mutation-checked.
+
+## Comments
+
+- 2026-11-02: implemented on `claude/alb-02-split-stored-albums-737b74` as
+  `sync_orchestrator.split_stored_albums`, run by
+  `backend/scripts/split_stored_albums.py` (`--dry-run` counts, fetches
+  nothing). Choices: each Channel's walk is charged to a follower's auto-sync
+  Budget (the Operator's when they follow it) and held to the sync's ceiling,
+  Channel claim and page cap per run; one page splits every stored Album it
+  reaches; an Album is split only when the page shows all of its stored size,
+  each with a thumbnail. Channels nobody follows are skipped (Out of Scope).
+  An Album left once is fetched again on the next run, which writes nothing
+  unless the page now shows it whole. Not run against staging; the Operator
+  runs it after deploy.
