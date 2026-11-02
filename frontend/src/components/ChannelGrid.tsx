@@ -676,7 +676,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
           requestSpotlight(name)
           setActiveTab("posts")
         }}
-        carried={cardFace(channelCardZoom, settings).keys}
+        face={cardFace(channelCardZoom, settings)}
       />
 
       <ChannelGridDialogs

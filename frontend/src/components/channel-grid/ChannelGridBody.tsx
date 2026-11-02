@@ -1,8 +1,8 @@
 import { Send } from "lucide-react"
 import type React from "react"
+import { ChannelGridSkeleton } from "@/components/channel-grid/ChannelGridSkeleton"
 import { VirtualizedChannelGrid } from "@/components/channel-grid/VirtualizedChannelGrid"
-import { Skeleton } from "@/components/ui/skeleton"
-import type { CardKey, CardZoom } from "@/lib/channels/card-zoom"
+import type { CardFace, CardZoom } from "@/lib/channels/card-zoom"
 import { channelGridCountLabel } from "@/lib/channels/grid-count-label"
 import type { Channel } from "@/types"
 
@@ -33,8 +33,8 @@ type ChannelGridBodyProps = {
   onZoomChange: (zoom: CardZoom) => void
   /** Keyboard mode's c: the Channel alone in Posts. */
   onSpotlight: (name: string) => void
-  /** The actions this card size carries a control for, for the corner list. */
-  carried: readonly CardKey[]
+  /** What a card draws at this Card size; its keys feed the corner list. */
+  face: CardFace
 }
 
 /** Grid body: loading skeletons, empty state, or the ChannelCard grid with infinite-scroll sentinel. */
@@ -57,40 +57,9 @@ export const ChannelGridBody: React.FC<ChannelGridBodyProps> = ({
   scrollContainerRef,
   onZoomChange,
   onSpotlight,
-  carried,
+  face,
 }) => {
-  if (isLoading) {
-    return (
-      <div
-        className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
-        id="tour-channel-grid"
-      >
-        {Array.from({ length: 8 }).map((_, index) => (
-          <div
-            key={`channel-skeleton-${index}`}
-            className="rounded-2xl border border-app-ink/10 bg-app-card p-5"
-          >
-            <div className="mb-4 flex items-start gap-4">
-              <Skeleton className="h-14 w-14 rounded-full bg-app-ink/10" />
-              <div className="flex-1 space-y-2 pt-1">
-                <Skeleton className="h-4 w-3/4 bg-app-ink/10" />
-                <Skeleton className="h-3 w-1/2 bg-app-ink/10" />
-              </div>
-            </div>
-            <div className="mb-5 flex flex-wrap gap-2">
-              <Skeleton className="h-6 w-24 bg-app-ink/10" />
-              <Skeleton className="h-6 w-20 bg-app-ink/10" />
-              <Skeleton className="h-6 w-28 bg-app-ink/10" />
-            </div>
-            <div className="mt-6 flex items-center justify-between border-t border-app-ink/5 pt-4">
-              <Skeleton className="h-8 w-28 bg-app-ink/10" />
-              <Skeleton className="h-8 w-20 bg-app-ink/10" />
-            </div>
-          </div>
-        ))}
-      </div>
-    )
-  }
+  if (isLoading) return <ChannelGridSkeleton zoom={zoom} face={face} />
 
   if (filteredChannelCount === 0) {
     return (
@@ -137,7 +106,7 @@ export const ChannelGridBody: React.FC<ChannelGridBodyProps> = ({
         onLoadMore={onLoadMore}
         onZoomChange={onZoomChange}
         onSpotlight={onSpotlight}
-        carried={carried}
+        carried={face.keys}
       />
 
       {/* Kept as a position marker for tests and as the visual end-of-list

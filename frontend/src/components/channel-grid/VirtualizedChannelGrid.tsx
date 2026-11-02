@@ -1,6 +1,6 @@
 import { useVirtualizer } from "@tanstack/react-virtual"
 import type React from "react"
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef } from "react"
 import { ChannelCard } from "@/components/ChannelCard"
 import {
   useChannelKeys,
@@ -9,6 +9,7 @@ import {
 import type { CardKey, CardZoom } from "@/lib/channels/card-zoom"
 import { GAP_PX, gridLanesForWidth } from "@/lib/channels/grid-lanes"
 import type { Channel } from "@/types"
+import { useGridBox } from "./useGridBox"
 
 /**
  * Windowed channel grid.
@@ -85,35 +86,14 @@ export const VirtualizedChannelGrid: React.FC<VirtualizedChannelGridProps> = ({
   carried,
 }) => {
   const gridRef = useRef<HTMLDivElement>(null)
-  const [width, setWidth] = useState(() =>
-    typeof window === "undefined" ? 1280 : window.innerWidth,
-  )
-  const lanes = gridLanesForWidth(width, zoom)
   /**
-   * Distance from the top of the scroll container to the top of the grid — the
-   * filter bar sits above it, so this is not zero. Held in state rather than
-   * read from the ref during render, where it would be stale on the first pass
-   * and would never update when the bar above changes height.
+   * `scrollMargin` is the distance from the top of the scroll container to the
+   * top of the grid. The filter bar sits above it, so this is not zero. Held in
+   * state rather than read from the ref during render, where it would be stale
+   * on the first pass and would never update when the bar above changes height.
    */
-  const [scrollMargin, setScrollMargin] = useState(0)
-
-  // Track the grid's own width, not the window's: the workspace has a sidebar,
-  // so the two disagree and the column count follows the container.
-  useLayoutEffect(() => {
-    const element = gridRef.current
-    if (!element) return
-
-    const apply = () => {
-      setWidth(element.clientWidth)
-      setScrollMargin(element.offsetTop)
-    }
-    apply()
-
-    if (typeof ResizeObserver === "undefined") return
-    const observer = new ResizeObserver(apply)
-    observer.observe(element)
-    return () => observer.disconnect()
-  }, [])
+  const { width, top: scrollMargin } = useGridBox(gridRef)
+  const lanes = gridLanesForWidth(width, zoom)
 
   const rowCount = Math.ceil(channels.length / lanes)
 
