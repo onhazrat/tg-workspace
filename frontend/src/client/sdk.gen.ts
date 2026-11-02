@@ -943,8 +943,9 @@ export const dataLookupPostsRoute = <ThrowOnError extends boolean = true>(option
  *
  * A reply's Reply chain up to the top in one read, and why it ends there.
  *
- * The first Post first, each flagged by the Post selection under the sent
- * window and Channels. 404 when the first Post is not one the Account sees.
+ * The starting Post first, each flagged by the Post selection under the
+ * sent window and Channels. 404 when the Account cannot see the starting
+ * Post.
  */
 export const dataPostsChain = <ThrowOnError extends boolean = true>(options: Options<DataPostsChainData, ThrowOnError>): RequestResult<DataPostsChainResponses, DataPostsChainErrors, ThrowOnError, 'data'> => (options.client ?? client).post<DataPostsChainResponses, DataPostsChainErrors, ThrowOnError, 'data'>({
     responseStyle: 'data',

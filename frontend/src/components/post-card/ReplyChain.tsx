@@ -10,6 +10,7 @@ import { Loader2, X } from "lucide-react"
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { toast } from "sonner"
+import type { PostChainResponse } from "@/client"
 import { usePostsViewEdits } from "@/contexts/PostsViewContext"
 import { lastHighlight } from "@/lib/keyboard/mode"
 import { pick } from "@/lib/posts/post-selection"
@@ -25,7 +26,7 @@ import { ReplyParentCard } from "./ReplyParent"
 
 const PANEL = 'aside[aria-label="Reply chain"]'
 /** Room under the panel's sticky header. */
-const HEADER_PX = 56
+const PANEL_HEADER_PX = 56
 
 const say = (why: string) => toast(why, { id: "reply-chain" })
 
@@ -77,7 +78,7 @@ const hold = (el: HTMLElement) => {
 export function revealInPanel(el: HTMLElement | null) {
   const panel = el?.parentElement
   if (!el || !panel) return
-  const top = el.offsetTop - HEADER_PX
+  const top = el.offsetTop - PANEL_HEADER_PX
   const bottom = el.offsetTop + el.offsetHeight - panel.clientHeight + 12
   // Instant: a smooth scroll is cut short by the holding whenever a card above
   // changes height (a photo loading), and stops off target.
@@ -89,7 +90,7 @@ export function revealInPanel(el: HTMLElement | null) {
 /** The chain's items, top to bottom: an excerpt card first when the parent of the top is not stored. */
 function chainItems(
   posts: Post[],
-  stop: string,
+  stop: PostChainResponse["stop"],
 ): { key: string; post: Post; excerpt: boolean }[] {
   const down = [...posts].reverse()
   const top = down[0]
@@ -110,9 +111,12 @@ export function useReplyChain(view: PostsView, feedKey: string) {
     origin: Post
     feedKey: string
   } | null>(null)
-  // Mouse and touch have no Highlight: the ring the panel shows without one.
-  const [ring, setRing] = useState<string | null>(null)
-  if (opened && opened.feedKey !== feedKey) setOpened(null)
+  // Where a reply link inside the chain moved the ring to.
+  const [moved, setMoved] = useState<string | null>(null)
+  if (opened && opened.feedKey !== feedKey) {
+    lastHighlight.set("posts", postCardKey(opened.origin))
+    setOpened(null)
+  }
   const origin = opened?.feedKey === feedKey ? opened.origin : null
   const query = useQuery({
     ...chainQuery(view, origin ?? { channelName: "", id: 0 }),
@@ -120,6 +124,9 @@ export function useReplyChain(view: PostsView, feedKey: string) {
   })
   const data = origin ? query.data : undefined
   const items = data ? chainItems(data.posts, data.stop) : null
+  // The parent as the route has it: a later Album Post's own copy holds no
+  // reply, the route's carries its Album's (ADR-046).
+  const start = data ? parentKey(data.posts[0]) : null
 
   const close = () => {
     if (origin) lastHighlight.set("posts", postCardKey(origin))
@@ -155,10 +162,9 @@ export function useReplyChain(view: PostsView, feedKey: string) {
     const within =
       items?.some((i) => i.key === postCardKey(reply)) &&
       items.some((i) => i.key === key)
-    setRing(key)
+    setMoved(within ? key : null)
     if (within) return { key, within: true }
     held = null
-    if (!origin) lastHighlight.set("chain", key)
     setOpened({ origin: reply, feedKey })
     return { key, within: origin !== null }
   }
@@ -166,9 +172,12 @@ export function useReplyChain(view: PostsView, feedKey: string) {
   return {
     origin,
     items,
-    keys: items?.map((item) => item.key) ?? null,
+    // Open while it loads too, so ], Esc and [ are the chain's at once.
+    keys: origin ? (items?.map((item) => item.key) ?? []) : null,
     loading: origin !== null && !data,
-    ring,
+    start,
+    // Mouse and touch have no Highlight: the ring the panel shows without one.
+    ring: moved ?? start,
     open,
     close,
   }
@@ -234,7 +243,7 @@ function useHoldStill(panel: React.RefObject<HTMLElement | null>, on: boolean) {
         (c): c is HTMLElement =>
           c instanceof HTMLElement &&
           !!c.dataset.chainKey &&
-          c.offsetTop + c.offsetHeight > box.scrollTop + HEADER_PX,
+          c.offsetTop + c.offsetHeight > box.scrollTop + PANEL_HEADER_PX,
       )
       if (top) hold(top)
     }

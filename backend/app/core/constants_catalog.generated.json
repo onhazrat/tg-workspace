@@ -825,7 +825,7 @@
       "value": 200
     },
     {
-      "comment": "The most Posts one Reply chain reads, its first Post included.",
+      "comment": "The most Posts one Reply chain reads, its starting Post included.",
       "expression": "100",
       "file": "backend/app/services/posts_view.py",
       "line": 510,
@@ -1388,8 +1388,8 @@
       "comment": "Room under the panel's sticky header.",
       "expression": "56",
       "file": "frontend/src/components/post-card/ReplyChain.tsx",
-      "line": 28,
-      "name": "HEADER_PX",
+      "line": 29,
+      "name": "PANEL_HEADER_PX",
       "value": 56
     },
     {

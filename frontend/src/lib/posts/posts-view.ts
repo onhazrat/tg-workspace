@@ -528,8 +528,7 @@ export const chainQuery = (
     }),
     queryFn: () =>
       dataApi.getPostsChain({
-        channelName: from.channelName,
-        postId: from.id,
+        ...start,
         ...postScopeBody({
           channelNames: view.scopeChannelNames,
           startDate: view.startDate,

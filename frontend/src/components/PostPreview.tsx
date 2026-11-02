@@ -101,7 +101,8 @@ export function PostPreview({
         rel="noopener noreferrer"
         delay={150}
         onClick={(e) => {
-          if (!onActivate) return
+          // A modified click still opens Telegram in a new tab.
+          if (!onActivate || e.metaKey || e.ctrlKey || e.shiftKey) return
           e.preventDefault()
           onActivate()
         }}

@@ -7,10 +7,10 @@
  * Highlight and presses the card control carrying a key's `data-shortcut`,
  * so each action keeps one implementation, its button's.
  */
+import { useEffect } from "react"
 import { toast } from "sonner"
 import { useKeyboardList } from "@/components/keyboard/useKeyboardList"
 import { ACTIONS, LIST_KEYS } from "@/lib/keyboard/key-list"
-import { panelItem, revealInPanel } from "./ReplyChain"
 
 /** A Post card's `data-post-key`, which is its id in the list. */
 export const postCardKey = (post: { channelName: string; id: number }) =>
@@ -42,6 +42,11 @@ export interface ChainKeys {
   items: readonly string[] | null
   /** Where a first move in the open chain starts: the reply's parent. */
   ring: string | null
+  /** Where the Highlight goes once the chain is read: the reply's parent. */
+  start: string | null
+  /** The open chain's item for a key, and bringing it into view. */
+  element: (key: string) => HTMLElement | null
+  reveal: (key: string) => void
   /** [ on a feed Post: opens its chain, or says it is not a reply. */
   open: (key: string) => void
   close: () => void
@@ -71,10 +76,10 @@ export function usePostKeys({
   const list = useKeyboardList({
     list: panel ? "chain" : "posts",
     items: panel ?? keys,
-    element: panel ? panelItem : cardOf,
+    element: panel && chain ? chain.element : cardOf,
     reveal: (at) =>
       panel
-        ? revealInPanel(panelItem(panel[at]))
+        ? chain?.reveal(panel[at])
         : cardOf(keys[at])?.scrollIntoView({
             block: "start",
             behavior: "smooth",
@@ -107,7 +112,8 @@ export function usePostKeys({
       }
       if (key === LIST_KEYS.showNew) {
         const first = onShowNew()
-        if (first) list.setHighlight(first)
+        // The panel keeps the Highlight while it is open.
+        if (first && !panel) list.setHighlight(first)
         else toast("No new posts", { id: "new-posts" })
         return true
       }
@@ -129,5 +135,11 @@ export function usePostKeys({
         'input[aria-label="Keyword search"], input[aria-label="Meaning search"]',
       ),
   })
+  // The Highlight starts on the parent once the chain's items are in.
+  const start = panel?.length ? (chain?.start ?? null) : null
+  const setHighlight = list.setHighlight
+  useEffect(() => {
+    if (start) setHighlight(start)
+  }, [start])
   return list
 }

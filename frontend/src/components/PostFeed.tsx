@@ -122,6 +122,9 @@ export const PostFeed: React.FC<PostFeedProps> = ({
     chain: {
       items: chain.keys,
       ring: chain.ring,
+      start: chain.start,
+      element: panelItem,
+      reveal: (key) => revealInPanel(panelItem(key)),
       open: (key) => {
         const post = posts.find((p) => postCardKey(p) === key)
         if (post) openChain(post)

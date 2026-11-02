@@ -388,7 +388,7 @@ class PostChainRequest(BaseModel):
 
 
 class PostChainResponse(BaseModel):
-    """A Reply chain from its first Post up to the top, and why it ends there.
+    """A Reply chain from its starting Post up to the top, and why it ends there.
 
     `parentNotStored` and `privateParent` leave the excerpt on the top Post's
     `replyTo.text`.

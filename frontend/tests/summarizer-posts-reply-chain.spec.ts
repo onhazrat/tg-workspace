@@ -56,6 +56,7 @@ async function mockPosts(page: Page, channel: string) {
     2: [p[2], p[1]],
   }
   const chainBodies: { postId: number; selection?: unknown[] }[] = []
+  const chainRead = { delay: 0 }
   await page.route("**/api/v1/rch02-photo", (route) =>
     route.fulfill({ contentType: "image/svg+xml", body: PHOTO }),
   )
@@ -71,14 +72,16 @@ async function mockPosts(page: Page, channel: string) {
       json: { counts: { [channel]: 3 }, selected: {}, tooNewToJudge: 0 },
     }),
   )
-  await page.route("**/api/v1/data/posts/chain", (route) => {
+  await page.route("**/api/v1/data/posts/chain", async (route) => {
     const body = route.request().postDataJSON()
     chainBodies.push(body)
+    if (chainRead.delay)
+      await new Promise((r) => setTimeout(r, chainRead.delay))
     return route.fulfill({
       json: { posts: chains[body.postId], stop: "notReply" },
     })
   })
-  return { channel, chainBodies }
+  return { channel, chainBodies, chainRead }
 }
 
 async function openPosts(page: Page) {
@@ -218,6 +221,39 @@ test("p steps through the chain's photos only", async ({ page }) => {
   await expect(
     viewer.getByRole("button", { name: "Next photo" }),
   ).toBeDisabled()
+})
+
+test("] closes the chain while it is still being read", async ({ page }) => {
+  const { chainRead } = await openPosts(page)
+  chainRead.delay = 1500
+  await keyboardOn(page)
+  await page.keyboard.press("j")
+  await page.keyboard.press("j")
+  await page.keyboard.press("[")
+  await expect(panel(page)).toBeVisible()
+  await page.keyboard.press("]")
+  await expect(panel(page)).toHaveCount(0)
+  // The read landing later opens nothing.
+  await page.waitForTimeout(2000)
+  await expect(panel(page)).toHaveCount(0)
+  await expect(page.locator("main article[data-highlight]")).toHaveAttribute(
+    "data-post-key",
+    /_4$/,
+  )
+})
+
+test("a keyword filter closes the panel", async ({ page }) => {
+  const { channel } = await openPosts(page)
+  await page.getByTestId(`post-reply-badge-${channel}-4`).click()
+  await expect(panel(page)).toBeVisible()
+  await page.getByRole("textbox", { name: "Keyword search" }).fill("answer")
+  await expect(panel(page)).toHaveCount(0)
+  // The feed's Highlight is back on the reply the chain started from.
+  await keyboardOn(page)
+  await expect(page.locator("main article[data-highlight]")).toHaveAttribute(
+    "data-post-key",
+    `${channel}_4`,
+  )
 })
 
 test("a sort change closes the panel", async ({ page }) => {

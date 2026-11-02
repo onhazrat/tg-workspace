@@ -227,8 +227,9 @@ def posts_chain(
 ) -> PostChainResponse:
     """A reply's Reply chain up to the top in one read, and why it ends there.
 
-    The first Post first, each flagged by the Post selection under the sent
-    window and Channels. 404 when the first Post is not one the Account sees.
+    The starting Post first, each flagged by the Post selection under the
+    sent window and Channels. 404 when the Account cannot see the starting
+    Post.
     """
     found = posts_view.chain(
         session,

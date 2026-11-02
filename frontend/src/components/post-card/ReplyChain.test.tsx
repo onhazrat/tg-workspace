@@ -16,7 +16,7 @@ import { lastHighlight, setKeyboardMode } from "@/lib/keyboard/mode"
 import { chainQuery, type PostsView } from "@/lib/posts/posts-view"
 import type { Post } from "@/types"
 import { postCardKey, usePostKeys } from "./FeedKeyboard"
-import { useReplyChain } from "./ReplyChain"
+import { panelItem, useReplyChain } from "./ReplyChain"
 
 const OPS = {
   go: () => {},
@@ -39,7 +39,9 @@ const post = (id: number, replyToPostId: number | null = null): Post =>
 const TOP = post(1)
 const MIDDLE = post(2, 1)
 const REPLY = post(3, 2)
-const FEED = [TOP, REPLY]
+/** A later Post of Album #4: only the Album's first Post holds its reply. */
+const PHOTO = { ...post(5), albumId: 4 } as Post
+const FEED = [TOP, REPLY, PHOTO]
 
 const VIEW = {
   scopeChannelNames: ["ch"],
@@ -61,10 +63,14 @@ function Feed() {
     onCompact: () => {},
     spotlit: false,
     onSpotlightBack: () => {},
-    onShowNew: () => null,
+    // A held Post: `.` shows it.
+    onShowNew: () => "ch_9",
     chain: {
       items,
       ring: chain.ring,
+      start: chain.start,
+      element: panelItem,
+      reveal: () => {},
       open: (key) => {
         opened.push(key)
         const reply = FEED.find((p) => postCardKey(p) === key)
@@ -134,6 +140,11 @@ beforeEach(() => {
     posts: [REPLY, MIDDLE, TOP],
     stop: "notReply" as const,
   })
+  // The route's copy of the photo carries its Album's reply.
+  client.setQueryData(chainQuery(VIEW, PHOTO).queryKey, {
+    posts: [{ ...PHOTO, replyToPostId: 2 }, MIDDLE, TOP],
+    stop: "notReply" as const,
+  })
   lastHighlight.clear()
   opened = []
   setKeyboardMode(true)
@@ -178,5 +189,21 @@ describe("the Reply chain's keys", () => {
     type("]")
     await act(async () => {})
     expect(feedHighlight()).toBe("ch_3")
+  })
+
+  test("[ on a later Album Post opens on the parent its Album answers", async () => {
+    mount()
+    type("G", "[")
+    await act(async () => {})
+    expect(chainKeys()).toEqual(["ch_1", "ch_2", "ch_5"])
+    expect(chainHighlight()).toBe("ch_2")
+  })
+
+  test(". in the chain shows the held Posts and leaves the Highlight in the chain", async () => {
+    mount()
+    type("j", "j", "[")
+    await act(async () => {})
+    type(".")
+    expect(chainHighlight()).toBe("ch_2")
   })
 })

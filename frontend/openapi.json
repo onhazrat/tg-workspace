@@ -2146,7 +2146,7 @@
       "post": {
         "tags": ["data"],
         "summary": "Posts Chain",
-        "description": "A reply's Reply chain up to the top in one read, and why it ends there.\n\nThe first Post first, each flagged by the Post selection under the sent\nwindow and Channels. 404 when the first Post is not one the Account sees.",
+        "description": "A reply's Reply chain up to the top in one read, and why it ends there.\n\nThe starting Post first, each flagged by the Post selection under the\nsent window and Channels. 404 when the Account cannot see the starting\nPost.",
         "operationId": "data-posts_chain",
         "requestBody": {
           "content": {
@@ -12941,7 +12941,7 @@
         "type": "object",
         "required": ["posts", "stop"],
         "title": "PostChainResponse",
-        "description": "A Reply chain from its first Post up to the top, and why it ends there.\n\n`parentNotStored` and `privateParent` leave the excerpt on the top Post's\n`replyTo.text`."
+        "description": "A Reply chain from its starting Post up to the top, and why it ends there.\n\n`parentNotStored` and `privateParent` leave the excerpt on the top Post's\n`replyTo.text`."
       },
       "PostCountsResponse": {
         "properties": {

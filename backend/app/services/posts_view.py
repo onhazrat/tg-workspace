@@ -506,7 +506,7 @@ def posts_by_ref(
 
 # ---- The Reply chain (RCH-02) ----------------------------------------------------
 
-#: The most Posts one Reply chain reads, its first Post included.
+#: The most Posts one Reply chain reads, its starting Post included.
 MAX_CHAIN_POSTS = 100
 
 ChainStop = Literal["notReply", "parentNotStored", "privateParent", "depthCap"]
@@ -515,7 +515,7 @@ ChainStop = Literal["notReply", "parentNotStored", "privateParent", "depthCap"]
 def chain(
     session: Session, view: PostsView, channel_name: str, post_id: int
 ) -> tuple[list[dict[str, Any]], ChainStop] | None:
-    """The Reply chain from one Post up to the top, each flagged by the selection.
+    """The Reply chain from the starting Post up to the top, each flagged by the selection.
 
     One recursive query, a level per step through the unique (Channel, post
     id) index: the parent's Channel is the reply's `replyTo.channel`, or its
@@ -524,11 +524,11 @@ def chain(
     and carries it on the wire, as the hover preview shows it. Every step is
     scoped, so a parent the Account does not Follow is not stored for it.
     Ignores the Post filter, the keyword, the cap and the sort. `None` when
-    the Account cannot see the first Post.
+    the Account cannot see the starting Post.
     """
     head = aliased(Post)
 
-    def walked(depth: Any) -> Any:
+    def walked(depth: ColumnElement[int]) -> Any:
         # Only the first Post of an Album holds its reply.
         own = col(Post.reply_to_post_id).isnot(None)
         stmt = sa_select(
