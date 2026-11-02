@@ -2238,8 +2238,11 @@ def test_a_channels_requests_read_the_tabs_range_and_filters(
     assert listed(channel=CHANNEL, charged="uncharged") == [("single", "wasted")]
     assert listed(kind="handle") == [("handle", "idle")]
     assert len(listed(channel=CHANNEL)) == 3
+    # Its own start, not today's midnight, which `before` precedes in the
+    # first ten minutes of a UTC day.
+    hour_back = (now - timedelta(hours=1)).isoformat()
     before = (now - timedelta(minutes=10)).isoformat()
-    assert listed(channel=CHANNEL, end=before) == []
+    assert listed(channel=CHANNEL, start=hour_back, end=before) == []
 
     month = (now - timedelta(days=30)).isoformat()
     moved = utc_now() + timedelta(days=8)
