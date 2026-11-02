@@ -4,8 +4,6 @@ Reached from the root `CLAUDE.md` when a guard fails, and before you add, change
 or delete one.
 
 The rules in `backend/CLAUDE.md` and `frontend/CLAUDE.md` are not all equal.
-Prose decayed before: three route modules inlined `BaseModel` while
-`CLAUDE.md` forbade it.
 
 Each row names the invariant and where it is asserted. **The row is the pointer,
 not the summary.** Open the file for the full list of what it checks and why.
@@ -63,7 +61,7 @@ not the summary.** Open the file for the full list of what it checks and why.
 | `backend/tests/api/test_account_isolation.py` | **every mounted operation is probed with two live accounts or excused with a typed reason**; a foreign row is that family's own 404; the flag off reopens cross-account reads | test |
 | `backend/tests/deployment/test_env_example_matches_defaults.py` | `.env.example` ships `config.py`'s value for every boolean **and every integer**, or names the divergence | test |
 | `backend/tests/deployment/test_ci_path_filters.py` | docs-only main pushes skip Playwright shards and staging deploys; a broken Playwright classifier cannot report green | test |
-| `backend/tests/deployment/test_crap_ratchet.py` | no function above CRAP 30 unless `scripts/crap/baseline.json` gives a reason; a listed one is pinned both ways until it leaves; CI checks the **combined** coverage | test |
+| `backend/tests/deployment/test_crap_ratchet.py`, `backend/tests/deployment/test_backend_complexity_hook.py` | no function above CRAP 30 unless `scripts/crap/baseline.json` gives a reason; a listed one is pinned both ways until it leaves; CI checks the **combined** coverage; a push fails at complexity 31+ | test |
 | `backend/tests/services/test_artifact_tenancy_scoping.py` | all four artifact families and the History scope by owner, per leg, with that family's own 404 detail; writes and deletes refuse a foreign row **even while the flag is off** | test |
 | `backend/tests/services/test_post_tenancy_scoping.py` | the feed, lookup, counts and Discover scope in **both** query shapes; the followed-channel set is scoped too; probes stay corpus and say why | test |
 | `backend/tests/services/test_sync_log_channel_telemetry.py` | a second Follower sees telemetry the first produced; search and `searchInDetails` stay inside the Follow; the row stores no owner even when handed one | test |

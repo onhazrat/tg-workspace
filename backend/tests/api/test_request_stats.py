@@ -229,8 +229,21 @@ def _sync(
 
 
 def _today() -> tuple[str, str]:
+    """Today's whole UTC day: the one range `_breakdown` reads from the daily
+    totals. A test reading it near midnight can miss Requests made a moment
+    before."""
     start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     return start.isoformat(), (start + timedelta(days=1)).isoformat()
+
+
+def _around_now() -> tuple[str, str]:
+    """A day of whole hours with now in its middle, for every read that needs
+    no whole UTC day. Today's midnight-to-midnight failed in the first minutes
+    of a UTC day: an end ten minutes back fell before its start (#267)."""
+    hour = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
+    return (hour - timedelta(hours=12)).isoformat(), (
+        hour + timedelta(hours=12)
+    ).isoformat()
 
 
 def _breakdown(
@@ -289,7 +302,7 @@ def _requests(
 ) -> dict[str, Any]:
     """One Channel's (`channel`) or aggregate row's (`kind`) Requests, today."""
     flush_recorded_requests()
-    day_start, day_end = _today()
+    day_start, day_end = _around_now()
     r = client.get(
         f"{API}/requests/records",
         params={"start": start or day_start, "end": end or day_end, **params},
@@ -1927,7 +1940,7 @@ def test_the_requests_endpoints_are_the_operators_alone(
     client: TestClient, normal_user_token_headers: dict[str, str], route: str
 ) -> None:
     """Mutation: drop the `QUOTA_READ_ANY` dependency from any route."""
-    start, end = _today()
+    start, end = _around_now()
     r = client.get(
         f"{API}/requests/{route}",
         params={"start": start, "end": end},
@@ -1954,7 +1967,7 @@ def _trend(
 ) -> dict[str, Any]:
     flush_recorded_requests()
     roll_up_request_totals()
-    day_start, day_end = _today()
+    day_start, day_end = _around_now()
     r = client.get(
         f"{API}/requests/trend",
         params={
@@ -2238,11 +2251,8 @@ def test_a_channels_requests_read_the_tabs_range_and_filters(
     assert listed(channel=CHANNEL, charged="uncharged") == [("single", "wasted")]
     assert listed(kind="handle") == [("handle", "idle")]
     assert len(listed(channel=CHANNEL)) == 3
-    # Its own start, not today's midnight, which `before` precedes in the
-    # first ten minutes of a UTC day.
-    hour_back = (now - timedelta(hours=1)).isoformat()
     before = (now - timedelta(minutes=10)).isoformat()
-    assert listed(channel=CHANNEL, start=hour_back, end=before) == []
+    assert listed(channel=CHANNEL, end=before) == []
 
     month = (now - timedelta(days=30)).isoformat()
     moved = utc_now() + timedelta(days=8)
@@ -2286,7 +2296,7 @@ def test_a_channels_requests_name_one_row(
     client: TestClient, superuser_token_headers: dict[str, str], row: dict[str, str]
 ) -> None:
     """Mutation: list every Request when no row is named."""
-    start, end = _today()
+    start, end = _around_now()
     r = client.get(
         f"{API}/requests/records",
         params={"start": start, "end": end, **row},

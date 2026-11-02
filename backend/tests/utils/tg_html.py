@@ -2,15 +2,36 @@
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
+from typing import Any
 
 from bs4 import BeautifulSoup, Tag
+
+from app.services import scraper
 
 LIVE_FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "live"
 
 
 def load_live_fixture(name: str) -> str:
     return (LIVE_FIXTURES_DIR / name).read_text(encoding="utf-8")
+
+
+def recent_page(html: str, channel_name: str, *, age_ms: int = 0) -> dict[str, Any]:
+    """A saved page as the sync's page fetch answers it, for the sync seam.
+
+    The live fixtures are years old, older than any retention, so each distinct
+    publish time moves to a recent minute (`age_ms` further back) in the same
+    order; Posts that shared a time, an Album's, still share one.
+    """
+    page = scraper._parse_scrape_channel_page(
+        html, channel_name, "", None, None, None, None, {}
+    )
+    stamps = sorted({p["timestamp"] for p in page["posts"]})
+    now = int(time.time() * 1000) - age_ms
+    for p in page["posts"]:
+        p["timestamp"] = now - (len(stamps) - stamps.index(p["timestamp"])) * 60_000
+    return page
 
 
 def live_fixture_paths() -> list[Path]:

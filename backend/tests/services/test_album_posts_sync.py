@@ -9,8 +9,6 @@ videos).
 from __future__ import annotations
 
 import asyncio
-import pathlib
-import time
 import uuid
 from collections.abc import Iterator
 from typing import Any
@@ -26,8 +24,7 @@ from app.services.follows import get_operator_user_id
 from app.services.scraper_jobs import ChannelSyncState, SyncJobState
 from app.services.walked_ranges import channel_ranges
 from tests.utils.setting_groups import add_test_channel
-
-LIVE = pathlib.Path(__file__).resolve().parents[1] / "fixtures" / "live"
+from tests.utils.tg_html import load_live_fixture, recent_page
 
 
 @pytest.fixture
@@ -36,8 +33,7 @@ def session() -> Iterator[Session]:
         yield s
 
 
-def _html(name: str) -> str:
-    return (LIVE / name).read_text(encoding="utf-8")
+_html = load_live_fixture
 
 
 def _cut_above(html: str, newest: int) -> str:
@@ -56,8 +52,6 @@ def _sync(
     """Sync a new Channel whose newest page is `html` and has nothing below.
 
     Answers the Channel's name, its sync state and the page's parsed Posts.
-    The fixtures are years old, so each distinct publish time is moved to a
-    recent minute in the same order, keeping an Album's Posts on one time.
     """
     owner = get_operator_user_id(session)
     assert owner is not None
@@ -68,13 +62,7 @@ def _sync(
     async def fetch(_ctx: Any, *, before_id: int | None, **_kw: Any) -> Any:
         if before_id is not None:
             return {"posts": [], "latestId": 0, "nextBeforeId": None}
-        page = scraper._parse_scrape_channel_page(
-            html, name, "", None, None, None, None, {}
-        )
-        stamps = sorted({p["timestamp"] for p in page["posts"]})
-        now = int(time.time() * 1000)
-        for p in page["posts"]:
-            p["timestamp"] = now - (len(stamps) - stamps.index(p["timestamp"])) * 60_000
+        page = recent_page(html, name)
         parsed.extend(page["posts"])
         return page
 
