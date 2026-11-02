@@ -1276,7 +1276,7 @@
       "comment": "Rows kept mounted beyond the viewport. Deliberately generous. Beyond smoothing scrolling, it keeps a workable number of cards reachable to anything that locates them by `[data-channel-name]` without scrolling first \u2014 which is how the command palette's channel actions and much of the e2e suite find cards.",
       "expression": "6",
       "file": "frontend/src/components/channel-grid/VirtualizedChannelGrid.tsx",
-      "line": 67,
+      "line": 68,
       "name": "OVERSCAN_ROWS",
       "value": 6
     },

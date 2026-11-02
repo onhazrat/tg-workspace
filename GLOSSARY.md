@@ -849,6 +849,11 @@ the Channel selection are what keys change, not what the Highlight is. The
 Posts tab's Reply chain keeps another while it is open.
 _Avoid_: focus (that is Focus mode), cursor, ring, selection
 
+**Card size**:
+How much of each Channel the Channels tab shows, one of four: Tiles, Compact
+cards, Cards and Detailed cards. One size holds for every Channel in the tab.
+_Avoid_: zoom, zoom level, density
+
 **Tools**:
 The workspace tab for doing rather than tuning: Logs, Quick message, and the
 Operator's diagnostics and data tools. Nothing on it is a Setting.
