@@ -5068,6 +5068,57 @@ export type PartialPublicationResponse = {
 };
 
 /**
+ * PostChainRequest
+ *
+ * The Post a Reply chain starts from, and what flags its Posts' Picks.
+ */
+export type PostChainRequest = {
+    /**
+     * Channelname
+     */
+    channelName: string;
+    /**
+     * Postid
+     */
+    postId: number;
+    /**
+     * Channelnames
+     */
+    channelNames?: Array<string> | null;
+    /**
+     * Window
+     */
+    window?: ({
+        mode: 'live';
+    } & LiveAnalysisWindow) | ({
+        mode: 'fixed';
+    } & FixedAnalysisWindow) | null;
+    /**
+     * Selection
+     */
+    selection?: Array<SelectionRuleInput | SelectionPick> | null;
+};
+
+/**
+ * PostChainResponse
+ *
+ * A Reply chain from its starting Post up to the top, and why it ends there.
+ *
+ * `parentNotStored` and `privateParent` leave the excerpt on the top Post's
+ * `replyTo.text`.
+ */
+export type PostChainResponse = {
+    /**
+     * Posts
+     */
+    posts: Array<SelectablePostResponse>;
+    /**
+     * Stop
+     */
+    stop: 'notReply' | 'parentNotStored' | 'privateParent' | 'depthCap';
+};
+
+/**
  * PostCountsResponse
  *
  * Per-channel Post counts for a scope, and how many were too new to judge.
@@ -11028,6 +11079,31 @@ export type DataLookupPostsRouteResponses = {
 };
 
 export type DataLookupPostsRouteResponse = DataLookupPostsRouteResponses[keyof DataLookupPostsRouteResponses];
+
+export type DataPostsChainData = {
+    body: PostChainRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data/posts/chain';
+};
+
+export type DataPostsChainErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataPostsChainError = DataPostsChainErrors[keyof DataPostsChainErrors];
+
+export type DataPostsChainResponses = {
+    /**
+     * Successful Response
+     */
+    200: PostChainResponse;
+};
+
+export type DataPostsChainResponse = DataPostsChainResponses[keyof DataPostsChainResponses];
 
 export type DataWindowCheckData = {
     body: WindowCheckRequest;

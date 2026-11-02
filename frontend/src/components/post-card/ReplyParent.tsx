@@ -32,6 +32,14 @@ export const ReplyPreviewContext = createContext<ReplyPreview | null>(null)
 
 export const useReplyPreview = () => useContext(ReplyPreviewContext)
 
+/**
+ * Provided on the Posts tab: a click on a reply link opens that reply's Reply
+ * chain (RCH-02). Elsewhere the link only previews.
+ */
+export const ReplyChainOpenContext = createContext<
+  ((reply: Post) => void) | null
+>(null)
+
 /** Turns reply previews on for every card below it, with one media query. */
 export function ReplyPreviewProvider({ children }: { children: ReactNode }) {
   const workspace = usePreviewWorkspace()

@@ -1,5 +1,5 @@
 import { CornerUpLeft, Hash, PlusCircle, Repeat2 } from "lucide-react"
-import type { ReactNode } from "react"
+import { type ReactNode, useContext } from "react"
 import {
   telegramWebViewChannelUrl,
   telegramWebViewPostUrl,
@@ -10,7 +10,11 @@ import { ChannelAvatar } from "../ChannelAvatar"
 import { PostPreview } from "../PostPreview"
 import { RelativeTime } from "../RelativeTime"
 import { postTime, replyParentUrl } from "./post-card-model"
-import { ReplyParentLookup, useReplyPreview } from "./ReplyParent"
+import {
+  ReplyChainOpenContext,
+  ReplyParentLookup,
+  useReplyPreview,
+} from "./ReplyParent"
 
 /** What the header needs to know beyond the Post itself. */
 export interface PostCardHeaderProps {
@@ -164,6 +168,7 @@ export function PostIdLink({ post }: { post: Post }) {
  */
 function ReplyRef({ post }: { post: Post }) {
   const preview = useReplyPreview()
+  const openChain = useContext(ReplyChainOpenContext)
   if (post.replyToPostId == null) return null
   const href = replyParentUrl(post, post.replyToPostId)
   const testId = `post-reply-badge-${post.channelName}-${post.id}`
@@ -203,6 +208,7 @@ function ReplyRef({ post }: { post: Post }) {
       triggerProps={{ "data-testid": testId }}
       triggerClassName={className}
       card={<ReplyParentLookup reply={post} href={href} workspace={preview} />}
+      onActivate={openChain ? () => openChain(post) : undefined}
     >
       {label}
     </PostPreview>

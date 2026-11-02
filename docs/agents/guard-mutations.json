@@ -121,15 +121,15 @@
   {
     "name": "the Ranking's key inside the invalidated set",
     "file": "frontend/src/hooks/queryKeys.ts",
-    "old": "    [\"postsSelectedShown\"],\n    [\"discoverCandidates\"],\n",
-    "new": "    [\"postsSelectedShown\"],\n    [\"discoverCandidates\"],\n    [\"postsRanking\"],\n",
+    "old": "    [\"postsChain\"],\n    [\"discoverCandidates\"],\n",
+    "new": "    [\"postsChain\"],\n    [\"discoverCandidates\"],\n    [\"postsRanking\"],\n",
     "test": "frontend/src/contexts/PostsViewContext.test.tsx"
   },
   {
     "name": "the Ranking retried on failure",
     "file": "frontend/src/lib/posts/posts-view.ts",
-    "old": "    retry: false,\n",
-    "new": "",
+    "old": "    retry: false,\n    refetchOnWindowFocus: false,\n",
+    "new": "    refetchOnWindowFocus: false,\n",
     "test": "frontend/src/lib/posts/posts-view.test.ts"
   },
   {

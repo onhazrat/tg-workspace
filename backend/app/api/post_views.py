@@ -14,6 +14,7 @@ from sqlmodel import Session
 
 from app.schemas.post_filter import to_steps
 from app.schemas.posts import (
+    PostChainRequest,
     PostFacetsRequest,
     PostFeedRequest,
     PostFilteredRequest,
@@ -27,7 +28,7 @@ from app.services.posts_view import PostsView, resolve_posts_view
 def view_of(
     session: Session,
     user_id: uuid.UUID,
-    body: PostWindowRequest | PostLookupRequest,
+    body: PostWindowRequest | PostLookupRequest | PostChainRequest,
     *,
     with_estimate: bool = False,
     with_followed: bool = False,
@@ -36,19 +37,25 @@ def view_of(
 
     A field a body does not carry is the view's default: no keyword, no tree,
     no cap, newest first, select all. The feed takes `channelName` as the
-    single-Channel shorthand; the lookup's Channels are where the selection's
-    rules reach, taken as sent.
+    single-Channel shorthand; the lookup's and the chain's Channels are where
+    the selection's rules reach, taken as sent.
     """
     window = resolve_analysis_window(body.window)
     if isinstance(body, PostFeedRequest):
         channel_names = body.resolved_channel_names()
-    elif isinstance(body, PostLookupRequest):
+    elif isinstance(body, PostLookupRequest | PostChainRequest):
         channel_names = body.channel_names
     else:
         channel_names = body.cleaned_channel_names()
     selection = (
         body.selection
-        if isinstance(body, PostFilteredRequest | PostFacetsRequest | PostLookupRequest)
+        if isinstance(
+            body,
+            PostFilteredRequest
+            | PostFacetsRequest
+            | PostLookupRequest
+            | PostChainRequest,
+        )
         else None
     )
     tree = (

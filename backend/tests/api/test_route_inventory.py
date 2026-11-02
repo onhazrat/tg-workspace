@@ -185,11 +185,12 @@ def test_the_split_did_not_change_the_route_count() -> None:
     /posts/window-check/events`, the followed Channels a sync just changed; and
     **122** with DRP-01's `GET /directory/refresh-projection`, what a Refresh
     target and waits would cost (ADR-045); and **123** with DRP-02's `POST
-    /directory/refresh-target`, an entry's own Refresh target.
+    /directory/refresh-target`, an entry's own Refresh target; and **124**
+    with RCH-02's `POST /posts/chain`, a reply's Reply chain in one read.
     """
     data_routes = {
         (m, p) for m, p in _mounted_routes() if p.startswith("/api/v1/data/")
     }
-    assert len(data_routes) == 123, (
-        f"expected 123 /data endpoints, found {len(data_routes)}"
+    assert len(data_routes) == 124, (
+        f"expected 124 /data endpoints, found {len(data_routes)}"
     )

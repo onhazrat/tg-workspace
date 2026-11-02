@@ -44,6 +44,7 @@ from app.services.posts import (
     MAX_POST_LOOKUP_BATCH,
     MAX_POST_PAGE_SIZE,
 )
+from app.services.posts_view import ChainStop
 
 
 class PostLinkSpan(BaseModel):
@@ -373,3 +374,25 @@ class PostLookupRequest(BaseModel):
     channel_names: list[str] | None = PydanticField(None, alias="channelNames")
     window: AnalysisWindowInput | None = None
     selection: PostSelection | None = None
+
+
+# RCH-02. The Channels, window and selection read as the lookup reads them.
+class PostChainRequest(BaseModel):
+    """The Post a Reply chain starts from, and what flags its Posts' Picks."""
+
+    channel_name: str = PydanticField(alias="channelName")
+    post_id: int = PydanticField(alias="postId")
+    channel_names: list[str] | None = PydanticField(None, alias="channelNames")
+    window: AnalysisWindowInput | None = None
+    selection: PostSelection | None = None
+
+
+class PostChainResponse(BaseModel):
+    """A Reply chain from its starting Post up to the top, and why it ends there.
+
+    `parentNotStored` and `privateParent` leave the excerpt on the top Post's
+    `replyTo.text`.
+    """
+
+    posts: list[SelectablePostResponse]
+    stop: ChainStop

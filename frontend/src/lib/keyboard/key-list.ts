@@ -7,7 +7,14 @@
 import type { TabType } from "@/constants"
 
 /** The lists keyboard mode moves through. */
-export type ListId = "posts" | "channels" | "directory" | "discover" | "history"
+export type ListId =
+  | "posts"
+  /** The Reply chain panel's Posts, while it is open (RCH-02). */
+  | "chain"
+  | "channels"
+  | "directory"
+  | "discover"
+  | "history"
 
 export const ACTIONS = {
   tick: { key: "x", label: "select or deselect" },
@@ -40,9 +47,12 @@ export const LIST_KEYS = {
   everyText: "M",
   /** Posts: show the new Posts the pill holds (RCH-01). */
   showNew: ".",
-  /** Directory: the next and previous page. */
-  nextPage: "]",
-  previousPage: "[",
+  /**
+   * Directory: the previous and next page. Posts: open the Reply chain of
+   * the highlighted reply, and close it (RCH-02).
+   */
+  earlier: "[",
+  later: "]",
 } as const
 
 /** Marks the control keyboard mode presses for `action`. */
@@ -66,6 +76,7 @@ export const keyTitle = (label: string, action: Action, on: boolean) =>
 /** `x` in each list's own word (GLOSSARY.md): select, or Pick in Posts. */
 const TICK_LABEL: Partial<Record<ListId, string>> = {
   posts: "pick or unpick",
+  chain: "pick or unpick",
 }
 
 type Row = readonly [keys: string, what: string]
@@ -73,6 +84,18 @@ type Row = readonly [keys: string, what: string]
 /** J / K, and F / D where a bulk bar acts on the Ticks. */
 const SWEEP = (word: string): Row => ["J / K", `${word} while moving`]
 const BULK: Row = ["F / D", "follow / dismiss everything selected"]
+
+/** What a Post card carries, in the feed and in the Reply chain alike. */
+const POST_ACTIONS: Action[] = [
+  "tick",
+  "spotlight",
+  "translate",
+  "related",
+  "copy",
+  "open",
+  "photo",
+  "more",
+]
 
 /** Each list's moves and own keys, then its actions in the list's order. */
 const LISTS: Record<ListId, { moves: Row[]; actions: Action[] }> = {
@@ -83,19 +106,20 @@ const LISTS: Record<ListId, { moves: Row[]; actions: Action[] }> = {
       ["- / +", "compact / full cards"],
       ["M", "more or less on every post"],
       [".", "show the new posts"],
+      ["[", "open the reply chain"],
       SWEEP("pick or unpick"),
       ["Esc", "drop the highlight"],
     ],
-    actions: [
-      "tick",
-      "spotlight",
-      "translate",
-      "related",
-      "copy",
-      "open",
-      "photo",
-      "more",
+    actions: POST_ACTIONS,
+  },
+  chain: {
+    moves: [
+      ["j / k", "next / previous post in the chain"],
+      ["gg / G", "the top / the post you started from"],
+      ["] or Esc", "close the chain"],
+      ["- / + / M / .", "as in the feed"],
     ],
+    actions: POST_ACTIONS,
   },
   channels: {
     moves: [

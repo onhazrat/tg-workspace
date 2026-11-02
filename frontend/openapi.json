@@ -2142,6 +2142,41 @@
         "security": [{ "OAuth2PasswordBearer": [] }]
       }
     },
+    "/api/v1/data/posts/chain": {
+      "post": {
+        "tags": ["data"],
+        "summary": "Posts Chain",
+        "description": "A reply's Reply chain up to the top in one read, and why it ends there.\n\nThe starting Post first, each flagged by the Post selection under the\nsent window and Channels. 404 when the Account cannot see the starting\nPost.",
+        "operationId": "data-posts_chain",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PostChainRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PostChainResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
     "/api/v1/data/posts/window-check": {
       "post": {
         "tags": ["data"],
@@ -12826,6 +12861,87 @@
         "required": ["id", "partsSent", "partsTotal"],
         "title": "PartialPublicationResponse",
         "description": "The Summary's latest Publication, stopped after some of its Parts."
+      },
+      "PostChainRequest": {
+        "properties": {
+          "channelName": { "type": "string", "title": "Channelname" },
+          "postId": { "type": "integer", "title": "Postid" },
+          "channelNames": {
+            "anyOf": [
+              { "items": { "type": "string" }, "type": "array" },
+              { "type": "null" }
+            ],
+            "title": "Channelnames"
+          },
+          "window": {
+            "anyOf": [
+              {
+                "oneOf": [
+                  { "$ref": "#/components/schemas/LiveAnalysisWindow" },
+                  { "$ref": "#/components/schemas/FixedAnalysisWindow" }
+                ],
+                "discriminator": {
+                  "propertyName": "mode",
+                  "mapping": {
+                    "fixed": "#/components/schemas/FixedAnalysisWindow",
+                    "live": "#/components/schemas/LiveAnalysisWindow"
+                  }
+                }
+              },
+              { "type": "null" }
+            ],
+            "title": "Window"
+          },
+          "selection": {
+            "anyOf": [
+              {
+                "items": {
+                  "oneOf": [
+                    { "$ref": "#/components/schemas/SelectionRule-Input" },
+                    { "$ref": "#/components/schemas/SelectionPick" }
+                  ],
+                  "discriminator": {
+                    "propertyName": "kind",
+                    "mapping": {
+                      "pick": "#/components/schemas/SelectionPick",
+                      "rule": "#/components/schemas/SelectionRule-Input"
+                    }
+                  }
+                },
+                "type": "array"
+              },
+              { "type": "null" }
+            ],
+            "title": "Selection"
+          }
+        },
+        "type": "object",
+        "required": ["channelName", "postId"],
+        "title": "PostChainRequest",
+        "description": "The Post a Reply chain starts from, and what flags its Posts' Picks."
+      },
+      "PostChainResponse": {
+        "properties": {
+          "posts": {
+            "items": { "$ref": "#/components/schemas/SelectablePostResponse" },
+            "type": "array",
+            "title": "Posts"
+          },
+          "stop": {
+            "type": "string",
+            "enum": [
+              "notReply",
+              "parentNotStored",
+              "privateParent",
+              "depthCap"
+            ],
+            "title": "Stop"
+          }
+        },
+        "type": "object",
+        "required": ["posts", "stop"],
+        "title": "PostChainResponse",
+        "description": "A Reply chain from its starting Post up to the top, and why it ends there.\n\n`parentNotStored` and `privateParent` leave the excerpt on the top Post's\n`replyTo.text`."
       },
       "PostCountsResponse": {
         "properties": {
