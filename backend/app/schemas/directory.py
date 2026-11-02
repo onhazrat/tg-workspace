@@ -16,6 +16,7 @@ from app.schemas.post_filter import check_tree_bounds
 from app.services.analysis_window import TimeBound, TimeMode
 from app.services.channel_directory import (
     MAX_PRIORITY_BOOST,
+    PROBE_KINDS,
     PROBE_STATUSES,
     BoostMode,
 )
@@ -156,7 +157,7 @@ class DirectoryFlagCondition(_Cond):
 #: than a Condition that quietly matches nothing.
 IS_VALUES: dict[IsField, frozenset[str]] = {
     "status": PROBE_STATUSES,
-    "kind": frozenset({"channel", "group", "bot", "user", "unknown"}),
+    "kind": PROBE_KINDS,
 }
 
 
@@ -648,10 +649,10 @@ class DirectoryRowResponse(BaseModel):
     videos: int | None = None
     files: int | None = None
     links: int | None = None
-    #: `ok`, `unavailable`, `private` or `unknown`: the verdict of the last
+    #: `ok`, `unavailable`, `hidden` or `unknown`: the verdict of the last
     #: conclusive probe.
     status: str | None = None
-    #: `channel`, `group`, `bot`, `user` or `unknown`. `DATA_ADMIN` only.
+    #: `channel`, `group`, `bot`, `user`, `free` or `unknown`. `DATA_ADMIN` only.
     kind: str | None = None
     bio: str | None = None
     #: How many sample Posts the statistics were computed from.
@@ -759,6 +760,8 @@ class DirectoryEntryResponse(_DirectoryEntryFields):
     the bio, which the list never carries."""
 
     bio: str | None
+    #: The verdict, which says when it is a Hidden Channel (`hidden`, ADR-047).
+    status: str | None = None
     #: These for a `DATA_ADMIN` reader only, absent otherwise (DPF, DRP-02).
     kind: str | None = None
     priority_boost: int | None = Field(None, alias="priorityBoost")

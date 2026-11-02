@@ -289,10 +289,12 @@ def _validate_telegram_web_view_page(
 
 def _soft_block(html: str) -> TelegramWebViewUnavailable:
     """The page is parsed before it is raised (RQS-13): a Channel's own page
-    says the handle exists and its Posts are private."""
+    says the handle exists and its Posts are withheld. Either way the page
+    travels with the exception, which is how a probe reads the Handle kind
+    (ADR-047)."""
     if counts_subscribers(BeautifulSoup(html, "html.parser")):
         return TelegramChannelPrivate(html)
-    return TelegramWebViewUnavailable()
+    return TelegramWebViewUnavailable(page=html)
 
 
 def _build_diagnostic_client(proxy_url: str | None) -> httpx.AsyncClient:

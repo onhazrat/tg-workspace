@@ -320,6 +320,7 @@ export function useDirectory() {
   const sending = columnsToSend(
     columns.shown,
     sent.current?.view === viewKey ? sent.current.columns : undefined,
+    columns.menu.catalogue.map((c) => c.key),
   )
   sent.current = { view: viewKey, columns: sending }
   const listBody = { ...body, columns: sending }

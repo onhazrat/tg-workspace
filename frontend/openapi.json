@@ -9790,6 +9790,10 @@
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Bio"
           },
+          "status": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Status"
+          },
           "kind": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Kind"
@@ -12195,7 +12199,7 @@
         "type": "object",
         "required": ["handle"],
         "title": "HandleProbeResponse",
-        "description": "A cached verdict about one handle, as `probe_to_camel` builds it.\n\n`status` is the structural fact (`ok` | `unavailable` | `unknown`); `kind`\n(`channel` | `group` | `bot` | `user` | `unknown`) is an HTML heuristic that\nsharpens the wording and is never filtered on."
+        "description": "A cached verdict about one handle, as `probe_to_camel` builds it.\n\n`status` is the structural fact (`ok` | `unavailable` | `hidden` |\n`unknown`); `kind` (`channel` | `group` | `bot` | `user` | `free` |\n`unknown`) is the Handle kind Telegram's page names."
       },
       "IgnoredChannelResponse": {
         "properties": {

@@ -126,7 +126,7 @@ const COLUMN_TEXT: Record<ColumnKey, Omit<DirectoryColumn, "key">> = {
   status: {
     label: "Status",
     description:
-      "The Directory's verdict: ok, unavailable, or unknown while no fetch has answered",
+      "The Directory's verdict: ok, unavailable, hidden for a Channel Telegram hides, or unknown while no fetch has answered",
   },
   followable: {
     label: "Followable",
@@ -135,7 +135,7 @@ const COLUMN_TEXT: Record<ColumnKey, Omit<DirectoryColumn, "key">> = {
   kind: {
     label: "Kind",
     description:
-      "What its page turned out to be: channel, group, bot, user, or unknown while unfetched",
+      "What its page turned out to be: channel, group, bot, user, free for a handle nobody holds, or unknown while unfetched",
   },
   bio: { label: "Bio", description: "What the Channel says about itself" },
   sample_count: measureText("sample_count"),
@@ -197,6 +197,29 @@ const sharedCount = (key: SharedKey, r: Row) =>
 
 const count = (n: number | null | undefined) =>
   n == null ? "" : formatCount(n)
+
+/** What Subscribers counts for a handle that is not a Channel (ADR-047). */
+const COUNT_UNIT: Partial<Record<string, string>> = {
+  group: "members",
+  bot: "monthly users",
+}
+const subscribers = (r: Row) => {
+  const unit = r.kind == null ? undefined : COUNT_UNIT[r.kind]
+  return unit && r.subscribers != null
+    ? `${count(r.subscribers)} ${unit}`
+    : count(r.subscribers)
+}
+
+/** Why a Hidden Channel has no Posts to show (ADR-047). */
+export const HIDDEN_TITLE =
+  "Telegram hides this Channel's Posts on the web, so it cannot be followed"
+
+const status = (r: Row) =>
+  r.status === "hidden" ? (
+    <span title={HIDDEN_TITLE}>Hidden</span>
+  ) : (
+    (r.status ?? "")
+  )
 const when = (ms: number | null | undefined) =>
   ms == null ? "" : <RelativeTime timestamp={ms} />
 const words = (text: string | null | undefined) =>
@@ -229,7 +252,7 @@ const mine = (r: Row) =>
  */
 const CELLS: Record<DirectoryColumn["key"], (r: Row) => React.ReactNode> = {
   language: (r) => languageLabel(languageValue(r.language)),
-  subscribers: (r) => count(r.subscribers),
+  subscribers,
   reach: (r) => (
     <>
       {count(r.reach)}
@@ -251,7 +274,7 @@ const CELLS: Record<DirectoryColumn["key"], (r: Row) => React.ReactNode> = {
   videos: (r) => count(r.videos),
   files: (r) => count(r.files),
   links: (r) => count(r.links),
-  status: (r) => r.status ?? "",
+  status,
   kind: (r) => r.kind ?? "",
   followable: (r) => (r.followable ? "Yes" : "No"),
   bio: (r) => words(r.bio),

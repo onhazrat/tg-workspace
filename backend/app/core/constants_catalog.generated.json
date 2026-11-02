@@ -252,7 +252,7 @@
       "comment": "A Live end's reach either way: a century, in ms.",
       "expression": "100 * 366 * 86400000",
       "file": "backend/app/schemas/directory.py",
-      "line": 192,
+      "line": 193,
       "name": "_MAX_OFFSET_MS",
       "value": 3162240000000
     },
@@ -260,7 +260,7 @@
       "comment": "A Fixed end's reach either way, inside what a `datetime` holds (years 1 to 9999), so an absurd instant is a 422 and never an overflow.",
       "expression": "62000000000000",
       "file": "backend/app/schemas/directory.py",
-      "line": 195,
+      "line": 196,
       "name": "_MAX_INSTANT_MS",
       "value": 62000000000000
     },
@@ -268,7 +268,7 @@
       "comment": "How many fixed handles one \"cited by\" or \"cites\" Condition names: 500 keeps a shared link under the 8 KB request line common proxies accept, and anything larger is a Tag (DFP-05).",
       "expression": "500",
       "file": "backend/app/schemas/directory.py",
-      "line": 245,
+      "line": 246,
       "name": "MAX_CONDITION_HANDLES",
       "value": 500
     },
@@ -276,7 +276,7 @@
       "comment": "How many Seeds one Shared parents / children Condition sends: every follow, or a Channels tab selection, which can be the whole account.",
       "expression": "10000",
       "file": "backend/app/schemas/directory.py",
-      "line": 248,
+      "line": 249,
       "name": "MAX_SEEDS",
       "value": 10000
     },
@@ -284,7 +284,7 @@
       "comment": "A Channels tab selection can be the whole account; past this, use \"every follow\".",
       "expression": "10000",
       "file": "backend/app/schemas/directory.py",
-      "line": 425,
+      "line": 426,
       "name": "MAX_YOUR_CHANNELS",
       "value": 10000
     },
@@ -292,7 +292,7 @@
       "comment": "The most handles one paste may add (DADD).",
       "expression": "100000",
       "file": "backend/app/schemas/directory.py",
-      "line": 735,
+      "line": 736,
       "name": "MAX_ADDED_HANDLES",
       "value": 100000
     },
@@ -652,7 +652,7 @@
       "comment": "A middle Channel past this many links is an aggregator, not a taste: a source citing more than this many Channels, or a target cited by more.",
       "expression": "3000",
       "file": "backend/app/services/directory_reads.py",
-      "line": 719,
+      "line": 721,
       "name": "AGGREGATOR_LINKS",
       "value": 3000
     },
@@ -660,7 +660,7 @@
       "comment": "The most entries Tick all turns into Ticks; above it a view is All matching (ADR-031). The same number as the ticked Seeds a Condition takes.",
       "expression": "10000",
       "file": "backend/app/services/directory_reads.py",
-      "line": 1429,
+      "line": 1431,
       "name": "MAX_TICK_ALL",
       "value": 10000
     },
@@ -668,7 +668,7 @@
       "comment": "How many citing Posts \"Why it's here\" quotes; the rest are counted.",
       "expression": "20",
       "file": "backend/app/services/directory_reads.py",
-      "line": 1593,
+      "line": 1597,
       "name": "WHY_LIMIT",
       "value": 20
     },
@@ -676,7 +676,7 @@
       "comment": "How many shared Channels \"Why it's here\" names per relation; the rest are counted.",
       "expression": "5",
       "file": "backend/app/services/directory_reads.py",
-      "line": 1731,
+      "line": 1735,
       "name": "SHARED_LIMIT",
       "value": 5
     },
@@ -684,7 +684,7 @@
       "comment": "How many Channels each side of the panel's neighbour lists shows.",
       "expression": "10",
       "file": "backend/app/services/directory_reads.py",
-      "line": 1787,
+      "line": 1791,
       "name": "NEIGHBOURS_LIMIT",
       "value": 10
     },
@@ -756,7 +756,7 @@
       "comment": "Attempts a media fetch gets. One, meaning no retry ladder at all. `retries=N` is N *attempts*, and the default 8 with a 3s escalating delay is sized for a page fetch, where losing the page loses the sync. Media is not that. An avatar is re-resolved on **every page** of a walk, so the page loop already is the retry, and a thumb is cosmetic. Left at the default, one dead avatar URL cost eight backed-off attempts per page: `tests/api/test_sync_jobs.py` went from 13 seconds to 8 minutes when the avatar cache first moved onto the lane pool, which is what surfaced this. Shared by both image caches rather than spelled twice, because they are twins and `test_image_cache_egress.py` asserts they stay that way.",
       "expression": "1",
       "file": "backend/app/services/network.py",
-      "line": 486,
+      "line": 488,
       "name": "MEDIA_FETCH_RETRIES",
       "value": 1
     },
@@ -1772,7 +1772,7 @@
       "comment": "The default minimum shared count.",
       "expression": "2",
       "file": "frontend/src/lib/directory/directory-filter.ts",
-      "line": 472,
+      "line": 474,
       "name": "SHARED_MIN",
       "value": 2
     },
@@ -1820,7 +1820,7 @@
       "comment": "Bounds for the weight inputs \u2014 wide enough to express \"ignore this kind\" (0).",
       "expression": "0",
       "file": "frontend/src/lib/posts/discover-candidates.ts",
-      "line": 285,
+      "line": 293,
       "name": "DISCOVER_WEIGHT_MIN",
       "value": 0
     },
@@ -1828,7 +1828,7 @@
       "comment": "",
       "expression": "99",
       "file": "frontend/src/lib/posts/discover-candidates.ts",
-      "line": 286,
+      "line": 294,
       "name": "DISCOVER_WEIGHT_MAX",
       "value": 99
     },
@@ -1836,7 +1836,7 @@
       "comment": "Floor for the \"Min hits\" threshold. 1 rather than 0 because a candidate exists only by being referenced at least once, so 0 and 1 would select the same rows.",
       "expression": "1",
       "file": "frontend/src/lib/posts/discover-candidates.ts",
-      "line": 379,
+      "line": 387,
       "name": "DISCOVER_MIN_TOTAL_MIN",
       "value": 1
     },

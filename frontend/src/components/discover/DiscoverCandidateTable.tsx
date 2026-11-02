@@ -89,9 +89,9 @@ const CountCell: React.FC<{ value: number; testId: string }> = ({
  * carries, so badging it would put a label on almost every line and make the
  * ones that matter harder to spot.
  */
-function probeBadgeTitle(kind: DiscoverProbeKind, isPrivate: boolean): string {
-  if (isPrivate)
-    return "This Channel keeps its Posts private, so it cannot be followed"
+function probeBadgeTitle(kind: DiscoverProbeKind, isHidden: boolean): string {
+  if (isHidden)
+    return "Telegram hides this Channel's Posts on the web, so it cannot be followed"
   if (kind === "unknown")
     return "Telegram has no public feed for this handle, so it cannot be followed"
   return `Telegram reports this handle as a ${DISCOVER_PROBE_KIND_LABELS[kind].toLowerCase()}, which cannot be followed`
@@ -102,14 +102,14 @@ const ProbeBadge: React.FC<{ candidate: DiscoveryCandidate }> = ({
 }) => {
   const probe = candidate.probe
   if (!probe || !isProbedUnavailable(candidate)) return null
-  const isPrivate = probe.status === "private"
+  const isHidden = probe.status === "hidden"
   return (
     <span
       className="ml-2 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400"
       data-testid={`discover-probe-kind-${candidate.name}`}
-      title={probeBadgeTitle(probe.kind, isPrivate)}
+      title={probeBadgeTitle(probe.kind, isHidden)}
     >
-      {isPrivate ? "Private" : DISCOVER_PROBE_KIND_LABELS[probe.kind]}
+      {isHidden ? "Hidden" : DISCOVER_PROBE_KIND_LABELS[probe.kind]}
     </span>
   )
 }

@@ -83,6 +83,15 @@ describe("the old hidden list", () => {
 })
 
 describe("what a list read asks for", () => {
+  test("Subscribers brings the kind for a reader who may see it (ADR-047)", () => {
+    expect(
+      columnsToSend(["subscribers"], undefined, ["subscribers", "kind"]),
+    ).toEqual(["kind", "subscribers"])
+    expect(columnsToSend(["subscribers"], undefined, ["subscribers"])).toEqual([
+      "subscribers",
+    ])
+  })
+
   test("with nothing loaded yet, the shown columns", () => {
     expect(columnsToSend(["reach", "language"], undefined)).toEqual([
       "language",

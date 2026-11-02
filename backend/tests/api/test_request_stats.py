@@ -953,7 +953,7 @@ def test_a_probe_of_a_private_handle_is_useful_then_idle_and_never_wasted(
 
     _probe(client)
 
-    assert _listed_as(client, superuser_token_headers, "private") == [
+    assert _listed_as(client, superuser_token_headers, "hidden") == [
         (HANDLE, "channel", "Hidden")
     ]
     [record] = _listed(client, superuser_token_headers, aggregate="probe")

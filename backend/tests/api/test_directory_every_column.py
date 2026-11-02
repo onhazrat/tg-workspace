@@ -239,11 +239,11 @@ def test_every_new_condition_narrows(
 def test_a_private_channel_is_still_unavailable_and_also_its_own_status(
     client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
 ) -> None:
-    """Mutations: match `status:unavailable` exactly; leave `private` out of
+    """Mutations: match `status:unavailable` exactly; leave `hidden` out of
     the statuses a Condition may name.
 
-    RQS-13 split private Channels off `unavailable`. A Condition written for
-    `unavailable` keeps finding them, and `private` finds only them.
+    RQS-13 split Hidden Channels off `unavailable`. A Condition written for
+    `unavailable` keeps finding them, and `hidden` finds only them (ADR-047).
     """
     operator, _ = accounts
     with Session(engine) as session:
@@ -262,8 +262,8 @@ def test_a_private_channel_is_still_unavailable_and_also_its_own_status(
         client, operator, filter=_where({**status, "value": "unavailable"})
     )
     assert sorted(unavailable) == ["ec_bot", "ec_gone", "ec_hidden"]  # type: ignore[arg-type]
-    private = _list(client, operator, filter=_where({**status, "value": "private"}))
-    assert private == ["ec_hidden"]
+    hidden = _list(client, operator, filter=_where({**status, "value": "hidden"}))
+    assert hidden == ["ec_hidden"]
 
 
 def test_a_time_bound_includes_its_start_and_excludes_its_end(

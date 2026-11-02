@@ -58,7 +58,7 @@ const followable = candidate("followable", { probe: { status: "ok" } })
 const bot = candidate("bot", { probe: { status: "unavailable", kind: "bot" } })
 const inconclusive = candidate("inconclusive", { probe: { status: "unknown" } })
 const hidden = candidate("hidden", {
-  probe: { status: "private", kind: "channel" },
+  probe: { status: "hidden", kind: "channel" },
 })
 const dismissed = candidate("dismissed", { isIgnored: true })
 const dismissedAndBot = candidate("both", {

@@ -363,15 +363,15 @@ describe("DiscoverCandidateTable", () => {
     expect(screen.getByText("Probe name")).toBeTruthy()
   })
 
-  test("a private Channel is badged private, not by its kind", () => {
+  test("a Hidden Channel is badged Hidden, not by its kind", () => {
     const hidden = row("a", {
-      probe: { ...probe, status: "private", kind: "channel" },
+      probe: { ...probe, status: "hidden", kind: "channel" },
     })
     render(<Harness candidates={[hidden]} />)
     const badge = screen.getByTestId("discover-probe-kind-a")
-    expect(badge.textContent).toBe("Private")
+    expect(badge.textContent).toBe("Hidden")
     expect(badge.getAttribute("title")).toBe(
-      "This Channel keeps its Posts private, so it cannot be followed",
+      "Telegram hides this Channel's Posts on the web, so it cannot be followed",
     )
   })
 

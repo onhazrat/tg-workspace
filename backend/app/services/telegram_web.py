@@ -22,23 +22,29 @@ class TelegramWebViewUnavailable(ConnectionError):
     A `ConnectionError` subclass so existing network-error handling keeps
     treating it as one, while `isinstance` lets callers distinguish a soft
     block (never worth retrying, and reported as 400) from a transport failure.
+
+    `page` is the page Telegram answered with, empty when none was read. It
+    names the Handle kind, so a probe classifies it at no extra Request
+    (ADR-047).
     """
 
-    def __init__(self, message: str = UNAVAILABLE_WEB_VIEW_MESSAGE) -> None:
+    def __init__(
+        self, message: str = UNAVAILABLE_WEB_VIEW_MESSAGE, *, page: str = ""
+    ) -> None:
         super().__init__(message)
+        self.page = page
 
 
 class TelegramChannelPrivate(TelegramWebViewUnavailable):
-    """The page withholding the messages is a Channel's own (RQS-13).
+    """The page withholding the messages is a Channel's own: a Hidden Channel
+    (RQS-13, ADR-047).
 
-    The handle exists and its Posts are private. Carries the page, so a probe
-    can keep what it says about the Channel instead of filing the handle as
-    missing.
+    The handle exists and Telegram withholds its Posts on the web. The class
+    keeps its RQS-13 name because Request records store it as a cause code.
     """
 
     def __init__(self, page: str) -> None:
-        super().__init__()
-        self.page = page
+        super().__init__(page=page)
 
 
 def telegram_web_domain() -> str:

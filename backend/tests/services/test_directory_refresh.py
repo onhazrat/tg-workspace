@@ -590,8 +590,8 @@ def test_a_failed_first_probe_still_has_no_answer_to_keep() -> None:
 
 @pytest.mark.parametrize(
     ("dead", "status"),
-    [({}, "unavailable"), ({"isPrivate": True, "kind": "channel"}, "private")],
-    ids=["unavailable", "private (RQS-13)"],
+    [({}, "unavailable"), ({"isPrivate": True, "kind": "channel"}, "hidden")],
+    ids=["unavailable", "hidden (RQS-13)"],
 )
 def test_one_unavailable_answer_does_not_seal_a_live_entry(
     dead: dict[str, Any], status: str

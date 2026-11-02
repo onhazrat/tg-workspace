@@ -147,8 +147,9 @@ const DAY = 86_400_000
 describe("Time bounds (DPF)", () => {
   test.each([
     "status:unavailable",
-    "status:private",
+    "status:hidden",
     "kind:bot",
+    "kind:free",
     "error:timeout",
     'error:"proxy timeout"',
     "checked_at 2026-10-01T00:00Z..",
@@ -162,6 +163,13 @@ describe("Time bounds (DPF)", () => {
     "not last_post_at -1w..",
   ])("%s prints and parses back unchanged", (text) => {
     expect(roundTrip(text)).toBe(text)
+  })
+
+  test("an old status:private link reads as status:hidden (ADR-047)", () => {
+    expect(conds("status:private")).toEqual([
+      { cond: { type: "is", field: "status", value: "hidden" }, not: false },
+    ])
+    expect(roundTrip("status:private")).toBe("status:hidden")
   })
 
   test("a Live end is signed ms from now, a Fixed end a UTC instant", () => {

@@ -2215,6 +2215,10 @@ export type DirectoryEntryResponse = {
      */
     bio: string | null;
     /**
+     * Status
+     */
+    status?: string | null;
+    /**
      * Kind
      */
     kind?: string | null;
@@ -4148,9 +4152,9 @@ export type HttpValidationError = {
  *
  * A cached verdict about one handle, as `probe_to_camel` builds it.
  *
- * `status` is the structural fact (`ok` | `unavailable` | `unknown`); `kind`
- * (`channel` | `group` | `bot` | `user` | `unknown`) is an HTML heuristic that
- * sharpens the wording and is never filtered on.
+ * `status` is the structural fact (`ok` | `unavailable` | `hidden` |
+ * `unknown`); `kind` (`channel` | `group` | `bot` | `user` | `free` |
+ * `unknown`) is the Handle kind Telegram's page names.
  */
 export type HandleProbeResponse = {
     /**

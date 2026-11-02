@@ -131,12 +131,21 @@ export const choicesFromHidden = (hidden: string[]): ColumnChoices =>
 /**
  * What a list read asks for. The last request stands while it carries every
  * shown column, so hiding one reads nothing; showing one it lacks asks for
- * exactly the shown ones, sorted so the query key is stable.
+ * exactly the shown ones, sorted so the query key is stable. Subscribers
+ * brings the kind along when the reader may see it: the count is a group's
+ * members or a bot's monthly users too, and the kind names which (ADR-047).
  */
 export function columnsToSend(
   shown: ColumnKey[],
   previous: ColumnKey[] | undefined,
+  catalogue: ColumnKey[] = [],
 ): ColumnKey[] {
-  if (previous && shown.every((key) => previous.includes(key))) return previous
-  return [...shown].sort()
+  const wanted =
+    shown.includes("subscribers") &&
+    catalogue.includes("kind") &&
+    !shown.includes("kind")
+      ? [...shown, "kind" as const]
+      : shown
+  if (previous && wanted.every((key) => previous.includes(key))) return previous
+  return [...wanted].sort()
 }

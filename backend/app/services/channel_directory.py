@@ -149,16 +149,16 @@ PROBE_SCOPE_REASON = (
     "of that public page said."
 )
 
-#: The verdicts that mean "exists, but not followable". `private` (RQS-13) is
-#: a Channel whose page names it and withholds its Posts; every reader that
-#: counted or filtered `unavailable` reads both.
-UNAVAILABLE_STATUSES = frozenset({"unavailable", "private"})
+#: The verdicts that mean "exists, but not followable". `hidden` (RQS-13,
+#: ADR-047) is a Hidden Channel, whose page names it and withholds its Posts;
+#: every reader that counted or filtered `unavailable` reads both.
+UNAVAILABLE_STATUSES = frozenset({"unavailable", "hidden"})
 
 #: Statuses that mean "Telegram answered, and this is the answer".
 CONCLUSIVE_STATUSES = frozenset({"ok", *UNAVAILABLE_STATUSES})
 
 PROBE_STATUSES = frozenset({*CONCLUSIVE_STATUSES, "unknown"})
-PROBE_KINDS = frozenset({"channel", "group", "bot", "user", "unknown"})
+PROBE_KINDS = frozenset({"channel", "group", "bot", "user", "free", "unknown"})
 
 #: How long to wait before re-probing a handle that keeps failing.
 #:
@@ -231,14 +231,14 @@ REFRESH_PRIORITY = 2_000_000
 
 #: Verdicts that never come due again (ticket 03).
 #:
-#: `status == "unavailable"` is private or deleted; these three are what the
-#: page turned out to be. Both are facts a timer cannot change, and re-probing
+#: `status == "unavailable"` is a handle with no preview; these four are what
+#: the page turned out to be (ADR-047). Both are facts a timer cannot change, and re-probing
 #: them is the "bots and deleted channels cost requests forever" the refresh
 #: window exists to bound. `channel` and `unknown` are the live kinds — an
 #: unclassified page is refreshed on purpose, because the cost of being wrong is
 #: one fetch a week and the cost of the other mistake is a Channel frozen at
 #: whatever it looked like the first time.
-DEAD_KINDS = frozenset({"bot", "group", "user"})
+DEAD_KINDS = frozenset({"bot", "group", "user", "free"})
 
 DEFAULT_PROBE_PAGE_SIZE = 200
 MAX_PROBE_PAGE_SIZE = 1000
@@ -1174,7 +1174,7 @@ def set_refresh_target(
 
 #: What a probe can change about an entry that makes the probe Useful (RQS-12):
 #: the verdict, the kind, the title and the subscriber count. Compared before
-#: and after the write, so a new status (RQS-13's private) needs nothing here.
+#: and after the write, so a new status (RQS-13's hidden) needs nothing here.
 _PROBE_WATCHED = ("status", "kind", "display_name", "subscribers")
 
 
@@ -1195,7 +1195,7 @@ class ProbeVerdict(NamedTuple):
 
 def _verdict(payload: dict[str, Any]) -> str:
     if payload.get("isPrivate"):
-        return "private"
+        return "hidden"
     return "unavailable" if payload.get("isUnavailableOnWebView") else "ok"
 
 

@@ -23,6 +23,8 @@
  * `found_days` are gone and no longer parse. TB-02 makes `mine:`'s window a
  * Time bound on when the citing Posts were published, in the same form; an
  * old `mine:14d` still reads, as Live from 14 days ago with the End open.
+ * HKD-01 renames `status:private` to `status:hidden` (ADR-047); the old word
+ * still reads as the new one, and `kind:free` is new.
  */
 
 import type {
@@ -219,8 +221,8 @@ export const momentOf = (key: MomentKey): Moment =>
 
 /** The values an "is" Condition offers, which are all the server writes. */
 export const IS_VALUES: Record<IsField, readonly string[]> = {
-  status: ["ok", "unavailable", "private", "unknown"],
-  kind: ["channel", "group", "bot", "user", "unknown"],
+  status: ["ok", "unavailable", "hidden", "unknown"],
+  kind: ["channel", "group", "bot", "user", "free", "unknown"],
 }
 export const IS_LABEL: Record<IsField, string> = {
   status: "Status",
@@ -714,6 +716,10 @@ const DIRECTORY_TEXT: TextVocabulary<DirectoryCond> = {
     }
     if (prefix === "is" && FLAGS.has(text))
       return { type: "flag", value: text as DirectoryFlag }
+    // `status:private` is what a Hidden Channel was called before ADR-047,
+    // still in links saved before it.
+    if (prefix === "status" && text === "private")
+      return { type: "is", field: prefix, value: "hidden" }
     if (
       (prefix === "status" || prefix === "kind") &&
       IS_VALUES[prefix].includes(text)

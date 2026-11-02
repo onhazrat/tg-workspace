@@ -36,15 +36,22 @@ export interface DiscoverySeenIn {
 }
 
 /** What kind of thing a handle turned out to be. Best effort — see D9. */
-export type DiscoverProbeKind = "channel" | "group" | "bot" | "user" | "unknown"
+export type DiscoverProbeKind =
+  | "channel"
+  | "group"
+  | "bot"
+  | "user"
+  | "free"
+  | "unknown"
 
 /**
  * `ok` — a public channel that can be followed.
  * `unavailable`: real, but not followable (bot, account, group, deleted).
- * `private`: a Channel that keeps its Posts private (RQS-13), not followable.
+ * `hidden`: a Hidden Channel, whose Posts Telegram withholds (RQS-13,
+ *   ADR-047), not followable.
  * `unknown` — we could not reach a conclusion; will be retried.
  */
-export type DiscoverProbeStatus = "ok" | "unavailable" | "private" | "unknown"
+export type DiscoverProbeStatus = "ok" | "unavailable" | "hidden" | "unknown"
 
 /**
  * What one fetch of `t.me/<handle>` told us (IDEA-011 D9).
@@ -157,13 +164,14 @@ export const DISCOVER_PROBE_KIND_LABELS: Record<DiscoverProbeKind, string> = {
   group: "Group",
   bot: "Bot",
   user: "Account",
+  free: "Free handle",
   unknown: "Unknown",
 }
 
 /** True when a probe has concluded the handle cannot be followed. */
 export function isProbedUnavailable(candidate: DiscoveryCandidate): boolean {
   const status = candidate.probe?.status
-  return status === "unavailable" || status === "private"
+  return status === "unavailable" || status === "hidden"
 }
 
 export type DiscoveryEmptyReason =
@@ -394,7 +402,7 @@ export interface DiscoveryFilterOptions {
  *   costing attention on later runs, which a merely-labelled row would not
  *   achieve.
  * * **Not followable** (`probe.status === "unavailable"`) — an automated
- *   verdict that the handle is a bot, an account, a group or a private channel.
+ *   verdict that the handle is a bot, an account, a group or a Hidden Channel.
  *   Hidden from every view except "Not followable" (D9).
  *
  * Each has exactly one home view, so both stay reviewable and reversible rather
