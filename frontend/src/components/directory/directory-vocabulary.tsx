@@ -68,6 +68,7 @@ import {
 
 const ICON: Record<DirectoryCond["type"], LucideIcon> = {
   language: Languages,
+  bio_language: Languages,
   name: Type,
   tag: Tag,
   group: Layers,
@@ -179,6 +180,8 @@ export function directoryVocabulary(
   renderMoment: MomentEditorRender = () => null,
   /** A `DATA_ADMIN` reader, offered the probe queue's internals too (DPF). */
   internals = false,
+  /** The Bio language counts, as `languageCounts` (ADR-048). */
+  bioLanguageCounts: DirectoryLanguageCountResponse[] = [],
 ): FilterVocabulary<DirectoryCond> {
   const languages = languageOptions(languageCounts)
   const offered = (column: ColumnKey) => internals || !isInternal(column)
@@ -195,6 +198,15 @@ export function directoryVocabulary(
             options: languages,
             make: (value) => ({ type: "language", value }),
             current: (c) => (c.type === "language" ? c.value : undefined),
+          },
+          {
+            kind: "list",
+            id: "bio_language",
+            label: "Bio language",
+            icon: Languages,
+            options: languageOptions(bioLanguageCounts),
+            make: (value) => ({ type: "bio_language", value }),
+            current: (c) => (c.type === "bio_language" ? c.value : undefined),
           },
           {
             kind: "list",

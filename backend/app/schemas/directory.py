@@ -119,6 +119,16 @@ class DirectoryLanguageCondition(_Cond):
         return LanguageCond(self.value)
 
 
+class DirectoryBioLanguageCondition(_Cond):
+    """The Language of the entry's Bio alone."""
+
+    type: Literal["bio_language"]
+    value: str = Field(min_length=1, max_length=16)
+
+    def to_cond(self) -> DirectoryCond:
+        return LanguageCond(self.value, "bio_language")
+
+
 class DirectoryNameCondition(_Cond):
     """Any part of the handle or the display name, case-insensitive."""
 
@@ -359,6 +369,7 @@ class DirectoryGroupCondition(_Cond):
 
 DirectoryCondition = Annotated[
     DirectoryLanguageCondition
+    | DirectoryBioLanguageCondition
     | DirectoryNameCondition
     | DirectoryMeasureCondition
     | DirectoryFlagCondition
@@ -568,6 +579,8 @@ class _DirectoryEntryFields(BaseModel):
     display_name: str | None = Field(alias="displayName")
     photo_url: str | None = Field(alias="photoUrl")
     language: str | None
+    #: The Language of the Bio alone; `null` while the Bio is not read.
+    bio_language: str | None = Field(alias="bioLanguage")
     subscribers: int | None
     #: Reach: the median Settled View count of recent Posts.
     reach: int | None
@@ -625,6 +638,7 @@ class DirectoryRowResponse(BaseModel):
     shared_children: int | None = Field(alias="sharedChildren")
 
     language: str | None = None
+    bio_language: str | None = Field(None, alias="bioLanguage")
     subscribers: int | None = None
     #: Reach: the median Settled View count of recent Posts.
     reach: int | None = None
@@ -914,6 +928,8 @@ class DirectoryListResponse(BaseModel):
     total: int
     #: Counted without the view's Language Conditions, for the Language menu.
     languages: list[DirectoryLanguageCountResponse]
+    #: Counted without the view's Bio language Conditions, for its menu.
+    bio_languages: list[DirectoryLanguageCountResponse] = Field(alias="bioLanguages")
     #: How many Channels "your channels" are; 0 means every "Yours" count is 0.
     yours_size: int = Field(alias="yoursSize")
     #: The deployment's Refresh target, which an entry with none of its own

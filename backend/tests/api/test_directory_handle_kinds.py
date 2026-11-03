@@ -42,7 +42,7 @@ from app.core.config import settings
 from app.core.db import engine
 from app.jobs import discover_probe
 from app.models import UserUpdate
-from app.services import directory_reads, network
+from app.services import channel_directory, directory_reads, network
 from app.services.proxy_pool import get_proxy_pool
 from app.services.telegram_web import telegram_web_domain
 from tests.utils.sleep import asyncio_without_sleep
@@ -194,3 +194,209 @@ def test_a_user_named_for_a_count_is_a_user(
 
     row = _listed(client, superuser_token_headers, ["status", "kind"])[handle]
     assert (row["status"], row["kind"]) == ("unavailable", "user")
+
+
+# ---- The profile the page shows (PRF-01, ADR-048) ---------------------------
+
+_PHOTO = "https://cdn.example/photo.jpg"
+
+
+@pytest.mark.parametrize(
+    ("page", "handle", "name", "bio", "photo", "bio_language"),
+    [
+        (
+            "readable_channel",
+            "durov",
+            "Pavel Durov",
+            "Founder of Telegram.",
+            "some",
+            "und",
+        ),
+        (
+            "hidden_channel",
+            "example_hidden",
+            "Example Hidden Channel",
+            "About this handle",
+            _PHOTO,
+            "und",
+        ),
+        (
+            "group",
+            "vsevcapoeira_group",
+            "Чат Капоэйра Санкт-Петербург",
+            None,
+            "some",
+            "zxx",
+        ),
+        (
+            "bot",
+            "BotFather",
+            "BotFather",
+            "BotFather is the one bot to rule them all.",
+            "some",
+            "en",
+        ),
+        (
+            "user",
+            "example_person",
+            "Example Person",
+            "دندانپزشک در تبریز",
+            _PHOTO,
+            "fa",
+        ),
+        ("free", "zzqq_no_such_handle_8812", None, None, None, None),
+    ],
+)
+def test_a_probe_keeps_the_profile_the_page_shows(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+    page: str,
+    handle: str,
+    name: str | None,
+    bio: str | None,
+    photo: str | None,
+    bio_language: str | None,
+) -> None:
+    """Name, Bio and photo for every Handle kind, users included; none for a
+    free handle, whose page holds only Telegram's own wording. The Bio
+    language is read from the Bio alone: an empty one is No words, a short one
+    Undetermined. The photo costs no Request: the browser loads it."""
+    _probe(telegram, handle, page)
+
+    row = _listed(client, superuser_token_headers, ["bio", "bio_language"])[
+        handle.lower()
+    ]
+    assert row["displayName"] == name
+    if bio is None:
+        assert row["bio"] is None
+    else:
+        assert row["bio"].startswith(bio)
+    if photo == "some":
+        assert row["photoUrl"].startswith("https://")
+    else:
+        assert row["photoUrl"] == photo
+    assert row["bioLanguage"] == bio_language
+
+
+def test_a_recheck_forgets_the_bio_language_with_the_bio(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+) -> None:
+    """A rechecked entry has not been read, so it has no Bio language, which is
+    a different claim from No words; the next probe reads it again."""
+    _probe(telegram, "BotFather", "bot")
+    with Session(engine) as session:
+        channel_directory.requeue_probes(session, ["BotFather"])
+
+    row = _listed(client, superuser_token_headers, ["bio", "bio_language"])["botfather"]
+    assert (row["bio"], row["bioLanguage"]) == (None, None)
+
+    _probe(telegram, "BotFather", "bot")
+    row = _listed(client, superuser_token_headers, ["bio_language"])["botfather"]
+    assert row["bioLanguage"] == "en"
+
+
+def _bio_language_is(value: str) -> dict[str, Any]:
+    cond = {"type": "bio_language", "value": value}
+    return {"kind": "group", "op": "and", "children": [{"kind": "atom", "cond": cond}]}
+
+
+def test_bio_language_filters_and_counts_without_its_own_conditions(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    reader: dict[str, str],
+    telegram: FakeTelegram,
+) -> None:
+    """`biolang:` narrows by the Bio's Language and its menu's counts ignore
+    it, as Language's do. A reader who does not see internals counts only what
+    they may list: the Persian-speaking user is not among their counts."""
+    for handle, page in [
+        ("example_person", "user"),
+        ("BotFather", "bot"),
+        ("vsevcapoeira_group", "group"),
+        ("example_hidden", "hidden_channel"),
+    ]:
+        _probe(telegram, handle, page)
+
+    def listed(headers: dict[str, str], value: str) -> dict[str, Any]:
+        response = client.post(
+            f"{DIRECTORY}/list",
+            json={"columns": [], "filter": _bio_language_is(value)},
+            headers=headers,
+        )
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    body = listed(superuser_token_headers, "fa")
+    assert [row["handle"] for row in body["rows"]] == ["example_person"]
+    counts = {c["language"]: c["count"] for c in body["bioLanguages"]}
+    assert counts == {"fa": 1, "en": 1, "zxx": 1, "und": 1}
+    assert body["total"] == 1
+    # No words is a value the filter reaches, as Language's is.
+    zxx = listed(superuser_token_headers, "zxx")
+    assert [row["handle"] for row in zxx["rows"]] == ["vsevcapoeira_group"]
+
+    body = listed(reader, "und")
+    assert [row["handle"] for row in body["rows"]] == ["example_hidden"]
+    assert {c["language"]: c["count"] for c in body["bioLanguages"]} == {"und": 1}
+
+
+def test_search_never_matches_a_user(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    reader: dict[str, str],
+    telegram: FakeTelegram,
+) -> None:
+    """A user's name and Bio are stored (ADR-048), but only a Channel has a
+    search document, so no reader finds a person by searching."""
+    _probe(telegram, "example_person", "user")
+
+    def found(headers: dict[str, str], text: str) -> list[str]:
+        response = client.post(
+            f"{DIRECTORY}/list",
+            json={"columns": [], "search": {"text": text}},
+            headers=headers,
+        )
+        assert response.status_code == 200, response.text
+        return [row["handle"] for row in response.json()["rows"]]
+
+    for text in ["دندانپزشک", "Example Person"]:
+        assert found(reader, text) == []
+        assert found(superuser_token_headers, text) == []
+
+
+def test_the_bio_language_column_is_public_and_off_by_default(
+    client: TestClient, reader: dict[str, str]
+) -> None:
+    """Every reader may show it; nobody sees it unasked beside Language."""
+    response = client.get(f"{DIRECTORY}/columns", headers=reader)
+    assert response.status_code == 200, response.text
+    columns = {c["key"]: c["default"] for c in response.json()}
+    assert columns["bio_language"] is False
+    assert columns["language"] is True
+
+
+def test_a_followed_channels_sync_reads_its_new_bio(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+) -> None:
+    """The Bio language is written wherever the Bio is, so a Bio a sync
+    rewrites never keeps the Bio language of the old one."""
+    _probe(telegram, "durov", "readable_channel")
+    with Session(engine) as session:
+        channel_directory.record_sync_metadata(
+            session,
+            "durov",
+            {
+                "isTelegramPage": True,
+                "kind": "channel",
+                "bio": "دندانپزشک در تبریز، نوبت‌دهی فقط با پیام",
+            },
+        )
+        session.commit()
+
+    row = _listed(client, superuser_token_headers, ["bio_language"])["durov"]
+    assert row["bioLanguage"] == "fa"

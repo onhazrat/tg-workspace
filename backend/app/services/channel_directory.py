@@ -125,6 +125,7 @@ from app.services.directory_statistics import (
     media_mix,
 )
 from app.services.follows import followed_channel_names
+from app.services.language import read_language
 from app.services.post_references import extract_sample_references
 from app.services.reach import Reach, reach_settings_from, sample_reach
 from app.services.settling_curve import current_curve
@@ -817,6 +818,12 @@ def _apply_page_metadata(row: DirectoryEntry, payload: dict[str, Any]) -> None:
     row.kind = kind if kind in PROBE_KINDS else "unknown"
     row.display_name = payload.get("displayName") or None
     row.bio = payload.get("bio") or None
+    # Read wherever the Bio is written, so it never describes an old Bio
+    # (ADR-048). A free handle has no Bio to read, and an `unknown` page was
+    # not read: neither is No words.
+    row.bio_language = (
+        None if row.kind in ("free", "unknown") else read_language(row.bio)
+    )
     row.subscribers = payload.get("subscribers")
     row.photos = payload.get("photos")
     row.videos = payload.get("videos")
@@ -1523,6 +1530,7 @@ def requeue_probes(
         row.kind = "unknown"
         row.display_name = None
         row.bio = None
+        row.bio_language = None
         row.subscribers = None
         row.photos = None
         row.videos = None

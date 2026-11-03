@@ -11,7 +11,7 @@ client.
 """
 
 from dataclasses import asdict
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -136,8 +136,8 @@ def list_directory(
 ) -> DirectoryListResponse:
     """One page of 100 Directory entries under a Directory filter, sorted.
 
-    With the view's total and its Language counts, both counted without the
-    view's Language Conditions where the menu needs them.
+    With the view's total, its Language counts and its Bio language counts,
+    each menu's counted without that menu's own Conditions.
     """
     internals = sees_internals(session, current_user.id)
     visible = directory_reads.visible_columns(internals=internals)
@@ -151,6 +151,11 @@ def list_directory(
         show_matches=body.show_matches,
         first=body.first(),
     )
+    # Set only for the reader who sees the column, so `exclude_unset` leaves
+    # it out for anybody else.
+    internal: dict[str, Any] = (
+        {"refreshTarget": refresh_policy(session).target} if internals else {}
+    )
     return DirectoryListResponse(
         rows=[DirectoryRowResponse.model_validate(row.fields()) for row in page.rows],
         total=page.total,
@@ -158,10 +163,12 @@ def list_directory(
             DirectoryLanguageCountResponse.model_validate(asdict(entry))
             for entry in page.languages
         ],
+        bioLanguages=[
+            DirectoryLanguageCountResponse.model_validate(asdict(entry))
+            for entry in page.bio_languages
+        ],
         yoursSize=page.yours_size,
-        # Set only for the reader who sees the column, so `exclude_unset`
-        # leaves it out for anybody else.
-        **({"refreshTarget": refresh_policy(session).target} if internals else {}),
+        **internal,
     )
 
 

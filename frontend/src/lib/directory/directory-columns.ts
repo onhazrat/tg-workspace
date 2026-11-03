@@ -33,6 +33,7 @@ const KEYS: Record<ColumnKey, true> = {
   files: true,
   links: true,
   status: true,
+  bio_language: true,
   followable: true,
   kind: true,
   bio: true,

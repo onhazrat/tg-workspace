@@ -200,6 +200,7 @@ def test_every_column_maps_to_its_fields(
     rows = _rows(client, operator, [c["key"] for c in catalogue])
     assert set(rows["dc_big"]) == CORE | {
         "language",
+        "bioLanguage",
         "subscribers",
         "reach",
         "reachEstimated",

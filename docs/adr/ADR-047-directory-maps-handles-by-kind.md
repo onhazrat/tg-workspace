@@ -1,6 +1,6 @@
 # ADR-047: The Directory maps handles, classified by the page already fetched
 
-**Status:** Accepted (2026-11-02). Decided in a grilling session that started
+**Status:** Accepted (2026-11-02); its "a user's name is not stored" superseded by ADR-048. Decided in a grilling session that started
 from embedding Telegram posts in the Directory panel.
 
 ## Context

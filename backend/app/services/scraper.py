@@ -11,6 +11,7 @@ import math
 import re
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import urlsplit
 
 from bs4 import BeautifulSoup, Tag
 
@@ -197,9 +198,10 @@ def _extract_channel_photo_url(soup: BeautifulSoup) -> str | None:
             if src:
                 return src
     og_image = soup.select_one("meta[property='og:image']")
-    if og_image:
-        return attr_str(og_image.get("content"))
-    return None
+    src = attr_str(og_image.get("content")) if og_image else None
+    # A handle with no photo of its own shows Telegram's logo there (ADR-048),
+    # which would stand in for the avatar's initial on every such entry.
+    return None if src and urlsplit(src).hostname == "telegram.org" else src
 
 
 def _decode_widget_data_view(encoded: str) -> dict[str, Any] | None:
@@ -302,7 +304,17 @@ def _parse_channel_meta(soup: BeautifulSoup, channel_name: str) -> dict[str, Any
 
     photo_url = _extract_channel_photo_url(soup)
 
-    bio_el = soup.select_one(".tgme_channel_info_description")
+    # A preview page's description, else the one a page with no preview shows
+    # under the name (ADR-048). Never `og:description`, which on a group's page
+    # is Telegram's "You can view and join" wording.
+    bio_el = soup.select_one(".tgme_channel_info_description") or soup.select_one(
+        ".tgme_page_description"
+    )
+    # Telegram's own "If you have Telegram, you can contact @x" sits in the same
+    # element when the holder wrote nothing, and links the handle; a Bio never
+    # carries that link.
+    if bio_el and bio_el.select_one(".tgme_username_link"):
+        bio_el = None
     bio = extract_telegram_html_text(bio_el) if bio_el else ""
 
     counters: dict[str, str] = {}
@@ -477,20 +489,19 @@ def private_channel_info(page: str, channel_name: str) -> dict[str, Any]:
 def withheld_page_info(page: str, channel_name: str) -> dict[str, Any]:
     """What the page Telegram answered a handle with no preview says (ADR-047).
 
-    Its Handle kind, title and count, from the page the fetch raised on; an
-    empty page says nothing, so its kind is `unknown`. No Posts, so an empty
-    `samples`; and no photo, which would cost a fetch of its own. A user's
-    name is not kept: the Directory records that a person holds the handle,
-    not who.
+    Its Handle kind, name, Bio, photo and count, from the page the fetch raised
+    on, users included (ADR-048); an empty page says nothing, so its kind is
+    `unknown`. No Posts, so an empty `samples`. The parser already leaves out
+    Telegram's own wording and logo, which is all a free handle's page holds;
+    it names nobody, so it keeps no name either.
     """
     info = _parse_channel_meta(make_soup(page), channel_name) if page else {}
-    if info.get("kind") in ("user", "free"):
+    if info.get("kind") == "free":
         info["displayName"] = None
     return {
         **info,
         "isTelegramPage": True,
         "isUnavailableOnWebView": True,
-        "photoUrl": None,
         "samples": [],
     }
 

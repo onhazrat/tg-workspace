@@ -35,6 +35,7 @@ const entry = (
   displayName: "Channel Name",
   photoUrl: null,
   language: "fa",
+  bioLanguage: "en",
   subscribers: 12_300,
   reach: 450,
   reachEstimated: true,
@@ -107,6 +108,18 @@ describe("the header", () => {
     expect(screen.getByText("12.3K")).toBeTruthy()
     expect(screen.getByTitle("Estimated Reach").textContent).toBe("~")
     expect(screen.getByText("25%")).toBeTruthy()
+  })
+
+  test("shows the Bio language right after the Language", () => {
+    mount()
+    const terms = [...document.querySelectorAll("dt")].map(
+      (dt) => dt.textContent,
+    )
+    expect(terms.indexOf("Bio lang")).toBe(terms.indexOf("Lang") + 1)
+    const bio = [...document.querySelectorAll("dt")].find(
+      (dt) => dt.textContent === "Bio lang",
+    )
+    expect(bio?.nextElementSibling?.textContent).toBe("English")
   })
 
   test("the photo opens the viewer on its own, though its row shows it too (KM-01)", async () => {

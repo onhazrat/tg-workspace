@@ -174,6 +174,7 @@ DirectorySort = Literal[
     "kind",
     "followable",
     "bio",
+    "bio_language",
     "last_error",
     "mine",
     "mine_last_days",
@@ -219,6 +220,7 @@ DirectoryColumn = Literal[
     "followable",
     "kind",
     "bio",
+    "bio_language",
     "sample_count",
     "checked_at",
     "refresh_due_at",
@@ -291,9 +293,14 @@ _LINEAR: frozenset[str] = frozenset(
 )
 
 
+#: The two Languages an entry has: its Posts' and its Bio's (ADR-048).
+LanguageField = Literal["language", "bio_language"]
+
+
 @dataclass(frozen=True)
 class LanguageCond:
     value: str
+    field: LanguageField = "language"
 
 
 @dataclass(frozen=True)
@@ -810,9 +817,8 @@ def _atom(cond: DirectoryCond, view: DirectoryView) -> ColumnElement[bool]:
             _shared(cond).with_only_columns(candidate).having(func.count() >= cond.min)
         )
     if isinstance(cond, LanguageCond):
-        if cond.value == NOT_READ:
-            return col(DirectoryEntry.language).is_(None)
-        return col(DirectoryEntry.language) == cond.value
+        language = col(getattr(DirectoryEntry, cond.field))
+        return language.is_(None) if cond.value == NOT_READ else language == cond.value
     if isinstance(cond, TagCond):
         tagged = view.tags.get(tag_key(cond.name), frozenset())
         return handle == any_(_handles(tagged)) if tagged else false()
@@ -996,6 +1002,8 @@ class DirectoryPage:
     rows: list[DirectoryRow]
     total: int
     languages: list[LanguageCount]
+    #: The same for the Bio language, without the view's Bio language Conditions.
+    bio_languages: list[LanguageCount]
     #: How many Channels "your channels" are, so an empty source can say so.
     yours_size: int
 
@@ -1050,6 +1058,7 @@ def _page_handles(
         key = col(DirectoryEntry.status) == "ok"
     elif (
         sort == "language"
+        or sort == "bio_language"
         or sort == "status"
         or sort == "kind"
         or sort == "bio"
@@ -1156,6 +1165,7 @@ _ENTRY_COLUMNS: dict[DirectoryColumn, tuple[str, ...]] = {
     # Every row carries `followable`, shown or not: Follow reads it.
     "followable": (),
     "bio": ("bio",),
+    "bio_language": ("bio_language",),
     "sample_count": ("sample_count",),
     "checked_at": ("checked_at",),
     "refresh_due_at": ("refresh_due_at",),
@@ -1293,6 +1303,8 @@ def _count_of(counts: dict[str, int] | None, handle: str) -> int | None:
 # ---- Totals, cached ---------------------------------------------------------------
 
 _counts: dict[str, tuple[float, int, list[LanguageCount]]] = {}
+#: The Bio language counts per view, kept apart because only the list reads them.
+_bio_counts: dict[str, tuple[float, list[LanguageCount]]] = {}
 #: The Directory's size per `every_kind`, with when it goes stale.
 _size: dict[bool, tuple[float, int]] = {}
 
@@ -1300,6 +1312,7 @@ _size: dict[bool, tuple[float, int]] = {}
 def forget_cached_counts() -> None:
     """Drop every cached total, Language count and the Directory's size."""
     _counts.clear()
+    _bio_counts.clear()
     _size.clear()
 
 
@@ -1332,8 +1345,8 @@ def _reads(tree: DirectoryTree | None, *kinds: type) -> bool:
     return tree is not None and any(isinstance(c, kinds) for c in tree_conds(tree))
 
 
-def _is_language(cond: DirectoryCond) -> bool:
-    return isinstance(cond, LanguageCond)
+def _is_language(cond: DirectoryCond, field: LanguageField = "language") -> bool:
+    return isinstance(cond, LanguageCond) and cond.field == field
 
 
 def _count(
@@ -1351,20 +1364,7 @@ def _totals(session: Session, view: DirectoryView) -> tuple[int, list[LanguageCo
     hit = _counts.get(key)
     if hit is not None and hit[0] > time.monotonic():
         return hit[1], hit[2]
-    without = _without(view.tree, _is_language)
-    language = col(DirectoryEntry.language)
-    statement = unscoped_select(
-        sa_select(language, func.count())
-        .select_from(_entries(without))
-        .where(_where(view, without))
-        .group_by(language)
-        .order_by(func.count().desc(), language),
-        reason=_SCOPE_REASON,
-    )
-    languages = [
-        LanguageCount(language=lang, count=int(n))
-        for lang, n in session.execute(statement).all()
-    ]
+    languages = _language_counts(session, view, "language")
     has_language = view.tree is not None and any(
         _is_language(c) for c in tree_conds(view.tree)
     )
@@ -1377,6 +1377,39 @@ def _totals(session: Session, view: DirectoryView) -> tuple[int, list[LanguageCo
         _counts.clear()
     _counts[key] = (time.monotonic() + COUNTS_TTL_SECONDS, total, languages)
     return total, languages
+
+
+def _language_counts(
+    session: Session, view: DirectoryView, field: LanguageField
+) -> list[LanguageCount]:
+    """How many entries of the view hold each value of `field`, counted
+    without the view's own Conditions on it, so picking one hides no other."""
+    without = _without(view.tree, lambda c: _is_language(c, field))
+    language = col(getattr(DirectoryEntry, field))
+    statement = unscoped_select(
+        sa_select(language, func.count())
+        .select_from(_entries(without))
+        .where(_where(view, without))
+        .group_by(language)
+        .order_by(func.count().desc(), language),
+        reason=_SCOPE_REASON,
+    )
+    return [
+        LanguageCount(language=lang, count=int(n))
+        for lang, n in session.execute(statement).all()
+    ]
+
+
+def _bio_languages(session: Session, view: DirectoryView) -> list[LanguageCount]:
+    key = _view_key(view, view.tree)
+    hit = _bio_counts.get(key)
+    if hit is not None and hit[0] > time.monotonic():
+        return hit[1]
+    counts = _language_counts(session, view, "bio_language")
+    if len(_bio_counts) >= _MAX_CACHED_VIEWS:
+        _bio_counts.clear()
+    _bio_counts[key] = (time.monotonic() + COUNTS_TTL_SECONDS, counts)
+    return counts
 
 
 def list_page(
@@ -1405,6 +1438,7 @@ def list_page(
         rows=_rows(session, view, handles, columns, show_matches=show_matches),
         total=total,
         languages=languages,
+        bio_languages=_bio_languages(session, view),
         yours_size=len(view.sources),
     )
 
@@ -1534,6 +1568,7 @@ def newest_references(
 _PANEL_COLUMNS: frozenset[DirectoryColumn] = frozenset(
     {
         "status",
+        "bio_language",
         "subscribers",
         "reach",
         "posts_per_week",

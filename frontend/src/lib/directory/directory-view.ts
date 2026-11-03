@@ -100,8 +100,18 @@ export const DEFAULT_VIEW: DirectoryView = {
 
 /** Sorts of words, which read A to Z first (DPF). */
 const WORD_SORTS = every<
-  Extract<DirectorySort, "language" | "status" | "kind" | "bio" | "last_error">
->({ language: true, status: true, kind: true, bio: true, last_error: true })
+  Extract<
+    DirectorySort,
+    "language" | "bio_language" | "status" | "kind" | "bio" | "last_error"
+  >
+>({
+  language: true,
+  bio_language: true,
+  status: true,
+  kind: true,
+  bio: true,
+  last_error: true,
+})
 
 /**
  * Days since your channels cited it and the words read smallest first; every
@@ -120,6 +130,7 @@ type SortOption = { value: string; label: string; internal: boolean }
 
 const WORD_LABELS: Record<(typeof WORD_SORTS)[number], string> = {
   language: "Language",
+  bio_language: "Bio language",
   status: "Status",
   kind: "Kind",
   bio: "Bio",
@@ -294,6 +305,7 @@ export function listSummary(
     rows: data?.rows ?? [],
     total: data?.total,
     languages: data?.languages ?? [],
+    bioLanguages: data?.bioLanguages ?? [],
     ms: fetching ? undefined : data?.ms,
     emptyYours: data?.yoursSize === 0 ? source : undefined,
   }

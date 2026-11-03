@@ -460,6 +460,8 @@ export type DirectoryBarProps = {
   vocabulary: FilterVocabulary<DirectoryCond>
   /** Per-Language counts for the view without its Language Conditions. */
   languages: DirectoryLanguageCountResponse[]
+  /** The same for the Bio language (ADR-048); none while not given. */
+  bioLanguages?: DirectoryLanguageCountResponse[]
   kinds: RefKind[]
   onKinds: (next: RefKind[]) => void
   sortValue: string
@@ -501,9 +503,58 @@ export type DirectoryBarProps = {
   groupsMenu?: ReactNode
 }
 
+/** A Language dropdown: the Posts' Language, or the Bio's. */
+function LanguageFacet({
+  type,
+  label,
+  testId,
+  counts,
+  filter,
+  onFilter,
+}: {
+  type: "language" | "bio_language"
+  label: string
+  testId: string
+  counts: DirectoryLanguageCountResponse[]
+  filter: DirectoryFilter
+  onFilter: (next: DirectoryFilter) => void
+}) {
+  return (
+    <FacetMenu
+      icon={<Languages size={12} />}
+      label={label}
+      noun={label.toLowerCase()}
+      testId={testId}
+      countLabel="channels"
+      rows={sortLanguages(
+        counts.map(({ language, count }) => ({
+          value: languageValue(language),
+          count,
+        })),
+      ).map(({ value, count }) => ({
+        id: value,
+        label: languageLabel(value),
+        hint: value,
+        selected: 0,
+        total: count,
+        tick: "false" as const,
+      }))}
+      funnelled={funnelledValues(filter, type)}
+      labelOf={(id) => languageLabel(id)}
+      onFunnel={(value, on) =>
+        onFilter(
+          on
+            ? addFunnel(filter, { type, value })
+            : removeFunnel(filter, type, value),
+        )
+      }
+      onClearFunnels={() => onFilter(clearFunnels(filter, type))}
+    />
+  )
+}
+
 export function DirectoryBar(p: DirectoryBarProps) {
   const conditions = atoms(p.filter).length
-  const funnelled = funnelledValues(p.filter, "language")
   const search = (
     <DirectorySearch
       search={p.search}
@@ -519,36 +570,24 @@ export function DirectoryBar(p: DirectoryBarProps) {
       {p.onAdd && seesInternals(p.columns.catalogue) && (
         <DirectoryAddBox onAdd={p.onAdd} />
       )}
-      <FacetMenu
-        icon={<Languages size={12} />}
+      <LanguageFacet
+        type="language"
         label="Language"
-        noun="language"
         testId="directory-language"
-        countLabel="channels"
-        rows={sortLanguages(
-          p.languages.map(({ language, count }) => ({
-            value: languageValue(language),
-            count,
-          })),
-        ).map(({ value, count }) => ({
-          id: value,
-          label: languageLabel(value),
-          hint: value,
-          selected: 0,
-          total: count,
-          tick: "false" as const,
-        }))}
-        funnelled={funnelled}
-        labelOf={(id) => languageLabel(id)}
-        onFunnel={(value, on) =>
-          p.onFilter(
-            on
-              ? addFunnel(p.filter, { type: "language", value })
-              : removeFunnel(p.filter, "language", value),
-          )
-        }
-        onClearFunnels={() => p.onFilter(clearFunnels(p.filter, "language"))}
+        counts={p.languages}
+        filter={p.filter}
+        onFilter={p.onFilter}
       />
+      {p.bioLanguages && (
+        <LanguageFacet
+          type="bio_language"
+          label="Bio language"
+          testId="directory-bio-language"
+          counts={p.bioLanguages}
+          filter={p.filter}
+          onFilter={p.onFilter}
+        />
+      )}
       {p.tagsMenu}
       {p.groupsMenu}
       <ConditionPicker

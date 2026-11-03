@@ -487,7 +487,11 @@ test.describe("TG Workspace directory", () => {
     // DPF renamed the day measures; their old text is not a filter any more.
     await mockDirectory(page)
     await gotoWorkspace(page, "channels")
-    await page.goto("/?tab=directory&dirFilter=last_post_days%20%3C%3D%207")
+    // Not waiting for `load`: on a slow runner the page fires it after the
+    // four-second toast has already closed, so the assertion would start late.
+    await page.goto("/?tab=directory&dirFilter=last_post_days%20%3C%3D%207", {
+      waitUntil: "commit",
+    })
     await expect(
       page.getByText("This link's filter could not be read and was reset"),
     ).toBeVisible()

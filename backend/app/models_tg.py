@@ -931,6 +931,10 @@ class DirectoryEntry(SQLModel, table=True):
 
     display_name: str | None = None
     bio: str | None = None
+    #: The Bio language (ADR-048): the Language of `bio` alone, a code, `zxx`
+    #: for an empty Bio or `und`; `None` while the Bio is not read. Never the
+    #: entry's `language`, which only Posts decide.
+    bio_language: str | None = None
     #: The five Channel counters as the numbers Telegram's text stands for
     #: ("12.3K" is 12300), approximate above 1,000 (ADR-023). Named and typed to
     #: match `Channel` so promoting an entry into a followed Channel needs no
