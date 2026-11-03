@@ -53,6 +53,10 @@ build-backend = "hatchling.build"
 [tool.mypy]
 strict = true
 exclude = ["venv", ".venv", "alembic"]
+# `backend/scripts` is checked as the package `scripts`, the name its own
+# imports and the tests use; without this mypy also names each file bare and
+# stops on the first module it finds twice (`worktree_db`, since #218).
+explicit_package_bases = true
 
 [[tool.mypy.overrides]]
 module = [

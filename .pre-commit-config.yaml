@@ -62,7 +62,7 @@ repos:
 
       - id: local-mypy
         name: mypy check
-        entry: bash -c 'cd backend && uv run mypy app ../scripts/crap'
+        entry: bash -c 'cd backend && uv run mypy app scripts ../scripts/crap'
         require_serial: true
         language: unsupported
         pass_filenames: false

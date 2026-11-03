@@ -10,16 +10,18 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_SCRIPTS_DIR = Path(__file__).resolve().parent
-if str(_SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(_SCRIPTS_DIR))
+# `backend/`, so the sibling module imports as `scripts.tg_test_pollution`, the
+# one name mypy and the tests know it by.
+_BACKEND_DIR = Path(__file__).resolve().parents[1]
+if str(_BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_DIR))
 
 load_dotenv(_REPO_ROOT / ".env")
 
 from sqlmodel import Session
-from tg_test_pollution import count_test_pollution, delete_test_pollution
 
 from app.core.db import engine
+from scripts.tg_test_pollution import count_test_pollution, delete_test_pollution
 
 
 def main() -> None:
