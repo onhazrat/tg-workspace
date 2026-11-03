@@ -15,6 +15,10 @@ can see and change. Bots, groups, personal accounts and handles not fetched yet
 are listed only to a `DATA_ADMIN` reader (DPF), whose opening view is still
 the followable Channels.
 
+Search covers Channels alone, whatever the view lists: only a Channel has a
+search document (`channel_directory.index_for_search`), so a group, a bot or a
+user is never found by its name or Bio, even in the every-kind view.
+
 ## "Your channels"
 
 One set of handles per request, chosen by the view: every Channel the Account
