@@ -1,6 +1,6 @@
 # CRG-01: A corpus Post's References are stored
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None (can start immediately)
 
@@ -139,3 +139,8 @@ It has already been rewritten; check it still matches what you built.
 
 Forwards get a null target post id until CRG-03 lands the column. Nothing here
 changes when it does, beyond the extractor reading one more field.
+
+## Comments
+
+- 2026-11-03: implemented on `crg-01-corpus-references` and merged into `main` in 2b1c40fa (#51).
+  Closed in a sweep of stale Status lines; the Status line was never updated at merge.

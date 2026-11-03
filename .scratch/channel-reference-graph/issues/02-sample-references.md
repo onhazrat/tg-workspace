@@ -1,6 +1,6 @@
 # CRG-02: Directory samples contribute References
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** CRG-01
 
@@ -49,3 +49,8 @@ the module rather than leaving the asymmetry looking like an oversight.
 - [ ] Sample-derived References are asserted where the probe's behaviour is
       already tested, not in a new file
 - [ ] Every new assertion mutation-tested
+
+## Comments
+
+- 2026-11-03: implemented on `crg-02-sample-references` and merged into `main` in 3b2373eb (#52).
+  Closed in a sweep of stale Status lines; the Status line was never updated at merge.

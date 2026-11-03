@@ -20,7 +20,7 @@ it from the start, and DRP-02 needs no migration.
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done
 
 ## Acceptance criteria
 
@@ -51,3 +51,8 @@ Tests and guards
 - [ ] There are tests at the spec's seams for the probe write path and queue, the routes (settings save, min > max, projection), sample retention, the migration, and the Settings projection. The last one is a mocked Playwright spec, run with one worker. Each new assertion is mutation-tested with `scripts/mutate.py`.
 - [ ] Existing guards are satisfied, not deleted: route inventories, env example defaults, Settings registry classification, generated client.
 - [ ] `cd backend && uv run prek run --all-files` passes, then the backend suite.
+
+## Comments
+
+- 2026-11-03: implemented on `claude/drp-01-due-by-expected-new-posts` and merged into `main` in a5c73533 (#260).
+  Closed in a sweep of stale Status lines; the Status line was never updated at merge.

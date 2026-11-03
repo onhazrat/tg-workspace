@@ -1,6 +1,6 @@
 # 1. `summaries/store.test.ts` fails on CI and passes everywhere locally
 
-**Status:** open
+**Status:** done
 **Blocked by:** None
 
 **What to fix:** `Test Frontend Unit` is the one workflow still red after CI was
@@ -44,3 +44,10 @@ whether bun sees a plain named export.
 The next step is to stop guessing from here and reproduce it on Linux, either in
 the `test-docker-compose` image or with `act`, where the failure can be bisected
 directly instead of through a five-minute CI round trip.
+
+## Comments
+
+- 2026-11-03: fixed on `worktree-fix-ci-failures` and merged into `main` in 510014fa (#1).
+  The cause was `mock.module` in `palette-search.test.ts` leaking a stub of the store into
+  every later test file; Linux sorts `lib/commands/` first, macOS did not. Closed in a sweep
+  of stale Status lines; Test Frontend Unit has passed on `main` since that merge.

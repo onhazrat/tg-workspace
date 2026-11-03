@@ -13,7 +13,7 @@ computation.
 
 **Blocked by:** DRP-01 (Entries come due by expected new posts).
 
-**Status:** ready-for-agent
+**Status:** done
 
 ## Acceptance criteria
 
@@ -25,3 +25,8 @@ computation.
 - [ ] Two optional, sortable columns go through the existing columns machinery: Refresh target (override, or the deployment's greyed) and Next refresh.
 - [ ] There are route tests for set and clear on handles and on a view, refusal without the permission, 422 with nothing changed, and a per-entry target moving only its entry and still clamped. There are component tests for set and clear and the two columns. Each new assertion is mutation-tested with `scripts/mutate.py`.
 - [ ] `cd backend && uv run prek run --all-files`, the backend suite, and the frontend unit tests and typecheck pass.
+
+## Comments
+
+- 2026-11-03: implemented on `claude/drp-02-implementation-ff1350` and merged into `main` in eced4961 (#263).
+  Closed in a sweep of stale Status lines; the Status line was never updated at merge.

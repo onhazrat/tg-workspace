@@ -1,6 +1,6 @@
 # CRG-03: A forward records which Post it came from
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** CRG-01
 
@@ -51,3 +51,8 @@ docstring so the next person does not go hunting for one.
       change still carries null
 - [ ] The migration adds two nullable columns and no backfill, and says why
 - [ ] Every new assertion mutation-tested
+
+## Comments
+
+- 2026-11-03: implemented on `worktree-crg-03-forward-post-id` and merged into `main` in eca09e71 (#53).
+  Closed in a sweep of stale Status lines; the Status line was never updated at merge.

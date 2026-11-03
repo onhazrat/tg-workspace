@@ -11,7 +11,7 @@ subscriber count and shown with their own unit. The whole of
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [ ] Both soft-block exceptions carry the page HTML; no change to pacing, charging, retries or Request records (a probe of each kind still records exactly one Request).
 - [ ] The handle-kind classifier reads the page title's verb (`View`, `Launch`, `Contact`), the header line and the name, per the spec's table; the handle's spelling plays no part, and the presence-line rule is gone. Its docstring says the kind decides what is listed.
@@ -27,3 +27,8 @@ subscriber count and shown with their own unit. The whole of
 - [ ] Frontend render tests for the table and panel cover the Hidden verdict and tooltip, each unit, the absent counts and the missing Samples section; the filter tests cover `kind:free` and `status:hidden`.
 - [ ] Each new guard is mutation-checked with the repo's mutation script, and the commit body carries its `Mutation-checked:` lines.
 - [ ] No backfill: entries probed before this change keep `unknown`.
+
+## Comments
+
+- 2026-11-03: implemented on `claude/telegram-feed-preview-iframe-6519ee` and merged into `main` in e51c1a89 (#272).
+  Closed in a sweep of stale Status lines; the Status line was never updated at merge.

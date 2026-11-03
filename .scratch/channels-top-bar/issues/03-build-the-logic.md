@@ -11,7 +11,7 @@ inside it. After this ticket, the spec's example
 
 **Blocked by:** CTB-02
 
-**Status:** ready-for-agent
+**Status:** done
 
 ### Editing
 
@@ -59,3 +59,8 @@ inside it. After this ticket, the spec's example
 - [ ] The Channels end-to-end spec gains building a two-clause OR with a NOT and finding it after
       a reload
 - [ ] Every new test is watched failing before it is trusted
+
+## Comments
+
+- 2026-11-03: implemented on `claude/ctb-03-implementation-6f6c75` and merged into `main` in 361d22ce (#132).
+  Closed in a sweep of stale Status lines; the Status line was never updated at merge.

@@ -13,7 +13,7 @@ Conditions, editing the logic, the selection tools and paste-to-follow on top. S
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done
 
 ### The Channel filter
 
@@ -94,3 +94,8 @@ Conditions, editing the logic, the selection tools and paste-to-follow on top. S
       chips are moved to the new controls, and it gains a funnel-then-reload step that finds the
       filter still applied
 - [ ] Every new test is watched failing before it is trusted
+
+## Comments
+
+- 2026-11-03: implemented on `claude/ctb-01-implementation-0600d7` and merged into `main` in 859ec503 (#130).
+  Closed in a sweep of stale Status lines; the Status line was never updated at merge.

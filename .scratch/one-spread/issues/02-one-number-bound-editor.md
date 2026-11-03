@@ -39,7 +39,7 @@ type NumberSource =
 
 **Blocked by:** SPR-01 (the editor draws the one Spread).
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Context pointers:** spec `../spec.md` (user stories 42 to 57 and 63 to 65,
 Implementation Decisions, Testing Decisions), `docs/adr/ADR-037-one-spread.md`,
@@ -55,3 +55,8 @@ renamed, ungated and test-first; nothing else is ported.
 - [ ] A pick fills the operator and fields with the rounding above.
 - [ ] Render tests pin the editor through its interface, per source and switch; the Channel and Directory editors' tests fold in.
 - [ ] The Playwright specs that name the old editor test ids use the new ones, and the frontend unit suite, typecheck and lint pass.
+
+## Comments
+
+- 2026-11-03: implemented on `claude/implement-spr-02-a06ba7` and merged into `main` in 3edae7f4 (#221).
+  Closed in a sweep of stale Status lines; the Status line was never updated at merge.
