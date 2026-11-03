@@ -1,6 +1,6 @@
 # Spec: History tab redesign
 
-Status: implemented on branch claude/history-tab-redesign-spec-acb754 (see "As built" in the plan)
+Status: done (merged in #202; closed 2026-11-03)
 
 Decisions: `docs/history-tab-redesign-plan.md`, the record of a grilling session
 and a prototype; this spec does not repeat its reasoning. Vocabulary (Artifact,

@@ -1,6 +1,6 @@
 # Channel Tags: one Tags dropdown, ordered by Tag use; Setting groups apart; Last sync and Last post
 
-Status: ready-for-agent
+Status: done (every ticket closed; closed 2026-11-03)
 
 Ticket prefix: `TGU`.
 

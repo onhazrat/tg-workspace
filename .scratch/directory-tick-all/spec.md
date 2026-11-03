@@ -1,6 +1,6 @@
 # Directory: tick all that match
 
-Status: implemented on branch claude/directory-select-all-filters-31166f (see "As built" in the plan)
+Status: done (merged in #183; closed 2026-11-03)
 
 Ticket prefix: `DTA`.
 

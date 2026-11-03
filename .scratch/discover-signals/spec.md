@@ -1,6 +1,6 @@
 # Spec: Discover Signals
 
-**Status:** ready-for-agent
+**Status:** done (every ticket closed; closed 2026-11-03)
 
 Implements the surface `.scratch/channel-directory/spec.md` deferred: *"A browsing or search
 surface over the Directory. This work builds the map; the UI that reads it is a separate

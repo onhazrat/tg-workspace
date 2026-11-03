@@ -1,6 +1,6 @@
 # Spec: The Posts view leaves ScraperContext
 
-Status: ready-for-agent
+Status: done (every ticket closed; closed 2026-11-03)
 
 Decisions: `docs/adr/ADR-039-posts-view-apart-from-its-edits.md` and
 `docs/posts-view-module-plan.md` (17 settled decisions and the facts they rest

@@ -4,7 +4,7 @@
 
 **Blocked by:** RKD-01, by agreed order: both rewrite the Request attribution and its callers, and ACW-01 rebases onto RKD-01 and keeps its tests green (spec, Further notes).
 
-**Status:** ready-for-agent
+**Status:** done
 
 Parent spec: `.scratch/accounted-work/spec.md`, effort ACW. ADR-041 records the decisions and the alternatives rejected. The spec defines the work values, the two seams and the exclusions.
 
@@ -38,3 +38,5 @@ Parent spec: `.scratch/accounted-work/spec.md`, effort ACW. ADR-041 records the 
 - [ ] The change stays within the spec: no change to what is Charged, to Budgets, lanes or ceilings, no per-page ledger writes, no backfill.
 
 ## Comments
+- 2026-11-03: implemented on `claude/acw-01-aa15f5` and merged into `main` in 7b3cf21c (#245).
+  Closed in a sweep of stale Status lines; the Status line was never updated at merge.

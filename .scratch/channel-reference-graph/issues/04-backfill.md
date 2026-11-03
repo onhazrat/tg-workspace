@@ -1,6 +1,6 @@
 # CRG-04: The existing corpus is backfilled
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** CRG-01
 
@@ -64,3 +64,8 @@ Not against staging. Staging is read-only for verification in this repo.
 
 Afterwards the sweep handles only newly scraped Posts and the partial index
 shrinks toward empty, the way the harvest's already does.
+
+## Comments
+
+- 2026-11-03: implemented on `worktree-crg-04-backfill` and merged into `main` in 455cada2 (#54).
+  Closed in a sweep of stale Status lines; the Status line was never updated at merge.

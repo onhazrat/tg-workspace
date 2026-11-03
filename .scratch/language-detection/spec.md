@@ -1,6 +1,6 @@
 # Spec: Language detection
 
-**Status:** ready-for-agent
+**Status:** done (every ticket closed; closed 2026-11-03)
 
 Decided in [ADR-021](../../docs/adr/ADR-021-post-language.md), which supersedes the `script`
 statistic of ADR-015. Ticket ids use the prefix `LANG`.

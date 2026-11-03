@@ -1,6 +1,6 @@
 # Summary tab redesign, Publications, and the photo viewer on phones
 
-Status: ready-for-agent
+Status: done (every ticket closed; closed 2026-11-03)
 
 Ticket prefix: `SUMTAB`.
 

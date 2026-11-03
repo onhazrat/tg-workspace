@@ -1,6 +1,6 @@
 # Spec: Settings as one page on one registry
 
-Status: ready-for-agent
+Status: done (every ticket closed; closed 2026-11-03)
 
 Plan and decision table: `docs/settings-registry-plan.md`. Architecture:
 `docs/adr/ADR-032-one-settings-registry.md`. Prototype: variant B on

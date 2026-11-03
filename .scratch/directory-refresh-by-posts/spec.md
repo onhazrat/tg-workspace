@@ -1,6 +1,6 @@
 # Spec: Directory refresh by expected new posts (ADR-045)
 
-**Status:** ready-for-agent
+**Status:** done (every ticket closed; closed 2026-11-03)
 
 Decided in ADR-045 and grilled on 2026-11-01; the plan with every decision and
 the staging sizing is `docs/directory-refresh-by-posts-plan.md`. Ticket ids use

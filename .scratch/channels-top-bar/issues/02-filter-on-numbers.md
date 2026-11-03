@@ -10,7 +10,7 @@ stories 19 to 32.
 
 **Blocked by:** CTB-01
 
-**Status:** ready-for-agent
+**Status:** done
 
 ### The criteria
 
@@ -60,3 +60,8 @@ stories 19 to 32.
       in between, the rounding, the log axis switching on, and the "N of M" count
 - [ ] The Channels end-to-end spec gains adding a Reach bound and seeing the count drop
 - [ ] Every new test is watched failing before it is trusted
+
+## Comments
+
+- 2026-11-03: implemented on `claude/ctb-02-implementation-1ac40e` and merged into `main` in 78529866 (#131).
+  Closed in a sweep of stale Status lines; the Status line was never updated at merge.

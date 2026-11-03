@@ -1,6 +1,6 @@
 # Channel card zoom levels
 
-Status: ready-for-agent
+Status: done (every ticket closed; closed 2026-11-03)
 
 Ticket prefix: `ZOOM`.
 

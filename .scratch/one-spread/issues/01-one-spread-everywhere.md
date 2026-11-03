@@ -50,7 +50,7 @@ type ZoomKit = {
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Context pointers:** spec `../spec.md` (user stories 1 to 41 and 58 to 62,
 Implementation Decisions, Testing Decisions), `docs/adr/ADR-037-one-spread.md`,
@@ -71,3 +71,8 @@ else is ported.
 - [ ] Render tests pin the Spread through its interface, both zoom adapters included; each caller's test checks only how a pick becomes its bound.
 - [ ] The Analysis window editor's snapshot is updated once, deliberately, and its other assertions pass unedited.
 - [ ] The Playwright specs that name the old chart test ids use the new ones, and the frontend unit suite, typecheck and lint pass.
+
+## Comments
+
+- 2026-11-03: implemented on `claude/spr-01-implementation-a40e04` and merged into `main` in 2d7de0c6 (#220).
+  Closed in a sweep of stale Status lines; the Status line was never updated at merge.

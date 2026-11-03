@@ -1,6 +1,6 @@
 # Spec: One time editor for every time filter
 
-Status: ready-for-agent
+Status: done (every ticket closed; closed 2026-11-03)
 
 Plan and decisions: `docs/time-bound-editor-plan.md`. Architecture:
 `docs/adr/ADR-033-one-time-editor.md`. Prototype: variant 1

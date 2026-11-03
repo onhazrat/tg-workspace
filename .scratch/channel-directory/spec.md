@@ -1,6 +1,6 @@
 # Spec: The Channel Directory
 
-**Status:** ready-for-agent
+**Status:** done (every ticket closed; closed 2026-11-03)
 
 Supersedes `docs/discover-candidate-posts-plan.md` (uncommitted), which re-specified PR #64 of
 the old private repo as a storage-only change. That plan's premise held up under review; its

@@ -1,6 +1,6 @@
 # Spec: One Spread and one Number bound editor
 
-Status: ready-for-agent
+Status: done (every ticket closed; closed 2026-11-03)
 
 Decisions: `docs/adr/ADR-037-one-spread.md` and `docs/one-spread-plan.md` (16
 settled decisions and what each rejected). Prototype: variant 1 on

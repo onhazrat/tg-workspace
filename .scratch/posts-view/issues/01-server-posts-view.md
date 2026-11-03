@@ -21,7 +21,7 @@ folded into the request adapter; the guard last.
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Context pointers:** spec `../spec.md` (Implementation Decisions, Testing
 Decisions), `docs/adr/ADR-036-one-resolved-posts-view.md`,
@@ -54,3 +54,5 @@ Directory view.
   and `test_posts_counts.py`, which called the removed plain-argument reads.
   `post_selection.selection_clause` keeps its own loading for the two Discover
   tests that call it unedited; no app code calls it.
+- 2026-11-03: implemented on `claude/implement-pv-01-8233d1` and merged into `main` in 42cfbf00 (#214).
+  Closed in a sweep of stale Status lines; the Status line was never updated at merge.

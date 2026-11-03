@@ -1,6 +1,6 @@
 # Spec: The Directory photo viewer and one Keyboard mode
 
-Status: ready-for-agent
+Status: done (every ticket closed; closed 2026-11-03)
 
 Decisions: `docs/adr/ADR-034-one-keyboard-mode.md` and
 `docs/keyboard-mode-plan.md` (19 settled decisions). Prototype: variant H

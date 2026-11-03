@@ -15,7 +15,7 @@ hold rule from the prototype.
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [ ] A refetch that brings a Post in above the last shown Post holds it; the
       pill shows the held count and avatars; a page loading below shows at
@@ -34,3 +34,8 @@ hold rule from the prototype.
 - [ ] No variant switch: the behaviour is unconditional on main.
 - [ ] Tests: the hold rule's unit test, a mocked Playwright spec for the pill,
       `.` and both skeletons (run serially), each mutation-checked.
+
+## Comments
+
+- 2026-11-03: implemented on `claude/rch-01-implementation-101a85` and merged into `main` in 0b9bfa02 (#265).
+  Closed in a sweep of stale Status lines; the Status line was never updated at merge.
