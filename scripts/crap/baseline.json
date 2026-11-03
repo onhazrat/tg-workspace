@@ -2,5 +2,65 @@
   "backend/app/services/network.py::fetch_with_retry": {
     "score": 32.6,
     "reason": "The retry loop decides proxy pacing and records every attempt for the one charge rule in Page.record; its uncovered lines are the local-Tor rotation and the unreachable exhaustion raise."
+  },
+  "frontend/src/components/filter-memory-prototype/FilterMemory.tsx::Timeline": {
+    "score": 72,
+    "reason": "Prototype code on the never-merged prototype/filter-memory snapshot; ADR-049 and TML-01 to TML-03 rebuild it with tests."
+  },
+  "frontend/src/components/filter-memory-prototype/FilterMemory.tsx::Timeline.<arg of rows.map>": {
+    "score": 210,
+    "reason": "Prototype code on the never-merged prototype/filter-memory snapshot; ADR-049 and TML-01 to TML-03 rebuild it with tests."
+  },
+  "frontend/src/components/filter-memory-prototype/FilterMemory.tsx::Timeline.<arg of useEffect>.onKey": {
+    "score": 342,
+    "reason": "Prototype code on the never-merged prototype/filter-memory snapshot; ADR-049 and TML-01 to TML-03 rebuild it with tests."
+  },
+  "frontend/src/components/filter-memory-prototype/FilterMemory.tsx::partLabel": {
+    "score": 42,
+    "reason": "Prototype code on the never-merged prototype/filter-memory snapshot; ADR-049 and TML-01 to TML-03 rebuild it with tests."
+  },
+  "frontend/src/components/filter-memory-prototype/FilterMemory.tsx::undoTarget": {
+    "score": 56,
+    "reason": "Prototype code on the never-merged prototype/filter-memory snapshot; ADR-049 and TML-01 to TML-03 rebuild it with tests."
+  },
+  "frontend/src/components/filter-memory-prototype/FilterMemory.tsx::useApply.<anonymous>": {
+    "score": 240,
+    "reason": "Prototype code on the never-merged prototype/filter-memory snapshot; ADR-049 and TML-01 to TML-03 rebuild it with tests."
+  },
+  "frontend/src/components/filter-memory-prototype/FilterMemory.tsx::useTravel.<anonymous>": {
+    "score": 132,
+    "reason": "Prototype code on the never-merged prototype/filter-memory snapshot; ADR-049 and TML-01 to TML-03 rebuild it with tests."
+  },
+  "frontend/src/components/filter-memory-prototype/FilterMemory.tsx::useUndoKeys.<arg of useEffect>.onKey": {
+    "score": 56,
+    "reason": "Prototype code on the never-merged prototype/filter-memory snapshot; ADR-049 and TML-01 to TML-03 rebuild it with tests."
+  },
+  "frontend/src/components/filter-memory-prototype/PrototypeSwitcher.tsx::PrototypeSwitcher.<arg of useEffect>.onKey": {
+    "score": 72,
+    "reason": "Prototype code on the never-merged prototype/filter-memory snapshot; ADR-049 and TML-01 to TML-03 rebuild it with tests."
+  },
+  "frontend/src/components/filter-memory-prototype/server-undo.ts::installServerUndo.wrapped": {
+    "score": 462,
+    "reason": "Prototype code on the never-merged prototype/filter-memory snapshot; ADR-049 and TML-01 to TML-03 rebuild it with tests."
+  },
+  "frontend/src/components/filter-memory-prototype/store.ts::describe": {
+    "score": 72,
+    "reason": "Prototype code on the never-merged prototype/filter-memory snapshot; ADR-049 and TML-01 to TML-03 rebuild it with tests."
+  },
+  "frontend/src/components/filter-memory-prototype/store.ts::describeChange": {
+    "score": 1190,
+    "reason": "Prototype code on the never-merged prototype/filter-memory snapshot; ADR-049 and TML-01 to TML-03 rebuild it with tests."
+  },
+  "frontend/src/components/filter-memory-prototype/store.ts::fromJson.<arg of JSON.parse>": {
+    "score": 56,
+    "reason": "Prototype code on the never-merged prototype/filter-memory snapshot; ADR-049 and TML-01 to TML-03 rebuild it with tests."
+  },
+  "frontend/src/components/filter-memory-prototype/store.ts::isFilterKey": {
+    "score": 42,
+    "reason": "Prototype code on the never-merged prototype/filter-memory snapshot; ADR-049 and TML-01 to TML-03 rebuild it with tests."
+  },
+  "frontend/src/components/filter-memory-prototype/store.ts::stateKey": {
+    "score": 44.74,
+    "reason": "Prototype code on the never-merged prototype/filter-memory snapshot; ADR-049 and TML-01 to TML-03 rebuild it with tests."
   }
 }

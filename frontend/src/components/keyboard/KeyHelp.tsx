@@ -6,6 +6,11 @@
  * and on a phone.
  */
 import { useEffect, useState } from "react"
+// PROTOTYPE (filter-memory): the timeline's keys in the corner, never merge.
+import {
+  timelineKeys,
+  useVariant,
+} from "@/components/filter-memory-prototype/store"
 import { afterCount, afterG, listKeys } from "@/lib/keyboard/key-list"
 import {
   useHelp,
@@ -62,6 +67,7 @@ export function CornerHelp() {
   const shown = useShownList()
   const { g, count } = usePending()
   const waited = useWaitedLong()
+  const variant = useVariant()
   if (!on) return null
   return (
     <div className="fixed bottom-4 left-4 z-50 hidden flex-col items-start gap-2 md:flex">
@@ -75,7 +81,11 @@ export function CornerHelp() {
       )}
       {help === "corner" && shown ? (
         <KeyRows
-          rows={[...listKeys(shown.list, shown.carried), ...CORNER_FOOT]}
+          rows={[
+            ...listKeys(shown.list, shown.carried),
+            ...timelineKeys(variant),
+            ...CORNER_FOOT,
+          ]}
         />
       ) : (
         <div className="rounded-full border border-app-ink/10 bg-app-card/95 px-3 py-1 font-mono text-[11px] text-app-ink/60 shadow-lg backdrop-blur">

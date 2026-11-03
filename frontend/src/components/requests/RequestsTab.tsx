@@ -6,6 +6,8 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 import { useMemo, useState } from "react"
+// PROTOTYPE (filter-memory): the filter and the open row join F's timeline, never merge.
+import { useTracked } from "@/components/filter-memory-prototype/store"
 import {
   requestsReadRequestBreakdown,
   requestsReadRequestSpread,
@@ -105,6 +107,8 @@ function OperatorRequests() {
   const spread = useSpread(filter)
   const phone = useIsMobile()
   const [opened, setOpened] = useState<ChannelRow | null>(null)
+  useTracked("Requests filter", filter, setFilter)
+  useTracked("Requests panel", opened, setOpened)
   const switches = useRequestKinds()
   const navigate = useNavigate()
   return (

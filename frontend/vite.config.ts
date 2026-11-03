@@ -59,6 +59,8 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       port: 5173,
+      // PROTOTYPE (filter-memory): `.ts.net` for Tailscale serve.
+      allowedHosts: [".ts.net"],
       proxy: {
         "/api": {
           target:

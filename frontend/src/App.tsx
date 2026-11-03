@@ -37,6 +37,7 @@ import { ToolsTab } from "./components/tools/ToolsTab"
 // Accounts never see it, and its trend brings Plotly (spec, "The Requests tab").
 const RequestsTab = lazy(() => import("./components/requests/RequestsTab"))
 
+import { FilterMemory } from "./components/filter-memory-prototype/FilterMemory"
 import {
   Tooltip,
   TooltipContent,
@@ -299,6 +300,7 @@ export default function App() {
                   className={`w-1 h-1 rounded-full animate-pulse ${routing.dotClass}`}
                 />
               </div>
+              <FilterMemory tab={activeTab} />
               {/* Grouped: keyboard (the mode, its keys, the palette), help,
                   then view. The first two are hidden on a phone, which has
                   no keyboard to use them with. */}

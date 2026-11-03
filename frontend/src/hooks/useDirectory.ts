@@ -107,9 +107,23 @@ function useStoredList(key: string) {
       const value = [...next]
       setList(value)
       scopedStorage.setItem(key, JSON.stringify(value))
+      // PROTOTYPE (filter-memory): tell the timeline, never merge.
+      window.dispatchEvent(new CustomEvent("proto:stored", { detail: key }))
     },
     [key],
   )
+  // PROTOTYPE (filter-memory): the timeline puts a list back, never merge.
+  useEffect(() => {
+    const onRestore = (e: Event) => {
+      const { key: target, value } = (e as CustomEvent).detail
+      if (target !== key) return
+      setList(value)
+      scopedStorage.setItem(key, JSON.stringify(value))
+      window.dispatchEvent(new CustomEvent("proto:stored", { detail: key }))
+    }
+    window.addEventListener("proto:restore", onRestore)
+    return () => window.removeEventListener("proto:restore", onRestore)
+  }, [key])
   return [list, set] as const
 }
 

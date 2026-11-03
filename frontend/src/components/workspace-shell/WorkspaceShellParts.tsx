@@ -1,5 +1,12 @@
 import { AlertCircle, AlertTriangle } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
+// PROTOTYPE (filter-memory): the timeline's keys in the full list, never merge.
+import {
+  TIMELINE_DRAWER_KEYS,
+  timelineAnywhereKeys,
+  timelineKeys,
+  useVariant,
+} from "@/components/filter-memory-prototype/store"
 import { goKeys, listKeys, WORKSPACE_KEYS } from "@/lib/keyboard/key-list"
 import { useShownList } from "@/lib/keyboard/mode"
 import type { TabType } from "@/types"
@@ -106,6 +113,25 @@ export function ShortcutsDialog({
   commandKey: string
 }) {
   const shown = useShownList()
+  const variant = useVariant()
+  const timeline =
+    variant === "0"
+      ? []
+      : [
+          {
+            heading: "Filters and selections, undo and the timeline",
+            bindings: bindings([
+              ...timelineAnywhereKeys(variant, commandKey),
+              ...timelineKeys(variant).map(
+                ([keys, what]) => [keys, `${what}, in keyboard mode`] as const,
+              ),
+            ]),
+          },
+          {
+            heading: "In the timeline",
+            bindings: bindings(TIMELINE_DRAWER_KEYS),
+          },
+        ]
   const groups = [
     ...(shown
       ? [
@@ -120,6 +146,7 @@ export function ShortcutsDialog({
       bindings: bindings(WORKSPACE_KEYS),
     },
     { heading: "Go to a tab, in keyboard mode", bindings: bindings(goKeys()) },
+    ...timeline,
     ...shortcutGroups(commandKey),
   ]
   return (
