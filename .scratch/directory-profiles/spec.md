@@ -1,6 +1,6 @@
 # Directory profiles: every entry keeps the name, Bio and photo its page shows
 
-Status: ready-for-agent
+Status: done
 
 Ticket prefix: `PRF`.
 

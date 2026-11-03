@@ -13,7 +13,7 @@ the decision record is ADR-048; the terms are Bio and Bio language in
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] A Hidden Channel's probe stores its Bio, read from the description its `t.me/<handle>` page shows under the name, and its photo.
 - [x] A group's, a bot's and a user's probe store the name, Bio and photo the page shows; a user's name is no longer dropped.
@@ -40,3 +40,12 @@ the decision record is ADR-048; the terms are Bio and Bio language in
 - [x] A script test seeds rows, runs the entry point and reads the rows back, covering both steps, a second run and a dry run.
 - [x] The Directory table, panel, bar and filter tests cover the column, the panel measure, the dropdown and the `biolang:` parse.
 - [x] Every new guard is mutation-checked, and the commit body carries the `Mutation-checked:` line.
+
+## Comments
+
+- 2026-11-03: implemented on `claude/entity-data-enrichment-31a52e` and merged into `main` in
+  ab9e8a7a (#273). Search indexes Channels only, so no reader finds a user by name or Bio; the
+  spec's first draft assumed internals readers could (spec and ADR-048 corrected in the same PR).
+  The catch-up ran on staging the same day: 731,814 Bio languages read and 13,760 Rechecks
+  queued, 10,319 of them Hidden Channels from RQS-13 rather than HKD-01. Production needs no
+  run; `merge-directory.sh` carries the column.
