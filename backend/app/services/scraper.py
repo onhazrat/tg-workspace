@@ -11,6 +11,7 @@ import math
 import re
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import urlsplit
 
 from bs4 import BeautifulSoup, Tag
 
@@ -200,7 +201,7 @@ def _extract_channel_photo_url(soup: BeautifulSoup) -> str | None:
     src = attr_str(og_image.get("content")) if og_image else None
     # A handle with no photo of its own shows Telegram's logo there (ADR-048),
     # which would stand in for the avatar's initial on every such entry.
-    return None if src and "//telegram.org/" in src else src
+    return None if src and urlsplit(src).hostname == "telegram.org" else src
 
 
 def _decode_widget_data_view(encoded: str) -> dict[str, Any] | None:
