@@ -1,6 +1,6 @@
 # Channels skeleton: the loading placeholders follow the Card size
 
-Status: ready-for-agent
+Status: done (merged in #271; closed 2026-11-03)
 
 Ticket prefix: `CSK`.
 

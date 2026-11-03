@@ -1,6 +1,6 @@
 # Handle kinds: every Directory entry says what its handle is
 
-Status: ready-for-agent
+Status: done (every ticket closed; closed 2026-11-03)
 
 Ticket prefix: `HKD`. One ticket: `issues/01-every-entry-says-its-handle-kind.md`.
 

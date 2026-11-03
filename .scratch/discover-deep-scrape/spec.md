@@ -1,6 +1,6 @@
 # References feed the Directory
 
-Status: ready-for-agent
+Status: done (every ticket closed; closed 2026-11-03)
 
 Settled by DDS-01 (`issues/01-triage-open-questions.md`). This spec replaces the earlier
 "deep-scrape discovered channels" draft; that idea is parked under Further Notes.

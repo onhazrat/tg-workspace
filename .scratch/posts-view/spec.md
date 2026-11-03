@@ -1,6 +1,6 @@
 # Spec: One resolved Posts view
 
-Status: ready-for-agent
+Status: done (every ticket closed; closed 2026-11-03)
 
 Decisions: `docs/adr/ADR-036-one-resolved-posts-view.md` and
 `docs/posts-view-plan.md` (22 settled decisions and the no-behaviour-change

@@ -1,6 +1,6 @@
 # Spec: Complete window (ADR-043)
 
-**Status:** ready-for-agent
+**Status:** done (every ticket closed; closed 2026-11-03)
 
 Decided in ADR-043, prototyped as variant D, and grilled on 2026-10-30; the
 grilling decisions are folded into ADR-043. Terms are the glossary's: Incomplete Channel,

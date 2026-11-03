@@ -1,6 +1,6 @@
 # Directory columns
 
-Status: ready-for-agent
+Status: done (merged in #177; closed 2026-11-03)
 
 Ticket prefix: `DCOL`.
 

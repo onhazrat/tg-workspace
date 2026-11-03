@@ -1,6 +1,6 @@
 # Channel reference graph
 
-Status: ready-for-agent
+Status: done (every ticket closed; closed 2026-11-03)
 
 ## Problem statement
 

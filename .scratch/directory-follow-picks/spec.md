@@ -1,6 +1,6 @@
 # Directory: Ticks on every row, Tags, keyboard and a phone layout
 
-Status: ready-for-agent
+Status: done (every ticket closed; closed 2026-11-03)
 
 Ticket prefix: `DFP`.
 

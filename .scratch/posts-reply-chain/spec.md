@@ -1,6 +1,6 @@
 # Posts reply chain: the Reply chain panel, held new Posts, a skeleton in the loading layout's shape
 
-Status: ready-for-agent
+Status: done (every ticket closed; closed 2026-11-03)
 
 Ticket prefix: `RCH`.
 

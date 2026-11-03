@@ -1,6 +1,6 @@
 # Reach from View observations
 
-Status: ready-for-agent
+Status: done (every ticket closed; closed 2026-11-03)
 
 A Channel's Reach is today a Directory-only statistic, `median_views`, computed from one preview
 page whose newest Posts are hours old, so it reads low for any busy Channel. Followed Channels have

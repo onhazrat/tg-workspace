@@ -1,6 +1,6 @@
 # Spec: The Analysis window
 
-**Status:** ready-for-agent
+**Status:** done (AW-01 to AW-09 closed, AW-00 superseded; closed 2026-11-03)
 
 Implements the accepted decision in `ADR-018: One global Analysis window with
 explicit Live and Fixed modes`. The ADR is authoritative if this spec and the

@@ -1,6 +1,6 @@
 # Spec: Accounted work attributes and pays in one place
 
-Status: ready-for-agent
+Status: done (every ticket closed; closed 2026-11-03)
 
 Date: 2026-10-28
 

@@ -1,6 +1,6 @@
 # Spec: Walked ranges and a live window check (ADR-044)
 
-**Status:** ready-for-agent
+**Status:** done (every ticket closed; closed 2026-11-03)
 
 Decided in a grilling session on 2026-11-01 and recorded in ADR-044, which
 supersedes ADR-043's three tests and its walk-back repair. The plan and the

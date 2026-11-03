@@ -1,6 +1,6 @@
 # Request kinds: an Operator can disable one on a deployment
 
-Status: ready-for-agent
+Status: done (every ticket closed; closed 2026-11-03)
 
 Ticket prefix: `RKD`.
 

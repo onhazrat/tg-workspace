@@ -1,6 +1,6 @@
 # Posts tab: fuller compact cards, a paging photo viewer, histograms, Channel posts bounds and reply Types
 
-Status: ready-for-agent
+Status: done (every ticket closed; closed 2026-11-03)
 
 Ticket prefix: `PTI`.
 
