@@ -884,6 +884,26 @@ The workspace tab for doing rather than tuning: Logs, Quick message, and the
 Operator's diagnostics and data tools. Nothing on it is a Setting.
 _Avoid_: system, admin, utilities
 
+**Timeline**:
+Everything done in the workspace in one browser tab, in order, as Steps to move
+back and forward along with Undo and Redo. A change made after an Undo starts a
+branch, so nothing on the Timeline is ever lost. It outlives a reload and ends
+when the browser tab closes or the Account signs out; Saved views outlive both.
+_Avoid_: history (that is the History tab), undo stack, log, journal, activity
+
+**Saved view**:
+A Step an Account has named, kept on the Account so any browser it signs in to
+can go back to it: its tab and filters always, and whichever of its selections,
+Analysis window and open tabs the Account chose to keep with it.
+_Avoid_: bookmark, preset, saved filter, saved search, favorite
+
+**Step**:
+One place on the Timeline: the workspace as one change left it, and the write
+that change sent, if any. A Step whose write cannot be taken back, such as a
+sync, an AI run, a Publication or a Tag merge, stays on the Timeline, and Undo
+passes over it.
+_Avoid_: entry, action (that is the Action tab), event, change, history item
+
 ### Settings
 
 **Setting**:

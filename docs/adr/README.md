@@ -58,3 +58,4 @@ The locked migration decisions of June 2026 sit outside this series, in
 | [ADR-046](./ADR-046-album-messages-are-posts.md) | Each message of an Album is its own Post, recording its Album by the first id |
 | [ADR-047](./ADR-047-directory-maps-handles-by-kind.md) | The Directory maps every handle by its Handle kind, read from the page the probe already fetches |
 | [ADR-048](./ADR-048-directory-keeps-the-whole-profile.md) | A Directory entry keeps the name, Bio and photo its page shows, users included, and a Bio language of its own; supersedes part of ADR-047 |
+| [ADR-049](./ADR-049-writes-carry-their-own-undo.md) | A write carries its own undo, and the server checks before undoing |
