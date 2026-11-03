@@ -106,6 +106,7 @@ describe("what the tab shows of a list read", () => {
     rows: [],
     total: 7,
     languages: [{ language: "fa", count: 7 }],
+    bioLanguages: [{ language: "en", count: 3 }],
     yoursSize: 0,
     ms: 120,
   }
@@ -115,6 +116,7 @@ describe("what the tab shows of a list read", () => {
       rows: [],
       total: undefined,
       languages: [],
+      bioLanguages: [],
       ms: undefined,
       emptyYours: undefined,
     })

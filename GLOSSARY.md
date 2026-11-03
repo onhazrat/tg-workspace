@@ -63,6 +63,18 @@ at all (a free handle). Read from the page Telegram serves for the handle, so it
 is Telegram's answer and not a guess from the handle's spelling.
 _Avoid_: chat type, entity kind, peer type, kind (alone)
 
+**Bio**:
+The text a handle shows under its name on Telegram, written by whoever holds
+the handle. Telegram calls it a description on a Channel, a group or a bot.
+_Avoid_: description, about
+
+**Bio language**:
+The Language a handle's Bio is written in, read from the Bio alone. A separate
+claim from the entry's Language, which only Posts decide, so a Channel that posts
+in English under a Persian Bio has both. An empty Bio has the Bio language No
+words; a Bio nobody has read yet has none.
+_Avoid_: channel language, profile language
+
 **Hidden Channel**:
 A Channel whose Posts Telegram will not show on the web, though the Channel
 exists and its handle is public. It is listed in the Directory like any other
@@ -291,8 +303,8 @@ third claim and still one a filter can ask for. A Channel's Language is the most
 common among its own recent Posts, counting forwards only when it has nothing of
 its own; with nothing to place, the same Posts decide between Undetermined (if
 any of them is) and No words. A Channel none of whose Posts is read yet is not
-read yet. A Directory entry's is derived the same way from its sample. Neither
-is ever set directly.
+read yet. A Directory entry's is derived the same way from its sample, never
+from its Bio, which has a Bio language of its own. Neither is ever set directly.
 _Avoid_: locale, lang, script, channel language (as something set)
 
 **Translation language**:

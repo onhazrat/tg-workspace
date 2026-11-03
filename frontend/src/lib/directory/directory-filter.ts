@@ -16,6 +16,7 @@
  * `citedby:"tag:news"`; the old word `picked` still reads as `ticked`.
  * TGU-04 adds `group:"Slow"`, In the Setting group, a Seed source too
  * (`parents:"group:Slow"`); an old `tag:"group:Slow"` reads as it.
+ * PRF-01 adds `biolang:fa`, the Language of the entry's Bio (ADR-048).
  * DPF adds `status:unavailable`, `kind:bot`, `error:"timeout"` and Time
  * bounds: `last_post_at -7d..` (Live, signed from now), `refresh_due_at
  * now..+2d`, `checked_at 2026-10-01T00:00Z..` (Fixed, a UTC instant), either
@@ -101,6 +102,8 @@ export type DirectoryMeasureCond = {
 
 export type DirectoryCond =
   | { type: "language"; value: string }
+  /** The Language of the entry's Bio alone (ADR-048). */
+  | { type: "bio_language"; value: string }
   | { type: "name"; value: string }
   | { type: "flag"; value: DirectoryFlag }
   | DirectoryMineCond
@@ -513,6 +516,8 @@ export function directoryConditionLabel(
       return timeLabel(cond, locale, timeZone)
     case "language":
       return languageLabel(cond.value, locale)
+    case "bio_language":
+      return `Bio language: ${languageLabel(cond.value, locale)}`
     case "name":
       return `Name contains "${cond.value}"`
     case "tag":
@@ -555,6 +560,8 @@ function condText(cond: DirectoryCond): string {
       return timeText(cond)
     case "language":
       return `lang:${quote(cond.value)}`
+    case "bio_language":
+      return `biolang:${quote(cond.value)}`
     case "name":
       return `name:${quote(cond.value)}`
     case "tag":
@@ -710,6 +717,7 @@ const DIRECTORY_TEXT: TextVocabulary<DirectoryCond> = {
     if (prefix === "name" || prefix === undefined)
       return { type: "name", value: text }
     if (prefix === "lang") return { type: "language", value: text }
+    if (prefix === "biolang") return { type: "bio_language", value: text }
     if (prefix === "tag" || prefix === "group") {
       const cond = namedCond(prefix, text)
       if (cond) return cond
@@ -789,7 +797,8 @@ export function withinDirectoryFilterBounds(filter: DirectoryFilter): boolean {
     if (node.kind === "group")
       return node.children.every((child) => fits(child, depth + 1))
     const { cond } = node
-    if (cond.type === "language") return cond.value.length <= b.languageLength
+    if (cond.type === "language" || cond.type === "bio_language")
+      return cond.value.length <= b.languageLength
     if (cond.type === "name" || cond.type === "contains")
       return cond.value.length <= b.nameLength
     if (cond.type === "mine" || cond.type === "time")

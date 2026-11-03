@@ -2830,7 +2830,7 @@
       "post": {
         "tags": ["data"],
         "summary": "List Directory",
-        "description": "One page of 100 Directory entries under a Directory filter, sorted.\n\nWith the view's total and its Language counts, both counted without the\nview's Language Conditions where the menu needs them.",
+        "description": "One page of 100 Directory entries under a Directory filter, sorted.\n\nWith the view's total, its Language counts and its Bio language counts,\neach menu's counted without that menu's own Conditions.",
         "operationId": "data-list_directory",
         "requestBody": {
           "content": {
@@ -9328,6 +9328,26 @@
         "title": "DirectoryBinResponse",
         "description": "One histogram bar: entries with a value from `lo` to `hi`."
       },
+      "DirectoryBioLanguageCondition": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "bio_language",
+            "title": "Type"
+          },
+          "value": {
+            "type": "string",
+            "maxLength": 16,
+            "minLength": 1,
+            "title": "Value"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["type", "value"],
+        "title": "DirectoryBioLanguageCondition",
+        "description": "The Language of the entry's Bio alone."
+      },
       "DirectoryBoostRequest": {
         "properties": {
           "handles": {
@@ -9469,6 +9489,7 @@
                 "followable",
                 "kind",
                 "bio",
+                "bio_language",
                 "sample_count",
                 "checked_at",
                 "refresh_due_at",
@@ -9518,6 +9539,7 @@
               "followable",
               "kind",
               "bio",
+              "bio_language",
               "sample_count",
               "checked_at",
               "refresh_due_at",
@@ -9738,6 +9760,10 @@
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Language"
           },
+          "bioLanguage": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Biolanguage"
+          },
           "subscribers": {
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Subscribers"
@@ -9821,6 +9847,7 @@
           "displayName",
           "photoUrl",
           "language",
+          "bioLanguage",
           "subscribers",
           "reach",
           "reachEstimated",
@@ -9854,6 +9881,7 @@
           "cond": {
             "oneOf": [
               { "$ref": "#/components/schemas/DirectoryLanguageCondition" },
+              { "$ref": "#/components/schemas/DirectoryBioLanguageCondition" },
               { "$ref": "#/components/schemas/DirectoryNameCondition" },
               { "$ref": "#/components/schemas/DirectoryMeasureCondition" },
               { "$ref": "#/components/schemas/DirectoryFlagCondition" },
@@ -9871,6 +9899,7 @@
             "discriminator": {
               "propertyName": "type",
               "mapping": {
+                "bio_language": "#/components/schemas/DirectoryBioLanguageCondition",
                 "children": "#/components/schemas/DirectorySharedCondition",
                 "citedby": "#/components/schemas/DirectoryCitedByCondition",
                 "cites": "#/components/schemas/DirectoryCitesCondition",
@@ -10038,6 +10067,7 @@
               "kind",
               "followable",
               "bio",
+              "bio_language",
               "last_error",
               "mine",
               "mine_last_days",
@@ -10177,6 +10207,7 @@
               "kind",
               "followable",
               "bio",
+              "bio_language",
               "last_error",
               "mine",
               "mine_last_days",
@@ -10237,6 +10268,7 @@
                 "followable",
                 "kind",
                 "bio",
+                "bio_language",
                 "sample_count",
                 "checked_at",
                 "refresh_due_at",
@@ -10278,6 +10310,13 @@
             "type": "array",
             "title": "Languages"
           },
+          "bioLanguages": {
+            "items": {
+              "$ref": "#/components/schemas/DirectoryLanguageCountResponse"
+            },
+            "type": "array",
+            "title": "Biolanguages"
+          },
           "yoursSize": { "type": "integer", "title": "Yourssize" },
           "refreshTarget": {
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
@@ -10285,7 +10324,7 @@
           }
         },
         "type": "object",
-        "required": ["rows", "total", "languages", "yoursSize"],
+        "required": ["rows", "total", "languages", "bioLanguages", "yoursSize"],
         "title": "DirectoryListResponse",
         "description": "One page, the view's total and its Language counts."
       },
@@ -10546,6 +10585,10 @@
           "language": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Language"
+          },
+          "bioLanguage": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Biolanguage"
           },
           "subscribers": {
             "anyOf": [{ "type": "integer" }, { "type": "null" }],

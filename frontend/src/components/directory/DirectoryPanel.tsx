@@ -43,6 +43,7 @@ const KIND_VERB: Record<string, string> = {
 
 const PANEL_COLUMNS = [
   "language",
+  "bio_language",
   "subscribers",
   "reach",
   "posts_per_week",

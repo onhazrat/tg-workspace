@@ -107,6 +107,10 @@ const COLUMN_TEXT: Record<ColumnKey, Omit<DirectoryColumn, "key">> = {
     label: "Lang",
     description: "The Language the Directory read from its Posts",
   },
+  bio_language: {
+    label: "Bio lang",
+    description: "The Language the Directory read from its Bio",
+  },
   subscribers: measureText("subscribers"),
   reach: measureText("reach"),
   posts_per_week: measureText("posts_per_week"),
@@ -165,6 +169,7 @@ export const columnOf = (key: ColumnKey): DirectoryColumn => ({
  * column's header sorts by it (DPF). */
 const WORDS = new Set<string>([
   "language",
+  "bio_language",
   "status",
   "kind",
   "followable",
@@ -252,6 +257,7 @@ const mine = (r: Row) =>
  */
 const CELLS: Record<DirectoryColumn["key"], (r: Row) => React.ReactNode> = {
   language: (r) => languageLabel(languageValue(r.language)),
+  bio_language: (r) => languageLabel(languageValue(r.bioLanguage)),
   subscribers,
   reach: (r) => (
     <>

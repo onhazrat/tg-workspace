@@ -415,6 +415,7 @@ export function DirectoryView() {
       />
     ),
     internals,
+    shown.bioLanguages,
   )
   const total = shown.total ?? 0
   const whole = tickAllState(d.whole, shown.rows, d.ticks, total)
@@ -453,6 +454,7 @@ export function DirectoryView() {
         onFilter={setFilter}
         vocabulary={vocabulary}
         languages={shown.languages}
+        bioLanguages={shown.bioLanguages}
         kinds={view.kinds}
         onKinds={(kinds) => patch({ kinds })}
         sortValue={sortValue(view, d.yours.source)}

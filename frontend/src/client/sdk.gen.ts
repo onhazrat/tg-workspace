@@ -1271,8 +1271,8 @@ export const dataGetDirectoryPosts = <ThrowOnError extends boolean = true>(optio
  *
  * One page of 100 Directory entries under a Directory filter, sorted.
  *
- * With the view's total and its Language counts, both counted without the
- * view's Language Conditions where the menu needs them.
+ * With the view's total, its Language counts and its Bio language counts,
+ * each menu's counted without that menu's own Conditions.
  */
 export const dataListDirectory = <ThrowOnError extends boolean = true>(options: Options<DataListDirectoryData, ThrowOnError>): RequestResult<DataListDirectoryResponses, DataListDirectoryErrors, ThrowOnError, 'data'> => (options.client ?? client).post<DataListDirectoryResponses, DataListDirectoryErrors, ThrowOnError, 'data'>({
     responseStyle: 'data',

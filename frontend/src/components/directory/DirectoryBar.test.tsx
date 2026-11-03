@@ -239,6 +239,22 @@ describe("the dropdowns", () => {
     expect(calls.filters).toEqual([`${OPENING_FILTER} and lang:en`])
   })
 
+  test("Bio language follows Language, counts its own and funnels biolang:", () => {
+    const calls = mount({ bioLanguages: [{ language: "fa", count: 4 }] })
+    const ids = [...document.querySelectorAll("[data-testid]")].map((el) =>
+      el.getAttribute("data-testid"),
+    )
+    expect(ids.indexOf("directory-bio-language")).toBeGreaterThan(
+      ids.indexOf("directory-language"),
+    )
+    fireEvent.click(screen.getByTestId("directory-bio-language"))
+    expect(
+      screen.getByTestId("directory-bio-language-count-fa").textContent,
+    ).toBe("4")
+    fireEvent.click(screen.getByTestId("directory-bio-language-funnel-fa"))
+    expect(calls.filters).toEqual([`${OPENING_FILTER} and biolang:fa`])
+  })
+
   test("Filters counts the Conditions and opens a searchable picker", () => {
     const calls = mount()
     expect(screen.getByTestId("directory-filters").textContent).toContain("3")

@@ -36,6 +36,7 @@ const conds = (text: string) => {
 describe("every Condition prints and parses back unchanged", () => {
   test.each([
     "lang:fa",
+    "biolang:fa",
     "name:news",
     'name:"daily news"',
     "is:followed",
