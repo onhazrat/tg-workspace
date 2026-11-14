@@ -16,7 +16,9 @@ stories 1 to 16, 38 to 49, 59). Glossary: Timeline, Step. Reference:
 `prototype/filter-memory`, variant F, whose store and drawer this replaces
 with a React-free model.
 
-**Blocked by:** None (can start immediately).
+**Blocked by:** DSM-01 (`.scratch/directory-selection-module/issues/01-the-directory-selection-lives-in-one-model.md`).
+The Directory selection's view state provider calls that module's read and
+restore; it does not read the Directory hook's state.
 
 **Status:** ready-for-agent
 
